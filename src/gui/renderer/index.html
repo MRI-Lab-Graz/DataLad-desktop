@@ -16,87 +16,115 @@
     <div class="app-shell">
       <header class="hero card reveal reveal-1">
         <p class="eyebrow">DataLad Desktop</p>
-        <h1>MVP Integration Harness</h1>
+        <h1>Project Workflow Preview</h1>
         <p class="lede">
-          Test adapter diagnostics, project classification, and curated DataLad commands before full shell integration.
+          Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
       </header>
 
+      <section class="card project-strip" aria-labelledby="current-project-title">
+        <div>
+          <p id="current-project-title" class="strip-label">Current Project</p>
+          <p id="current-project-path" class="strip-path">No project selected</p>
+        </div>
+        <div class="strip-state-group">
+          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
+          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
+        </div>
+      </section>
+
       <main class="grid">
-        <section class="card reveal reveal-2" aria-labelledby="environment-title">
+        <section class="card reveal reveal-2" aria-labelledby="open-project-title">
           <div class="section-head">
-            <h2 id="environment-title">Environment Diagnostics</h2>
-            <button id="check-env" class="button button-primary">Run Check</button>
+            <h2 id="open-project-title">1. Open Project</h2>
+            <button id="check-env" class="button button-ghost">Check Setup</button>
           </div>
-          <div id="environment-output" class="panel panel-muted">Run diagnostics to see setup status.</div>
-        </section>
 
-        <section class="card reveal reveal-3" aria-labelledby="classification-title">
-          <div class="section-head">
-            <h2 id="classification-title">Project Classification</h2>
-            <button id="detect-project" class="button button-primary">Detect</button>
-          </div>
           <label class="field">
-            <span>Project Path</span>
-            <input id="project-path" type="text" placeholder="/path/to/project" />
+            <span>Project Folder</span>
+            <div class="field-row">
+              <input id="project-path" type="text" placeholder="/path/to/project" />
+              <button id="pick-project-path" class="button button-ghost button-inline" type="button">Browse</button>
+            </div>
           </label>
-          <div id="classification-output" class="panel panel-muted">Detect a project to show Git/Dataset/Superdataset state.</div>
+
+          <div class="row-actions">
+            <button id="detect-project" class="button button-primary" type="button">Detect Project Type</button>
+          </div>
+
+          <div id="classification-output" class="panel panel-muted">Select a folder and detect its project type.</div>
+          <div id="environment-output" class="panel panel-muted">Setup check has not run yet.</div>
         </section>
 
-        <section class="card reveal reveal-4" aria-labelledby="commands-title">
+        <section class="card reveal reveal-3" aria-labelledby="clone-title">
           <div class="section-head">
-            <h2 id="commands-title">DataLad Actions</h2>
-            <button id="run-command" class="button button-primary">Run</button>
+            <h2 id="clone-title">2. Clone DataLad Project (Optional)</h2>
           </div>
 
-          <div class="command-grid">
-            <label class="field">
-              <span>Command</span>
-              <select id="command-name">
-                <option value="get">Get Data</option>
-                <option value="save">Save</option>
-                <option value="update">Update Project</option>
-                <option value="push">Publish</option>
-                <option value="cloneInstall">Clone/Install</option>
-              </select>
-            </label>
+          <label class="field">
+            <span>Source URL</span>
+            <input id="source" type="text" placeholder="https://example.org/dataset.git" />
+          </label>
 
-            <label class="field" data-field="source" hidden>
-              <span>Source</span>
-              <input id="source" type="text" placeholder="https://example.org/dataset.git" />
-            </label>
-
-            <label class="field" data-field="targetPath" hidden>
-              <span>Target Path</span>
+          <label class="field">
+            <span>Target Folder</span>
+            <div class="field-row">
               <input id="target-path" type="text" placeholder="/path/to/clone/target" />
-            </label>
+              <button id="pick-target-path" class="button button-ghost button-inline" type="button">Browse</button>
+            </div>
+          </label>
 
-            <label class="field" data-field="projectPath">
-              <span>Project Path</span>
-              <input id="command-project-path" type="text" placeholder="/path/to/project" />
-            </label>
+          <div class="row-actions">
+            <button id="clone-project" class="button button-primary" type="button">Clone Project</button>
+          </div>
+        </section>
 
-            <label class="field" data-field="message" hidden>
-              <span>Commit Message</span>
-              <input id="message" type="text" placeholder="checkpoint" />
-            </label>
-
-            <label class="field" data-field="paths" hidden>
-              <span>Paths (comma separated)</span>
-              <input id="paths" type="text" placeholder="results.csv, notes.md" />
-            </label>
+        <section class="card reveal reveal-4" aria-labelledby="project-actions-title">
+          <div class="section-head">
+            <h2 id="project-actions-title">3. Work With Project</h2>
           </div>
 
-          <div id="command-output" class="panel panel-muted">Run a command to inspect adapter results.</div>
+          <label class="field">
+            <span>Active Project Folder</span>
+            <div class="field-row">
+              <input id="command-project-path" type="text" placeholder="/path/to/project" />
+              <button id="pick-command-project-path" class="button button-ghost button-inline" type="button">
+                Browse
+              </button>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>Save Message</span>
+            <input id="message" type="text" placeholder="checkpoint" />
+          </label>
+
+          <label class="field">
+            <span>Optional Paths (comma separated)</span>
+            <input id="paths" type="text" placeholder="results.csv, notes.md" />
+          </label>
+
+          <div class="action-strip">
+            <button id="save-project" class="button button-primary" type="button">Save</button>
+            <button id="get-data" class="button button-primary" type="button">Get Data</button>
+            <button id="update-project" class="button button-primary" type="button">Update</button>
+            <button id="publish-project" class="button button-primary" type="button">Publish</button>
+          </div>
+
+          <div id="command-output" class="panel panel-muted">Run a workflow action to see a short status update.</div>
         </section>
       </main>
 
       <aside class="card reveal reveal-5" aria-labelledby="contract-title">
         <div class="section-head">
-          <h2 id="contract-title">Adapter Contract Snapshot</h2>
+          <h2 id="contract-title">Technical Details (Optional)</h2>
           <button id="refresh-contract" class="button button-ghost">Refresh</button>
         </div>
-        <pre id="contract-output" class="panel panel-code">Loading interface contract...</pre>
+
+        <details>
+          <summary>Adapter contract</summary>
+          <pre id="contract-output" class="panel panel-code">Loading interface contract...</pre>
+        </details>
       </aside>
     </div>
 

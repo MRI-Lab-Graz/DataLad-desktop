@@ -247,6 +247,33 @@ test('runCommand routes save through curated datalad invocation', async () => {
   assert.equal(result.ok, true)
   assert.equal(runner.calls.length, 1)
   assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'])
+  assert.deepEqual(result.warnings, [])
+})
+
+test('runCommand returns non-fatal clone advisories from stderr output', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['clone', 'https://example.org/ds.git', '/tmp/ds'], {
+    exitCode: 0,
+    stdout: 'install(ok): /tmp/ds (dataset)\n',
+    stderr:
+      '[INFO] Remote origin not usable by git-annex; setting annex-ignore\n' +
+      '[INFO] https://example.org/ds.git/config download failed: Not Found\n' +
+      '[INFO] access to 1 dataset sibling s3-BACKUP not auto-enabled\n',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('cloneInstall', {
+    source: 'https://example.org/ds.git',
+    targetPath: '/tmp/ds'
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.warnings.length, 3)
+  assert.deepEqual(
+    result.warnings.map((warning) => warning.code),
+    ['ORIGIN_NOT_ANNEX_REMOTE', 'REMOTE_CONFIG_NOT_FOUND', 'SIBLING_NOT_AUTO_ENABLED']
+  )
 })
 
 test('runCommand maps publish failure to researcher-facing remote message', async () => {
@@ -285,7 +312,7 @@ test('getInterfaceContract returns stable schema metadata', () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const contract = adapter.getInterfaceContract()
 
-  assert.equal(contract.version, '0.2.0')
+  assert.equal(contract.version, '0.3.0')
   assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
   assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
 })

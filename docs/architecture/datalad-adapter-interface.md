@@ -4,7 +4,7 @@ This document defines the stable boundary between UI/shell code and DataLad inte
 
 ## Version
 
-- Interface version: `0.2.0`
+- Interface version: `0.3.0`
 - Source of truth: `src/datalad/schema.js`
 
 ## Goals
@@ -63,6 +63,7 @@ All command calls return:
 - `stderr`
 - `failed`
 - `userError` (present when `ok` is false)
+- `warnings[]` (non-fatal advisories, can be present even when `ok` is true)
 
 The runner result shape is validated before returning to callers.
 
