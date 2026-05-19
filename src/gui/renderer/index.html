@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>DataLad Desktop MVP Harness</title>
+    <title>DataLad Desktop</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,7 +16,7 @@
     <div class="app-shell">
       <header class="hero card reveal reveal-1">
         <p class="eyebrow">DataLad Desktop</p>
-        <h1>Project Workflow Preview</h1>
+        <h1>DataLad Desktop</h1>
         <p class="lede">
           Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
@@ -95,6 +95,14 @@
           </label>
 
           <label class="field">
+            <span>Dataset Inside Project</span>
+            <div class="field-row">
+              <select id="dataset-select"></select>
+              <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
+            </div>
+          </label>
+
+          <label class="field">
             <span>Save Message</span>
             <input id="message" type="text" placeholder="checkpoint" />
           </label>
@@ -113,9 +121,19 @@
 
           <div id="command-output" class="panel panel-muted">Run a workflow action to see a short status update.</div>
         </section>
+
+        <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
+          <div class="section-head">
+            <h2 id="files-title">4. Files</h2>
+            <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
+          </div>
+
+          <p class="lede-small">Browse visible files in the selected dataset.</p>
+          <div id="files-output" class="panel panel-muted">Select or detect a project to load files.</div>
+        </section>
       </main>
 
-      <aside class="card reveal reveal-5" aria-labelledby="contract-title">
+      <aside class="card reveal reveal-6" aria-labelledby="contract-title">
         <div class="section-head">
           <h2 id="contract-title">Technical Details (Optional)</h2>
           <button id="refresh-contract" class="button button-ghost">Refresh</button>

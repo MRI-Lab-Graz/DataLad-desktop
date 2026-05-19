@@ -228,6 +228,50 @@ test('detectProject falls back to metadata when datalad probe is inconclusive', 
   assert.equal(project.classificationSource.dataset, 'metadata-fallback')
 })
 
+test('listDatasets returns root dataset and nested subdatasets from .gitmodules', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-list-datasets-'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "inputs"]\n\tpath = inputs\n\turl = ../inputs.git\n' +
+      '[submodule "derivatives"]\n\tpath = derivatives/fmriprep\n\turl = ../derivatives.git\n'
+  )
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const datasets = await adapter.listDatasets(root)
+
+  assert.equal(datasets.length, 3)
+  assert.deepEqual(
+    datasets.map((dataset) => dataset.relativePath),
+    ['.', 'inputs', 'derivatives/fmriprep']
+  )
+})
+
+test('listDatasets returns only root dataset when no .gitmodules exists', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-list-root-only-'))
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const datasets = await adapter.listDatasets(root)
+
+  assert.equal(datasets.length, 1)
+  assert.equal(datasets[0].relativePath, '.')
+})
+
 test('runCommand routes save through curated datalad invocation', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'], {
