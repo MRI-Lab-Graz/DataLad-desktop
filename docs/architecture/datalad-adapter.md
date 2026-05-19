@@ -4,6 +4,8 @@
 
 Keep DataLad integration behind one boundary so shell/UI code remains close to upstream GitHub Desktop behavior and does not issue DataLad shell calls directly.
 
+Detailed request/result schema and interface guarantees are documented in `docs/architecture/datalad-adapter-interface.md`.
+
 ## Responsibilities
 
 The adapter is responsible for:

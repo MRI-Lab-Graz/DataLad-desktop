@@ -1,0 +1,18 @@
+{
+  "name": "datalad-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/gui/main.js",
+  "description": "Foundational adapter layer for DataLad Desktop MVP",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

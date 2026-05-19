@@ -16,11 +16,14 @@ Git-only projects should continue to behave like normal GitHub Desktop projects.
 
 ## Repository setup notes
 
-This repository currently tracks planning and architecture for the MVP scope.
+This repository now includes an initial implementation scaffold for the MVP DataLad adapter boundary, strict command schemas, onboarding diagnostics formatting, and tests for classification edge cases.
 
 - Roadmap: `docs/roadmap.md`
 - Researcher workflow and UX rules: `docs/product/researcher-workflow.md`
 - DataLad adapter contract: `docs/architecture/datalad-adapter.md`
+- DataLad adapter interface schemas: `docs/architecture/datalad-adapter-interface.md`
+- Adapter scaffold source: `src/datalad/adapter.js`
+- Adapter tests: `test/adapter.test.js`
 
 ## Fork origin and upstream sync
 
@@ -32,4 +35,24 @@ This project is intended to be seeded from GitHub Desktop and maintained with an
 
 ## Local validation
 
-No build/test tooling is configured in this repository yet.
+Run baseline tests:
+
+```bash
+npm test
+```
+
+## GUI harness testing
+
+Install dependencies and start the desktop harness:
+
+```bash
+npm install
+npm start
+```
+
+The window includes:
+
+- Environment diagnostics (with UI-ready recovery report)
+- Project classification (Git / Dataset / Superdataset)
+- Curated DataLad actions (Clone/Install, Get, Save, Update, Push)
+- Adapter interface contract snapshot
