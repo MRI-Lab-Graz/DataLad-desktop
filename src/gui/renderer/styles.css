@@ -137,6 +137,12 @@ h2 {
   margin-bottom: 12px;
 }
 
+.section-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .button {
   appearance: none;
   border: none;
@@ -168,6 +174,12 @@ h2 {
   border-radius: 10px;
   padding: 0.56rem 0.85rem;
   font-size: 0.88rem;
+}
+
+.button-mini {
+  border-radius: 8px;
+  padding: 0.28rem 0.58rem;
+  font-size: 0.76rem;
 }
 
 .field {
@@ -266,8 +278,16 @@ select:focus {
   font-size: 0.84rem;
 }
 
+.file-list.depth-0 {
+  padding-left: 0.4rem;
+}
+
+.file-list ul {
+  margin-top: 4px;
+}
+
 .file-list li {
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 
 .file-type {
@@ -275,6 +295,29 @@ select:focus {
   min-width: 2.8rem;
   color: #5b666b;
   font-weight: 600;
+}
+
+.file-name {
+  color: #243136;
+}
+
+.folder-node details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.folder-node details > summary::-webkit-details-marker {
+  margin-right: 6px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .hint {

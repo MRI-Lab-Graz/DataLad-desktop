@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.invoke('fs:listEntries', {
       rootPath,
       ...(options ?? {})
-    })
+    }),
+  revealPath: (targetPath) => ipcRenderer.invoke('fs:revealPath', targetPath)
 })
