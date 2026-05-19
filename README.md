@@ -51,9 +51,9 @@ Run baseline tests:
 npm test
 ```
 
-## GUI harness testing
+## Desktop app testing
 
-Install dependencies and start the desktop harness:
+Install dependencies and start the desktop app:
 
 ```bash
 npm install

@@ -1,5 +1,10 @@
 const api = window.dataladDesktop
 
+const state = {
+  rootProjectPath: null,
+  rootProjectClassification: 'unknown'
+}
+
 const elements = {
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
@@ -11,11 +16,14 @@ const elements = {
   source: document.getElementById('source'),
   targetPath: document.getElementById('target-path'),
   pickTargetPathButton: document.getElementById('pick-target-path'),
+  datasetSelect: document.getElementById('dataset-select'),
+  refreshDatasetsButton: document.getElementById('refresh-datasets'),
   cloneProjectButton: document.getElementById('clone-project'),
   saveProjectButton: document.getElementById('save-project'),
   getDataButton: document.getElementById('get-data'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
+  refreshFilesButton: document.getElementById('refresh-files'),
   message: document.getElementById('message'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
@@ -24,12 +32,15 @@ const elements = {
   environmentOutput: document.getElementById('environment-output'),
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
+  filesOutput: document.getElementById('files-output'),
   contractOutput: document.getElementById('contract-output')
 }
 
 await seedWorkspacePath()
 await renderContract()
 setCurrentProjectHeader(elements.commandProjectPath.value.trim(), 'unknown')
+await refreshDatasetList(elements.commandProjectPath.value.trim())
+await refreshFileBrowser(elements.commandProjectPath.value.trim())
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -85,6 +96,8 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   elements.projectPath.value = targetPath
   setCurrentProjectHeader(targetPath, 'unknown')
   await detectProjectType(targetPath)
+  await refreshDatasetList(targetPath)
+  await refreshFileBrowser(targetPath)
 })
 
 elements.saveProjectButton.addEventListener('click', async () => {
@@ -118,6 +131,8 @@ elements.getDataButton.addEventListener('click', async () => {
     projectPath,
     paths: parsePaths(elements.paths.value)
   })
+
+  await refreshFileBrowser(projectPath)
 })
 
 elements.updateProjectButton.addEventListener('click', async () => {
@@ -138,6 +153,37 @@ elements.publishProjectButton.addEventListener('click', async () => {
   await runWorkflowCommand('push', { projectPath })
 })
 
+elements.refreshDatasetsButton.addEventListener('click', async () => {
+  const projectPath = elements.projectPath.value.trim() || elements.commandProjectPath.value.trim()
+  if (!projectPath) {
+    setLastActionState('Select a project first.', 'error')
+    return
+  }
+
+  await refreshDatasetList(projectPath)
+})
+
+elements.datasetSelect.addEventListener('change', async () => {
+  const selectedDatasetPath = elements.datasetSelect.value
+  if (!selectedDatasetPath) {
+    return
+  }
+
+  elements.commandProjectPath.value = selectedDatasetPath
+  setCurrentProjectHeader(selectedDatasetPath, classificationForPath(selectedDatasetPath))
+  setLastActionState('Active dataset changed.', 'success')
+  await refreshFileBrowser(selectedDatasetPath)
+})
+
+elements.refreshFilesButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await refreshFileBrowser(projectPath)
+})
+
 elements.refreshContractButton.addEventListener('click', async () => {
   await renderContract()
 })
@@ -153,8 +199,12 @@ async function detectProjectType(projectPath) {
       `dataset probe: ${escapeHtml(result.classificationSource?.dataset ?? 'n/a')} | ` +
       `subdataset probe: ${escapeHtml(result.classificationSource?.subdatasets ?? 'n/a')}` +
       `</div>`
+    state.rootProjectPath = projectPath
+    state.rootProjectClassification = result.classification
     setCurrentProjectHeader(projectPath, result.classification)
     setLastActionState(`Project type detected: ${result.classification}.`, 'success')
+    await refreshDatasetList(projectPath)
+    await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
   } catch (error) {
     elements.classificationOutput.textContent = String(error.message)
     setLastActionState('Project type detection failed.', 'error')
@@ -194,6 +244,50 @@ async function runWorkflowCommand(commandName, request) {
   }
 }
 
+async function refreshDatasetList(projectPath) {
+  if (!projectPath) {
+    return
+  }
+
+  try {
+    const datasets = await api.listDatasets(projectPath)
+    elements.datasetSelect.innerHTML = ''
+
+    for (const dataset of datasets) {
+      const option = document.createElement('option')
+      option.value = dataset.path
+      option.textContent = dataset.relativePath === '.' ? '(root dataset)' : dataset.relativePath
+      elements.datasetSelect.appendChild(option)
+    }
+
+    const activePath = elements.commandProjectPath.value.trim()
+    const hasActivePath = datasets.some((dataset) => dataset.path === activePath)
+    const nextPath = hasActivePath ? activePath : datasets[0]?.path
+
+    if (nextPath) {
+      elements.datasetSelect.value = nextPath
+      elements.commandProjectPath.value = nextPath
+      setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
+    }
+  } catch (error) {
+    setLastActionState('Could not load nested datasets.', 'warning')
+    elements.commandOutput.textContent = String(error.message)
+  }
+}
+
+async function refreshFileBrowser(projectPath) {
+  if (!projectPath) {
+    return
+  }
+
+  try {
+    const listing = await api.listFileEntries(projectPath, { maxDepth: 2, maxEntries: 250 })
+    elements.filesOutput.innerHTML = renderFileListing(listing)
+  } catch (error) {
+    elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
+  }
+}
+
 function parsePaths(text) {
   if (!text.trim()) {
     return []
@@ -206,12 +300,20 @@ function parsePaths(text) {
 
 function wireFolderPicker(button, input, options) {
   button.addEventListener('click', async () => {
-    const selectedPath = await api.pickDirectory({
-      title: options.title,
-      defaultPath: input.value.trim()
-    })
+    let selectedPath = null
+    try {
+      selectedPath = await api.pickDirectory({
+        title: options.title,
+        defaultPath: input.value.trim()
+      })
+    } catch (error) {
+      setLastActionState('Could not open folder picker.', 'error')
+      elements.commandOutput.textContent = String(error.message ?? error)
+      return
+    }
 
     if (!selectedPath) {
+      setLastActionState('Folder selection canceled.', 'idle')
       return
     }
 
@@ -223,6 +325,8 @@ function wireFolderPicker(button, input, options) {
     if (options.setAsCurrentProject) {
       setCurrentProjectHeader(selectedPath, getCurrentBadgeType())
     }
+
+    setLastActionState('Folder selected.', 'success')
   })
 }
 
@@ -358,6 +462,18 @@ function setCurrentProjectHeader(projectPath, classification) {
   setProjectBadge(classification)
 }
 
+function classificationForPath(projectPath) {
+  if (!projectPath) {
+    return 'unknown'
+  }
+
+  if (state.rootProjectPath && projectPath !== state.rootProjectPath) {
+    return 'dataset'
+  }
+
+  return state.rootProjectClassification
+}
+
 function getCurrentBadgeType() {
   if (elements.currentProjectBadge.classList.contains('badge-git')) {
     return 'git'
@@ -419,6 +535,24 @@ function setLastActionState(text, tone) {
   }
 
   elements.lastActionState.textContent = text
+}
+
+function renderFileListing(listing) {
+  if (!listing.entries.length) {
+    return '<p>No files found at this level.</p>'
+  }
+
+  const lines = listing.entries.map((entry) => {
+    const indent = '&nbsp;'.repeat(entry.depth * 4)
+    const marker = entry.type === 'directory' ? 'DIR' : 'FILE'
+    return `<li>${indent}<span class="file-type">${marker}</span> ${escapeHtml(entry.relativePath)}</li>`
+  })
+
+  const truncatedNote = listing.truncated
+    ? '<p class="hint">Listing truncated. Narrow project scope or increase listing limits.</p>'
+    : ''
+
+  return `<ul class="file-list">${lines.join('')}</ul>${truncatedNote}`
 }
 
 function escapeHtml(text) {

@@ -119,6 +119,27 @@ export class DataLadAdapter {
     return buildCommandResult(commandName, result, mapCommandError(commandName, result), warnings)
   }
 
+  async listDatasets(projectPath) {
+    await this.#ensureGitProject(projectPath)
+
+    const datasets = [{
+      path: projectPath,
+      relativePath: '.',
+      kind: 'root'
+    }]
+
+    const subdatasetPaths = await this.#readSubdatasetPathsFromGitModules(projectPath)
+    for (const relativePath of subdatasetPaths) {
+      datasets.push({
+        path: join(projectPath, relativePath),
+        relativePath,
+        kind: 'subdataset'
+      })
+    }
+
+    return datasets
+  }
+
   getInterfaceContract() {
     return getAdapterInterfaceContract()
   }
@@ -212,6 +233,24 @@ export class DataLadAdapter {
 
     const content = await readFile(gitModulesPath, 'utf8')
     return /\[submodule\s+".+"\]/.test(content)
+  }
+
+  async #readSubdatasetPathsFromGitModules(projectPath) {
+    const gitModulesPath = join(projectPath, '.gitmodules')
+    if (!(await fileExists(gitModulesPath))) {
+      return []
+    }
+
+    const content = await readFile(gitModulesPath, 'utf8')
+    const subdatasetPaths = []
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^\s*path\s*=\s*(.+)\s*$/)
+      if (match && match[1]) {
+        subdatasetPaths.push(match[1].trim())
+      }
+    }
+
+    return [...new Set(subdatasetPaths)]
   }
 
   #extractCommandWarnings(commandName, runResult) {

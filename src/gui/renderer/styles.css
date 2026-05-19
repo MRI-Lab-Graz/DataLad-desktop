@@ -41,6 +41,10 @@ body {
   gap: 18px;
 }
 
+.full-span {
+  grid-column: 1 / -1;
+}
+
 .project-strip {
   display: flex;
   align-items: center;
@@ -117,6 +121,12 @@ h2 {
   margin: 0.75rem 0 0 0;
   max-width: 64ch;
   color: var(--ink-soft);
+}
+
+.lede-small {
+  margin: 0 0 0.6rem 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
 .section-head {
@@ -246,6 +256,33 @@ select:focus {
   margin-top: 8px;
 }
 
+.file-list {
+  margin: 0;
+  padding-left: 1rem;
+  list-style: none;
+  max-height: 280px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+}
+
+.file-list li {
+  margin-bottom: 2px;
+}
+
+.file-type {
+  display: inline-block;
+  min-width: 2.8rem;
+  color: #5b666b;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.84rem;
+  color: #5b666b;
+}
+
 .badge {
   display: inline-block;
   padding: 0.17rem 0.55rem;
@@ -329,6 +366,10 @@ select:focus {
 
 .reveal-5 {
   animation-delay: 350ms;
+}
+
+.reveal-6 {
+  animation-delay: 420ms;
 }
 
 @keyframes reveal {
