@@ -2,7 +2,8 @@ const api = window.dataladDesktop
 
 const state = {
   rootProjectPath: null,
-  rootProjectClassification: 'unknown'
+  rootProjectClassification: 'unknown',
+  fileListing: null
 }
 
 const elements = {
@@ -23,7 +24,9 @@ const elements = {
   getDataButton: document.getElementById('get-data'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
+  openActiveFolderButton: document.getElementById('open-active-folder'),
   refreshFilesButton: document.getElementById('refresh-files'),
+  filesSearchInput: document.getElementById('files-search'),
   message: document.getElementById('message'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
@@ -184,6 +187,34 @@ elements.refreshFilesButton.addEventListener('click', async () => {
   await refreshFileBrowser(projectPath)
 })
 
+elements.openActiveFolderButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await revealPath(projectPath)
+})
+
+elements.filesSearchInput.addEventListener('input', () => {
+  renderCurrentFileBrowser()
+})
+
+elements.filesOutput.addEventListener('click', async (event) => {
+  const target = event.target.closest('[data-entry-path]')
+  if (!target) {
+    return
+  }
+
+  event.preventDefault()
+  const targetPath = target.getAttribute('data-entry-path')
+  if (!targetPath) {
+    return
+  }
+
+  await revealPath(targetPath)
+})
+
 elements.refreshContractButton.addEventListener('click', async () => {
   await renderContract()
 })
@@ -281,11 +312,32 @@ async function refreshFileBrowser(projectPath) {
   }
 
   try {
-    const listing = await api.listFileEntries(projectPath, { maxDepth: 2, maxEntries: 250 })
-    elements.filesOutput.innerHTML = renderFileListing(listing)
+    state.fileListing = await api.listFileEntries(projectPath, { maxDepth: 4, maxEntries: 500 })
+    renderCurrentFileBrowser()
   } catch (error) {
+    state.fileListing = null
     elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
   }
+}
+
+async function revealPath(targetPath) {
+  try {
+    await api.revealPath(targetPath)
+    setLastActionState('Opened in file manager.', 'success')
+  } catch (error) {
+    setLastActionState('Could not open file manager path.', 'error')
+    elements.commandOutput.textContent = String(error.message)
+  }
+}
+
+function renderCurrentFileBrowser() {
+  if (!state.fileListing) {
+    elements.filesOutput.textContent = 'Select or detect a project to load files.'
+    return
+  }
+
+  const query = elements.filesSearchInput.value.trim().toLowerCase()
+  elements.filesOutput.innerHTML = renderFileListing(state.fileListing, query)
 }
 
 function parsePaths(text) {
@@ -324,6 +376,8 @@ function wireFolderPicker(button, input, options) {
 
     if (options.setAsCurrentProject) {
       setCurrentProjectHeader(selectedPath, getCurrentBadgeType())
+      await refreshDatasetList(selectedPath)
+      await refreshFileBrowser(selectedPath)
     }
 
     setLastActionState('Folder selected.', 'success')
@@ -537,22 +591,112 @@ function setLastActionState(text, tone) {
   elements.lastActionState.textContent = text
 }
 
-function renderFileListing(listing) {
-  if (!listing.entries.length) {
-    return '<p>No files found at this level.</p>'
+function renderFileListing(listing, query) {
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredEntries = normalizedQuery
+    ? listing.entries.filter((entry) => entry.relativePath.toLowerCase().includes(normalizedQuery))
+    : listing.entries
+
+  if (!filteredEntries.length) {
+    return '<p>No matching files or folders.</p>'
   }
 
-  const lines = listing.entries.map((entry) => {
-    const indent = '&nbsp;'.repeat(entry.depth * 4)
-    const marker = entry.type === 'directory' ? 'DIR' : 'FILE'
-    return `<li>${indent}<span class="file-type">${marker}</span> ${escapeHtml(entry.relativePath)}</li>`
-  })
-
+  const tree = buildFileTree(listing.rootPath, filteredEntries)
+  const treeHtml = renderFileTreeNodes(tree.children, Boolean(normalizedQuery), 0)
   const truncatedNote = listing.truncated
     ? '<p class="hint">Listing truncated. Narrow project scope or increase listing limits.</p>'
     : ''
 
-  return `<ul class="file-list">${lines.join('')}</ul>${truncatedNote}`
+  return `<p class="hint">Use arrows to expand folders. Use Open to reveal in file manager.</p>${treeHtml}${truncatedNote}`
+}
+
+function buildFileTree(rootPath, entries) {
+  const root = {
+    name: '.',
+    type: 'directory',
+    absolutePath: rootPath,
+    children: new Map()
+  }
+
+  for (const entry of entries) {
+    const segments = entry.relativePath.split('/').filter(Boolean)
+    let currentNode = root
+    let currentPath = rootPath
+
+    for (let index = 0; index < segments.length; index += 1) {
+      const segment = segments[index]
+      const isLeaf = index === segments.length - 1
+
+      if (!currentNode.children.has(segment)) {
+        const absolutePath = isLeaf ? entry.absolutePath : appendPath(currentPath, segment)
+        currentNode.children.set(segment, {
+          name: segment,
+          type: isLeaf ? entry.type : 'directory',
+          absolutePath,
+          children: new Map()
+        })
+      }
+
+      const nextNode = currentNode.children.get(segment)
+      if (!isLeaf) {
+        nextNode.type = 'directory'
+      }
+      currentNode = nextNode
+      currentPath = nextNode.absolutePath
+    }
+  }
+
+  return root
+}
+
+function renderFileTreeNodes(children, expandAll, depth) {
+  const nodes = [...children.values()].sort((left, right) => {
+    if (left.type !== right.type) {
+      return left.type === 'directory' ? -1 : 1
+    }
+    return left.name.localeCompare(right.name)
+  })
+
+  const items = nodes
+    .map((node) => {
+      if (node.type === 'directory') {
+        const openAttribute = expandAll || depth === 0 ? ' open' : ''
+        return (
+          '<li class="file-node folder-node">' +
+          `<details${openAttribute}>` +
+          '<summary>' +
+          `<span class="file-type">DIR</span> <span class="file-name">${escapeHtml(node.name)}</span>` +
+          `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>` +
+          '</summary>' +
+          renderFileTreeNodes(node.children, expandAll, depth + 1) +
+          '</details>' +
+          '</li>'
+        )
+      }
+
+      return (
+        '<li class="file-node file-row">' +
+        `<span><span class="file-type">FILE</span> <span class="file-name">${escapeHtml(node.name)}</span></span>` +
+        `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>` +
+        '</li>'
+      )
+    })
+    .join('')
+
+  return `<ul class="file-list depth-${depth}">${items}</ul>`
+}
+
+function appendPath(basePath, segment) {
+  if (!basePath) {
+    return segment
+  }
+
+  const separator = basePath.includes('\\') ? '\\' : '/'
+  if (basePath.endsWith('\\') || basePath.endsWith('/')) {
+    return `${basePath}${segment}`
+  }
+
+  return `${basePath}${separator}${segment}`
 }
 
 function escapeHtml(text) {

@@ -125,10 +125,17 @@
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
           <div class="section-head">
             <h2 id="files-title">4. Files</h2>
-            <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
+            <div class="section-actions">
+              <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
+              <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
+            </div>
           </div>
 
           <p class="lede-small">Browse visible files in the selected dataset.</p>
+          <label class="field">
+            <span>Search In Files</span>
+            <input id="files-search" type="text" placeholder="Type to filter files and folders" />
+          </label>
           <div id="files-output" class="panel panel-muted">Select or detect a project to load files.</div>
         </section>
       </main>

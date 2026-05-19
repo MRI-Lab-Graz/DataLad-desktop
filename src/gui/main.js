@@ -1,7 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron'
-import { access, readdir } from 'node:fs/promises'
+import { access, readdir, stat } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { shell } from 'electron'
 import { DataLadAdapter } from '../datalad/adapter.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -83,6 +84,27 @@ ipcMain.handle('fs:listEntries', async (_event, payload = {}) => {
   return listEntries(rootPath, maxDepth, maxEntries)
 })
 
+ipcMain.handle('fs:revealPath', async (_event, targetPath) => {
+  if (!targetPath || typeof targetPath !== 'string') {
+    throw new Error('targetPath is required')
+  }
+
+  const normalizedTargetPath = resolve(targetPath)
+  await access(normalizedTargetPath)
+
+  const targetStat = await stat(normalizedTargetPath)
+  if (targetStat.isDirectory()) {
+    const errorMessage = await shell.openPath(normalizedTargetPath)
+    if (errorMessage) {
+      throw new Error(errorMessage)
+    }
+    return true
+  }
+
+  shell.showItemInFolder(normalizedTargetPath)
+  return true
+})
+
 async function resolveDialogDefaultPath(requestedPath) {
   const fallbackPath = process.cwd()
   if (!requestedPath || typeof requestedPath !== 'string') {
@@ -134,6 +156,7 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
 
       entries.push({
         name: child.name,
+        absolutePath,
         relativePath,
         type: child.isDirectory() ? 'directory' : 'file',
         depth: depthLevel
