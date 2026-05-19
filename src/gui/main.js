@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
@@ -45,6 +45,20 @@ ipcMain.handle('adapter:getContract', async () => {
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
   return process.cwd()
+})
+
+ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
+  const result = await dialog.showOpenDialog({
+    title: options.title ?? 'Select folder',
+    defaultPath: options.defaultPath || process.cwd(),
+    properties: ['openDirectory', 'createDirectory']
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
 })
 
 app.whenReady().then(() => {

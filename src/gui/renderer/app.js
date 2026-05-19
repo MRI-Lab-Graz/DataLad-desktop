@@ -2,15 +2,24 @@ const api = window.dataladDesktop
 
 const elements = {
   projectPath: document.getElementById('project-path'),
+  pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
-  commandName: document.getElementById('command-name'),
+  pickCommandProjectPathButton: document.getElementById('pick-command-project-path'),
+  currentProjectPath: document.getElementById('current-project-path'),
+  currentProjectBadge: document.getElementById('current-project-badge'),
+  lastActionState: document.getElementById('last-action-state'),
   source: document.getElementById('source'),
   targetPath: document.getElementById('target-path'),
+  pickTargetPathButton: document.getElementById('pick-target-path'),
+  cloneProjectButton: document.getElementById('clone-project'),
+  saveProjectButton: document.getElementById('save-project'),
+  getDataButton: document.getElementById('get-data'),
+  updateProjectButton: document.getElementById('update-project'),
+  publishProjectButton: document.getElementById('publish-project'),
   message: document.getElementById('message'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
   detectProjectButton: document.getElementById('detect-project'),
-  runCommandButton: document.getElementById('run-command'),
   refreshContractButton: document.getElementById('refresh-contract'),
   environmentOutput: document.getElementById('environment-output'),
   classificationOutput: document.getElementById('classification-output'),
@@ -19,11 +28,22 @@ const elements = {
 }
 
 await seedWorkspacePath()
-toggleFieldsByCommand(elements.commandName.value)
 await renderContract()
+setCurrentProjectHeader(elements.commandProjectPath.value.trim(), 'unknown')
 
-elements.commandName.addEventListener('change', () => {
-  toggleFieldsByCommand(elements.commandName.value)
+wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
+  title: 'Select project folder',
+  mirrorTo: elements.commandProjectPath,
+  setAsCurrentProject: true
+})
+
+wireFolderPicker(elements.pickCommandProjectPathButton, elements.commandProjectPath, {
+  title: 'Select command project folder',
+  setAsCurrentProject: true
+})
+
+wireFolderPicker(elements.pickTargetPathButton, elements.targetPath, {
+  title: 'Select clone target folder'
 })
 
 elements.checkEnvButton.addEventListener('click', async () => {
@@ -39,9 +59,90 @@ elements.detectProjectButton.addEventListener('click', async () => {
   const projectPath = elements.projectPath.value.trim()
   if (!projectPath) {
     elements.classificationOutput.textContent = 'Enter a project path first.'
+    setLastActionState('Select a project folder first.', 'error')
     return
   }
 
+  await detectProjectType(projectPath)
+})
+
+elements.cloneProjectButton.addEventListener('click', async () => {
+  const source = elements.source.value.trim()
+  const targetPath = elements.targetPath.value.trim()
+
+  if (!source || !targetPath) {
+    elements.commandOutput.textContent = 'Provide both source URL and target folder for clone.'
+    setLastActionState('Add source URL and target folder.', 'error')
+    return
+  }
+
+  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath })
+  if (!cloneResult?.ok) {
+    return
+  }
+
+  elements.commandProjectPath.value = targetPath
+  elements.projectPath.value = targetPath
+  setCurrentProjectHeader(targetPath, 'unknown')
+  await detectProjectType(targetPath)
+})
+
+elements.saveProjectButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const message = elements.message.value.trim()
+
+  if (!message) {
+    elements.commandOutput.textContent = 'Add a save message before running Save.'
+    setLastActionState('Add a save message first.', 'error')
+    return
+  }
+
+  await runWorkflowCommand('save', {
+    projectPath,
+    message,
+    paths: parsePaths(elements.paths.value)
+  })
+})
+
+elements.getDataButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await runWorkflowCommand('get', {
+    projectPath,
+    paths: parsePaths(elements.paths.value)
+  })
+})
+
+elements.updateProjectButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await runWorkflowCommand('update', { projectPath })
+})
+
+elements.publishProjectButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await runWorkflowCommand('push', { projectPath })
+})
+
+elements.refreshContractButton.addEventListener('click', async () => {
+  await renderContract()
+})
+
+async function detectProjectType(projectPath) {
   try {
     const result = await api.detectProject(projectPath)
     const badgeClass = `badge-${result.classification}`
@@ -52,52 +153,44 @@ elements.detectProjectButton.addEventListener('click', async () => {
       `dataset probe: ${escapeHtml(result.classificationSource?.dataset ?? 'n/a')} | ` +
       `subdataset probe: ${escapeHtml(result.classificationSource?.subdatasets ?? 'n/a')}` +
       `</div>`
+    setCurrentProjectHeader(projectPath, result.classification)
+    setLastActionState(`Project type detected: ${result.classification}.`, 'success')
   } catch (error) {
     elements.classificationOutput.textContent = String(error.message)
+    setLastActionState('Project type detection failed.', 'error')
   }
-})
+}
 
-elements.runCommandButton.addEventListener('click', async () => {
-  const commandName = elements.commandName.value
-  const request = buildCommandRequest(commandName)
+function readProjectPath() {
+  const path = elements.commandProjectPath.value.trim()
+  if (!path) {
+    elements.commandOutput.textContent = 'Set an active project folder first.'
+    setLastActionState('Set an active project folder first.', 'error')
+    return null
+  }
+  return path
+}
 
+async function runWorkflowCommand(commandName, request) {
   try {
     const result = await api.runCommand(commandName, request)
-    elements.commandOutput.textContent = JSON.stringify(result, null, 2)
+    elements.commandOutput.innerHTML = renderCommandResult(result)
+    if (result.ok) {
+      setLastActionState(
+        result.warnings?.length
+          ? `${actionLabel(commandName)} completed with advisories.`
+          : `${actionLabel(commandName)} completed.`,
+        result.warnings?.length ? 'warning' : 'success'
+      )
+    } else {
+      setLastActionState(`${actionLabel(commandName)} failed.`, 'error')
+    }
+
+    return result
   } catch (error) {
     elements.commandOutput.textContent = String(error.message)
-  }
-})
-
-elements.refreshContractButton.addEventListener('click', async () => {
-  await renderContract()
-})
-
-function buildCommandRequest(commandName) {
-  switch (commandName) {
-    case 'cloneInstall':
-      return {
-        source: elements.source.value.trim(),
-        targetPath: elements.targetPath.value.trim()
-      }
-    case 'save':
-      return {
-        projectPath: elements.commandProjectPath.value.trim(),
-        message: elements.message.value.trim(),
-        paths: parsePaths(elements.paths.value)
-      }
-    case 'get':
-      return {
-        projectPath: elements.commandProjectPath.value.trim(),
-        paths: parsePaths(elements.paths.value)
-      }
-    case 'update':
-    case 'push':
-      return {
-        projectPath: elements.commandProjectPath.value.trim()
-      }
-    default:
-      return {}
+    setLastActionState(`${actionLabel(commandName)} failed.`, 'error')
+    return null
   }
 }
 
@@ -111,20 +204,26 @@ function parsePaths(text) {
     .filter(Boolean)
 }
 
-function toggleFieldsByCommand(commandName) {
-  setFieldVisibility('source', commandName === 'cloneInstall')
-  setFieldVisibility('targetPath', commandName === 'cloneInstall')
-  setFieldVisibility('projectPath', commandName !== 'cloneInstall')
-  setFieldVisibility('message', commandName === 'save')
-  setFieldVisibility('paths', commandName === 'save' || commandName === 'get')
-}
+function wireFolderPicker(button, input, options) {
+  button.addEventListener('click', async () => {
+    const selectedPath = await api.pickDirectory({
+      title: options.title,
+      defaultPath: input.value.trim()
+    })
 
-function setFieldVisibility(fieldName, visible) {
-  const node = document.querySelector(`[data-field="${fieldName}"]`)
-  if (!node) {
-    return
-  }
-  node.hidden = !visible
+    if (!selectedPath) {
+      return
+    }
+
+    input.value = selectedPath
+    if (options.mirrorTo) {
+      options.mirrorTo.value = selectedPath
+    }
+
+    if (options.setAsCurrentProject) {
+      setCurrentProjectHeader(selectedPath, getCurrentBadgeType())
+    }
+  })
 }
 
 async function seedWorkspacePath() {
@@ -168,6 +267,158 @@ function renderEnvironment(diagnostics) {
     `<ul>${checksHtml}</ul>` +
     stepsHtml
   )
+}
+
+function renderCommandResult(result) {
+  const statusLine = buildWorkflowStatusLine(result)
+  const warningCount = result.warnings?.length ?? 0
+
+  let html = `<p><strong>${escapeHtml(statusLine)}</strong></p>`
+
+  if (warningCount > 0) {
+    html +=
+      '<p><strong>Advisories</strong> (non-fatal):</p>' +
+      `<ul>${result.warnings
+        .map((warning) => {
+          const actionHint = warning.actionHint ? ` (Tip: ${escapeHtml(warning.actionHint)})` : ''
+          return `<li>${escapeHtml(warning.message)}${actionHint}</li>`
+        })
+        .join('')}</ul>`
+  }
+
+  if (!result.ok && result.userError) {
+    html +=
+      `<p><strong>${escapeHtml(result.userError.title)}</strong></p>` +
+      `<p>${escapeHtml(result.userError.message)}</p>`
+  }
+
+  html +=
+    '<details>' +
+    '<summary>Raw command result</summary>' +
+    `<pre class="panel panel-code panel-inline-code">${escapeHtml(JSON.stringify(result, null, 2))}</pre>` +
+    '</details>'
+
+  return html
+}
+
+function buildWorkflowStatusLine(result) {
+  if (!result.ok) {
+    return 'Action could not be completed.'
+  }
+
+  if (result.commandName === 'cloneInstall') {
+    return 'Project cloned successfully.'
+  }
+
+  if (result.commandName === 'save') {
+    return 'Project changes saved.'
+  }
+
+  if (result.commandName === 'get') {
+    return 'Requested data retrieval finished.'
+  }
+
+  if (result.commandName === 'update') {
+    return 'Project update finished.'
+  }
+
+  if (result.commandName === 'push') {
+    return 'Publish finished.'
+  }
+
+  return 'Action finished.'
+}
+
+function actionLabel(commandName) {
+  if (commandName === 'cloneInstall') {
+    return 'Clone'
+  }
+
+  if (commandName === 'save') {
+    return 'Save'
+  }
+
+  if (commandName === 'get') {
+    return 'Get Data'
+  }
+
+  if (commandName === 'update') {
+    return 'Update'
+  }
+
+  if (commandName === 'push') {
+    return 'Publish'
+  }
+
+  return 'Action'
+}
+
+function setCurrentProjectHeader(projectPath, classification) {
+  elements.currentProjectPath.textContent = projectPath || 'No project selected'
+  setProjectBadge(classification)
+}
+
+function getCurrentBadgeType() {
+  if (elements.currentProjectBadge.classList.contains('badge-git')) {
+    return 'git'
+  }
+
+  if (elements.currentProjectBadge.classList.contains('badge-dataset')) {
+    return 'dataset'
+  }
+
+  if (elements.currentProjectBadge.classList.contains('badge-superdataset')) {
+    return 'superdataset'
+  }
+
+  return 'unknown'
+}
+
+function setProjectBadge(classification) {
+  const next = classification ?? 'unknown'
+  elements.currentProjectBadge.classList.remove(
+    'badge-git',
+    'badge-dataset',
+    'badge-superdataset',
+    'badge-unknown'
+  )
+
+  if (next === 'git') {
+    elements.currentProjectBadge.classList.add('badge-git')
+    elements.currentProjectBadge.textContent = 'Git'
+    return
+  }
+
+  if (next === 'dataset') {
+    elements.currentProjectBadge.classList.add('badge-dataset')
+    elements.currentProjectBadge.textContent = 'Dataset'
+    return
+  }
+
+  if (next === 'superdataset') {
+    elements.currentProjectBadge.classList.add('badge-superdataset')
+    elements.currentProjectBadge.textContent = 'Superdataset'
+    return
+  }
+
+  elements.currentProjectBadge.classList.add('badge-unknown')
+  elements.currentProjectBadge.textContent = 'Unknown'
+}
+
+function setLastActionState(text, tone) {
+  elements.lastActionState.classList.remove('state-idle', 'state-success', 'state-warning', 'state-error')
+
+  if (tone === 'success') {
+    elements.lastActionState.classList.add('state-success')
+  } else if (tone === 'warning') {
+    elements.lastActionState.classList.add('state-warning')
+  } else if (tone === 'error') {
+    elements.lastActionState.classList.add('state-error')
+  } else {
+    elements.lastActionState.classList.add('state-idle')
+  }
+
+  elements.lastActionState.textContent = text
 }
 
 function escapeHtml(text) {

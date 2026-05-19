@@ -21,6 +21,7 @@ Main workflow:
 - Support one active project at a time.
 - Keep the first version small.
 - Treat Gooey as reference only.
+- Keep MVP cross-platform (Windows and macOS), with Windows as the primary user platform for QA and polish priorities.
 
 ## MVP command set
 

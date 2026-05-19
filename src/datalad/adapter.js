@@ -110,12 +110,13 @@ export class DataLadAdapter {
 
     const commandSpec = this.#buildCommand(commandName, request)
     const result = await this.runner.run(commandSpec.command, commandSpec.args, commandSpec.options)
+    const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {
-      return buildCommandResult(commandName, result)
+      return buildCommandResult(commandName, result, null, warnings)
     }
 
-    return buildCommandResult(commandName, result, mapCommandError(commandName, result))
+    return buildCommandResult(commandName, result, mapCommandError(commandName, result), warnings)
   }
 
   getInterfaceContract() {
@@ -211,6 +212,54 @@ export class DataLadAdapter {
 
     const content = await readFile(gitModulesPath, 'utf8')
     return /\[submodule\s+".+"\]/.test(content)
+  }
+
+  #extractCommandWarnings(commandName, runResult) {
+    const stderr = runResult.stderr ?? ''
+    if (!stderr.trim()) {
+      return []
+    }
+
+    const warnings = []
+
+    if (/remote origin not usable by git-annex/i.test(stderr)) {
+      warnings.push({
+        code: 'ORIGIN_NOT_ANNEX_REMOTE',
+        severity: 'info',
+        message:
+          'The origin remote is usable for Git metadata but does not provide git-annex content endpoints.'
+      })
+    }
+
+    if (/\/config\s+download failed:\s*Not Found/i.test(stderr)) {
+      warnings.push({
+        code: 'REMOTE_CONFIG_NOT_FOUND',
+        severity: 'info',
+        message:
+          'A remote git-annex config endpoint was not found. Dataset metadata clone can still succeed.'
+      })
+    }
+
+    const siblingMatch = stderr.match(/access to \d+ dataset sibling\s+([^\s]+)\s+not auto-enabled/i)
+    if (siblingMatch) {
+      const siblingName = siblingMatch[1]
+      warnings.push({
+        code: 'SIBLING_NOT_AUTO_ENABLED',
+        severity: 'info',
+        message: `Sibling ${siblingName} was discovered but not auto-enabled. Enable it if you need data from that source.`,
+        actionHint: `datalad siblings -d "<dataset-path>" enable -s ${siblingName}`
+      })
+    }
+
+    if (warnings.length === 0 && commandName === 'cloneInstall') {
+      warnings.push({
+        code: 'CLONE_STDERR_OUTPUT',
+        severity: 'info',
+        message: 'Clone completed with additional command output in stderr. Review details if needed.'
+      })
+    }
+
+    return warnings
   }
 
   #buildCommand(commandName, request) {

@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
       request
     }),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
-  getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot')
+  getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
+  pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options)
 })

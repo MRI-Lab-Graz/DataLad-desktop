@@ -1,4 +1,4 @@
-export const ADAPTER_INTERFACE_VERSION = '0.2.0'
+export const ADAPTER_INTERFACE_VERSION = '0.3.0'
 
 export const COMMAND_SCHEMAS = Object.freeze({
   cloneInstall: {
@@ -59,13 +59,14 @@ export function assertRunnerResultShape(result) {
   }
 }
 
-export function buildCommandResult(commandName, runResult, userError = null) {
+export function buildCommandResult(commandName, runResult, userError = null, warnings = []) {
   assertRunnerResultShape(runResult)
   return {
     ok: !runResult.failed,
     commandName,
     ...runResult,
-    userError
+    userError,
+    warnings
   }
 }
 

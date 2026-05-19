@@ -14,6 +14,16 @@ The first version keeps the GitHub Desktop shell and exposes only five DataLad a
 
 Git-only projects should continue to behave like normal GitHub Desktop projects.
 
+## Platform target
+
+DataLad Desktop must be cross-platform for MVP, with special focus on Windows because the main user base is expected to run on Windows systems.
+
+Platform guidance:
+
+- Windows is the primary day-to-day user platform and should be treated as first-class in UX and validation.
+- macOS support remains required for cross-platform parity.
+- Cross-platform behavior should stay consistent across project detection, diagnostics, and DataLad actions.
+
 ## Repository setup notes
 
 This repository now includes an initial implementation scaffold for the MVP DataLad adapter boundary, strict command schemas, onboarding diagnostics formatting, and tests for classification edge cases.
