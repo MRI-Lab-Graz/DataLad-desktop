@@ -66,3 +66,30 @@ The window includes:
 - Project classification (Git / Dataset / Superdataset)
 - Curated DataLad actions (Clone/Install, Get, Save, Update, Push)
 - Adapter interface contract snapshot
+
+## Packaging builds
+
+Build packaged app output into an unpacked directory:
+
+```bash
+npm run package:dir
+```
+
+Build distributable artifacts:
+
+```bash
+npm run package:dist
+```
+
+Platform-specific packaging commands:
+
+```bash
+npm run package:mac
+npm run package:win
+```
+
+Packaged icons are configured in package.json and use:
+
+- src/gui/assets/icons/datalad_desktop.icns (macOS)
+- src/gui/assets/icons/datalad_desktop.ico (Windows)
+- src/gui/assets/icons/datalad_desktop.png (Linux)
