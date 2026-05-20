@@ -100,8 +100,7 @@ npm run package:platforms
 
 Use the workflow [build-os-artifacts.yml](.github/workflows/build-os-artifacts.yml) to build and upload platform artifacts in CI:
 
-- macOS Intel (x64)
-- macOS Apple Silicon (arm64)
+- macOS (builds both Intel x64 and Apple Silicon arm64)
 - Windows (x64)
 
 Trigger it manually from Actions via **Build OS Artifacts** (`workflow_dispatch`) or automatically by pushing a tag like `v0.1.0`.
