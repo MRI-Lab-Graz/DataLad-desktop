@@ -84,9 +84,29 @@ npm run package:dist
 Platform-specific packaging commands:
 
 ```bash
-npm run package:mac
-npm run package:win
+npm run package:mac:x64
+npm run package:mac:arm64
+npm run package:mac:both
+npm run package:win:x64
 ```
+
+Run all requested platform artifacts in sequence:
+
+```bash
+npm run package:platforms
+```
+
+## GitHub Actions Packaging
+
+Use the workflow [build-os-artifacts.yml](.github/workflows/build-os-artifacts.yml) to build and upload platform artifacts in CI:
+
+- macOS Intel (x64)
+- macOS Apple Silicon (arm64)
+- Windows (x64)
+
+Trigger it manually from Actions via **Build OS Artifacts** (`workflow_dispatch`) or automatically by pushing a tag like `v0.1.0`.
+
+When triggered by a `v*` tag, the same workflow also creates a GitHub Release and attaches the generated macOS and Windows artifacts.
 
 Packaged icons are configured in package.json and use:
 

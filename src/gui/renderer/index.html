@@ -116,11 +116,11 @@
           </label>
 
           <div class="row-actions">
-            <button id="detect-project" class="button button-primary" type="button">Detect Project Type</button>
+            <button id="detect-project" class="button button-primary" type="button">Check Project Folder</button>
           </div>
 
-          <div id="classification-output" class="panel panel-muted">Select a folder and detect its project type.</div>
-          <div id="environment-output" class="panel panel-muted">Setup check has not run yet.</div>
+          <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
+          <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Use Check Setup above.</div>
         </section>
 
         <section class="card reveal reveal-4" aria-labelledby="project-actions-title">
@@ -139,7 +139,7 @@
           </label>
 
           <label class="field">
-            <span>Dataset Inside Project</span>
+            <span>Project Data Folder</span>
             <div class="field-row">
               <select id="dataset-select"></select>
               <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
@@ -200,7 +200,7 @@
             </div>
           </div>
 
-          <p class="lede-small">Browse visible files in the selected dataset.</p>
+          <p class="lede-small">Browse visible files in the selected project folder.</p>
           <label class="field">
             <span>Search In Files</span>
             <input id="files-search" type="text" placeholder="Type to filter files and folders" />
