@@ -617,18 +617,24 @@ function buildFileTree(rootPath, entries) {
     absolutePath: rootPath,
     children: new Map()
   }
+  const absolutePathByRelative = new Map(
+    entries.map((entry) => [entry.relativePath, entry.absolutePath])
+  )
 
   for (const entry of entries) {
     const segments = entry.relativePath.split('/').filter(Boolean)
     let currentNode = root
-    let currentPath = rootPath
+    let currentRelativePath = ''
 
     for (let index = 0; index < segments.length; index += 1) {
       const segment = segments[index]
       const isLeaf = index === segments.length - 1
+      currentRelativePath = currentRelativePath ? `${currentRelativePath}/${segment}` : segment
 
       if (!currentNode.children.has(segment)) {
-        const absolutePath = isLeaf ? entry.absolutePath : appendPath(currentPath, segment)
+        const absolutePath = isLeaf
+          ? entry.absolutePath
+          : absolutePathByRelative.get(currentRelativePath) ?? null
         currentNode.children.set(segment, {
           name: segment,
           type: isLeaf ? entry.type : 'directory',
@@ -638,11 +644,14 @@ function buildFileTree(rootPath, entries) {
       }
 
       const nextNode = currentNode.children.get(segment)
+      if (isLeaf && !nextNode.absolutePath) {
+        nextNode.absolutePath = entry.absolutePath
+      }
+
       if (!isLeaf) {
         nextNode.type = 'directory'
       }
       currentNode = nextNode
-      currentPath = nextNode.absolutePath
     }
   }
 
@@ -659,6 +668,10 @@ function renderFileTreeNodes(children, expandAll, depth) {
 
   const items = nodes
     .map((node) => {
+      const openButton = node.absolutePath
+        ? `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>`
+        : ''
+
       if (node.type === 'directory') {
         const openAttribute = expandAll || depth === 0 ? ' open' : ''
         return (
@@ -666,7 +679,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
           `<details${openAttribute}>` +
           '<summary>' +
           `<span class="file-type">DIR</span> <span class="file-name">${escapeHtml(node.name)}</span>` +
-          `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>` +
+          openButton +
           '</summary>' +
           renderFileTreeNodes(node.children, expandAll, depth + 1) +
           '</details>' +
@@ -677,26 +690,13 @@ function renderFileTreeNodes(children, expandAll, depth) {
       return (
         '<li class="file-node file-row">' +
         `<span><span class="file-type">FILE</span> <span class="file-name">${escapeHtml(node.name)}</span></span>` +
-        `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>` +
+        openButton +
         '</li>'
       )
     })
     .join('')
 
   return `<ul class="file-list depth-${depth}">${items}</ul>`
-}
-
-function appendPath(basePath, segment) {
-  if (!basePath) {
-    return segment
-  }
-
-  const separator = basePath.includes('\\') ? '\\' : '/'
-  if (basePath.endsWith('\\') || basePath.endsWith('/')) {
-    return `${basePath}${segment}`
-  }
-
-  return `${basePath}${separator}${segment}`
 }
 
 function escapeHtml(text) {
