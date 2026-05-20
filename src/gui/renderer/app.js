@@ -150,8 +150,8 @@ elements.checkEnvButton.addEventListener('click', async () => {
 elements.detectProjectButton.addEventListener('click', async () => {
   const projectPath = elements.projectPath.value.trim()
   if (!projectPath) {
-    elements.classificationOutput.textContent = 'Enter a project path first.'
-    setLastActionState('Select a project folder first.', 'error')
+    elements.classificationOutput.textContent = 'Please choose a project folder first.'
+    setLastActionState('Choose a project folder first.', 'error')
     return
   }
 
@@ -307,7 +307,7 @@ elements.datasetSelect.addEventListener('change', async () => {
 
   elements.commandProjectPath.value = selectedDatasetPath
   setCurrentProjectHeader(selectedDatasetPath, classificationForPath(selectedDatasetPath))
-  setLastActionState('Active dataset changed.', 'success')
+  setLastActionState('Active data folder changed.', 'success')
   await refreshFileBrowser(selectedDatasetPath)
   await refreshBranchList(selectedDatasetPath)
 })
@@ -356,24 +356,17 @@ elements.refreshContractButton.addEventListener('click', async () => {
 async function detectProjectType(projectPath) {
   try {
     const result = await api.detectProject(projectPath)
-    const badgeClass = `badge-${result.classification}`
-    elements.classificationOutput.innerHTML =
-      `<div><span class="badge ${badgeClass}">${escapeHtml(result.classification)}</span></div>` +
-      `<div style="margin-top: 8px;">${escapeHtml(result.reason ?? 'No details provided.')}</div>` +
-      `<div style="margin-top: 8px; font-family: var(--mono); font-size: 0.78rem; color: #51636a;">` +
-      `dataset probe: ${escapeHtml(result.classificationSource?.dataset ?? 'n/a')} | ` +
-      `subdataset probe: ${escapeHtml(result.classificationSource?.subdatasets ?? 'n/a')}` +
-      `</div>`
+    elements.classificationOutput.innerHTML = renderProjectCheckOutput(result)
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
     setCurrentProjectHeader(projectPath, result.classification)
     rememberRecentProject(projectPath)
-    setLastActionState(`Project type detected: ${result.classification}.`, 'success')
+    setLastActionState(`Project check finished: ${friendlyProjectTypeLabel(result.classification)}.`, 'success')
     await refreshDatasetList(projectPath)
     await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
   } catch (error) {
     elements.classificationOutput.textContent = String(error.message)
-    setLastActionState('Project type detection failed.', 'error')
+    setLastActionState('Could not check this project folder.', 'error')
   }
 }
 
@@ -431,7 +424,7 @@ async function refreshDatasetList(projectPath) {
     for (const dataset of datasets) {
       const option = document.createElement('option')
       option.value = dataset.path
-      option.textContent = dataset.relativePath === '.' ? '(root dataset)' : dataset.relativePath
+      option.textContent = dataset.relativePath === '.' ? '(main project folder)' : dataset.relativePath
       elements.datasetSelect.appendChild(option)
     }
 
@@ -732,6 +725,59 @@ function actionLabel(commandName) {
   return 'Action'
 }
 
+function friendlyProjectTypeLabel(classification) {
+  if (classification === 'git') {
+    return 'Git project'
+  }
+
+  if (classification === 'dataset') {
+    return 'DataLad project'
+  }
+
+  if (classification === 'superdataset') {
+    return 'DataLad project with linked data'
+  }
+
+  return 'Project type unknown'
+}
+
+function friendlyProjectSummary(classification) {
+  if (classification === 'git') {
+    return 'This folder is a regular Git project. DataLad-specific structure was not detected.'
+  }
+
+  if (classification === 'dataset') {
+    return 'This folder is a DataLad project and is ready for DataLad actions.'
+  }
+
+  if (classification === 'superdataset') {
+    return 'This DataLad project contains linked child data folders.'
+  }
+
+  return 'We could not determine the project type.'
+}
+
+function renderProjectCheckOutput(result) {
+  const badgeClass = `badge-${result.classification}`
+  const label = friendlyProjectTypeLabel(result.classification)
+  const summary = friendlyProjectSummary(result.classification)
+  const detailsReason = result.reason ?? 'No additional details provided.'
+  const datasetSource = result.classificationSource?.dataset ?? 'n/a'
+  const subdatasetSource = result.classificationSource?.subdatasets ?? 'n/a'
+
+  return (
+    `<div><span class="badge ${badgeClass}">${escapeHtml(label)}</span></div>` +
+    `<div style="margin-top: 8px;">${escapeHtml(summary)}</div>` +
+    '<details style="margin-top: 8px;">' +
+    '<summary>Technical details</summary>' +
+    `<div style="margin-top: 8px;">${escapeHtml(detailsReason)}</div>` +
+    `<div style="margin-top: 8px; font-family: var(--mono); font-size: 0.78rem; color: #51636a;">` +
+    `checks: dataset=${escapeHtml(datasetSource)} | linked-data=${escapeHtml(subdatasetSource)}` +
+    '</div>' +
+    '</details>'
+  )
+}
+
 function setCurrentProjectHeader(projectPath, classification) {
   elements.currentProjectPath.textContent = projectPath || 'No project selected'
   setProjectBadge(classification)
@@ -784,13 +830,13 @@ function setProjectBadge(classification) {
 
   if (next === 'dataset') {
     elements.currentProjectBadge.classList.add('badge-dataset')
-    elements.currentProjectBadge.textContent = 'Dataset'
+    elements.currentProjectBadge.textContent = 'DataLad'
     return
   }
 
   if (next === 'superdataset') {
     elements.currentProjectBadge.classList.add('badge-superdataset')
-    elements.currentProjectBadge.textContent = 'Superdataset'
+    elements.currentProjectBadge.textContent = 'DataLad + Links'
     return
   }
 

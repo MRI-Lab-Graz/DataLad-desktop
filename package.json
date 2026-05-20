@@ -11,7 +11,12 @@
     "package:dir": "electron-builder --dir",
     "package:dist": "electron-builder",
     "package:mac": "electron-builder --mac",
-    "package:win": "electron-builder --win"
+    "package:win": "electron-builder --win",
+    "package:mac:x64": "electron-builder --mac --x64",
+    "package:mac:arm64": "electron-builder --mac --arm64",
+    "package:mac:both": "electron-builder --mac --x64 --arm64",
+    "package:win:x64": "electron-builder --win --x64",
+    "package:platforms": "npm run package:mac:both && npm run package:win:x64"
   },
   "build": {
     "appId": "org.datalad.desktop",
