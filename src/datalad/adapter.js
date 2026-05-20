@@ -9,8 +9,17 @@ import {
   getAdapterInterfaceContract
 } from './schema.js'
 
-const CURATED_COMMANDS = new Set(['cloneInstall', 'get', 'save', 'update', 'push'])
+const CURATED_COMMANDS = new Set([
+  'cloneInstall',
+  'get',
+  'save',
+  'update',
+  'push',
+  'createBranch',
+  'switchBranch'
+])
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
+const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
 export class DataLadAdapter {
   constructor({ runner } = {}) {
@@ -138,6 +147,90 @@ export class DataLadAdapter {
     }
 
     return datasets
+  }
+
+  async listBranches(projectPath) {
+    await this.#ensureGitProject(projectPath)
+
+    const branchResult = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      'branch',
+      '--format=%(refname:short)'
+    ])
+
+    if (branchResult.failed) {
+      throw new Error(
+        `Could not list branches for project: ${projectPath} (${branchResult.stderr.trim() || 'unknown error'})`
+      )
+    }
+
+    const currentBranchResult = await this.runner.run('git', ['-C', projectPath, 'branch', '--show-current'])
+    const branches = (branchResult.stdout ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right))
+
+    const currentBranch = this.#firstLine(currentBranchResult.stdout)
+
+    return {
+      projectPath,
+      currentBranch,
+      detachedHead: !currentBranch,
+      branches
+    }
+  }
+
+  async getLastCommit(projectPath) {
+    try {
+      await this.#ensureGitProject(projectPath)
+    } catch {
+      return {
+        hasCommit: false,
+        reason: 'not-git'
+      }
+    }
+
+    const result = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      'log',
+      '-1',
+      '--format=%ct%n%h%n%s'
+    ])
+
+    if (result.failed) {
+      const diagnostics = `${result.stderr ?? ''}\n${result.stdout ?? ''}`
+      if (NO_COMMITS_PATTERN.test(diagnostics)) {
+        return {
+          hasCommit: false,
+          reason: 'no-commits'
+        }
+      }
+
+      return {
+        hasCommit: false,
+        reason: 'unavailable'
+      }
+    }
+
+    const [timestampLine, commitHashLine, subjectLine] = (result.stdout ?? '').split(/\r?\n/)
+    const timestamp = Number.parseInt(timestampLine, 10)
+
+    if (!Number.isFinite(timestamp)) {
+      return {
+        hasCommit: false,
+        reason: 'unavailable'
+      }
+    }
+
+    return {
+      hasCommit: true,
+      timestamp,
+      commitHash: (commitHashLine ?? '').trim(),
+      subject: (subjectLine ?? '').trim()
+    }
   }
 
   getInterfaceContract() {
@@ -403,6 +496,24 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['-C', projectPath, 'push'],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'createBranch': {
+        const projectPath = request.projectPath
+        const branchName = request.branchName
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'checkout', '-b', branchName],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'switchBranch': {
+        const projectPath = request.projectPath
+        const branchName = request.branchName
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'checkout', branchName],
           options: { cwd: projectPath }
         }
       }

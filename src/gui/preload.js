@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     }),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
+  listBranches: (projectPath) => ipcRenderer.invoke('adapter:listBranches', projectPath),
+  getLastCommit: (projectPath) => ipcRenderer.invoke('adapter:getLastCommit', projectPath),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>

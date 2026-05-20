@@ -1,4 +1,4 @@
-export const ADAPTER_INTERFACE_VERSION = '0.3.0'
+export const ADAPTER_INTERFACE_VERSION = '0.4.0'
 
 export const COMMAND_SCHEMAS = Object.freeze({
   cloneInstall: {
@@ -20,13 +20,21 @@ export const COMMAND_SCHEMAS = Object.freeze({
   push: {
     required: ['projectPath'],
     optional: []
+  },
+  createBranch: {
+    required: ['projectPath', 'branchName'],
+    optional: []
+  },
+  switchBranch: {
+    required: ['projectPath', 'branchName'],
+    optional: []
   }
 })
 
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
 
 /**
- * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push'} DataLadCommandName
+ * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
  */
 
 export function assertCommandRequest(commandName, request) {

@@ -3,10 +3,25 @@ const api = window.dataladDesktop
 const state = {
   rootProjectPath: null,
   rootProjectClassification: 'unknown',
-  fileListing: null
+  fileListing: null,
+  commitMetaRequestToken: 0,
+  recentProjects: [],
+  recentProjectEmojiByPath: {}
 }
 
+const DAY_IN_MS = 24 * 60 * 60 * 1000
+const MAX_RECENT_PROJECTS = 8
+const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
+const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
+const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
+
 const elements = {
+  recentProjectsOutput: document.getElementById('recent-projects-output'),
+  clearRecentProjectsButton: document.getElementById('clear-recent-projects'),
+  cloneNavTriggerButton: document.getElementById('clone-nav-trigger'),
+  topQuickSaveButton: document.getElementById('top-quick-save'),
+  cloneDrawer: document.getElementById('clone-drawer'),
+  cloneDrawerCloseButton: document.getElementById('clone-drawer-close'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -14,11 +29,18 @@ const elements = {
   currentProjectPath: document.getElementById('current-project-path'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   lastActionState: document.getElementById('last-action-state'),
+  lastCommitMeta: document.getElementById('last-commit-meta'),
   source: document.getElementById('source'),
   targetPath: document.getElementById('target-path'),
   pickTargetPathButton: document.getElementById('pick-target-path'),
   datasetSelect: document.getElementById('dataset-select'),
   refreshDatasetsButton: document.getElementById('refresh-datasets'),
+  branchSelect: document.getElementById('branch-select'),
+  refreshBranchesButton: document.getElementById('refresh-branches'),
+  switchBranchButton: document.getElementById('switch-branch'),
+  createBranchButton: document.getElementById('create-branch'),
+  newBranchNameInput: document.getElementById('new-branch-name'),
+  branchStatus: document.getElementById('branch-status'),
   cloneProjectButton: document.getElementById('clone-project'),
   saveProjectButton: document.getElementById('save-project'),
   getDataButton: document.getElementById('get-data'),
@@ -39,11 +61,16 @@ const elements = {
   contractOutput: document.getElementById('contract-output')
 }
 
+loadRecentProjects()
 await seedWorkspacePath()
+if (state.recentProjects.length === 0 && elements.projectPath.value.trim()) {
+  rememberRecentProject(elements.projectPath.value.trim())
+}
 await renderContract()
 setCurrentProjectHeader(elements.commandProjectPath.value.trim(), 'unknown')
 await refreshDatasetList(elements.commandProjectPath.value.trim())
 await refreshFileBrowser(elements.commandProjectPath.value.trim())
+await refreshBranchList(elements.commandProjectPath.value.trim())
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -58,6 +85,57 @@ wireFolderPicker(elements.pickCommandProjectPathButton, elements.commandProjectP
 
 wireFolderPicker(elements.pickTargetPathButton, elements.targetPath, {
   title: 'Select clone target folder'
+})
+
+elements.cloneNavTriggerButton.addEventListener('click', () => {
+  setCloneDrawerExpanded(elements.cloneDrawer.hasAttribute('hidden'))
+})
+
+elements.cloneDrawerCloseButton.addEventListener('click', () => {
+  setCloneDrawerExpanded(false)
+})
+
+elements.recentProjectsOutput.addEventListener('click', async (event) => {
+  const target = event.target.closest('[data-recent-project-path]')
+  if (!target) {
+    return
+  }
+
+  const projectPath = target.getAttribute('data-recent-project-path')?.trim()
+  if (!projectPath) {
+    return
+  }
+
+  setLastActionState('Switching to recent project...', 'idle')
+  elements.projectPath.value = projectPath
+  elements.commandProjectPath.value = projectPath
+  setCurrentProjectHeader(projectPath, 'unknown')
+  await detectProjectType(projectPath)
+})
+
+elements.clearRecentProjectsButton.addEventListener('click', () => {
+  state.recentProjects = []
+  persistRecentProjects()
+  renderRecentProjects()
+  setLastActionState('Recent project list cleared.', 'idle')
+})
+
+elements.topQuickSaveButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const message = elements.message.value.trim() || buildQuickSaveMessage()
+  if (!elements.message.value.trim()) {
+    elements.message.value = message
+  }
+
+  await runWorkflowCommand('save', {
+    projectPath,
+    message,
+    paths: parsePaths(elements.paths.value)
+  })
 })
 
 elements.checkEnvButton.addEventListener('click', async () => {
@@ -98,6 +176,7 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   elements.commandProjectPath.value = targetPath
   elements.projectPath.value = targetPath
   setCurrentProjectHeader(targetPath, 'unknown')
+  setCloneDrawerExpanded(false)
   await detectProjectType(targetPath)
   await refreshDatasetList(targetPath)
   await refreshFileBrowser(targetPath)
@@ -166,6 +245,60 @@ elements.refreshDatasetsButton.addEventListener('click', async () => {
   await refreshDatasetList(projectPath)
 })
 
+elements.refreshBranchesButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  await refreshBranchList(projectPath)
+})
+
+elements.switchBranchButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const branchName = elements.branchSelect.value.trim()
+  if (!branchName) {
+    setBranchStatus('Select a branch before switching.', 'error')
+    setLastActionState('Select a branch before switching.', 'error')
+    return
+  }
+
+  const result = await runWorkflowCommand('switchBranch', { projectPath, branchName })
+  if (!result?.ok) {
+    return
+  }
+
+  setBranchStatus(`Switched to ${branchName}.`, 'success')
+  await refreshBranchList(projectPath)
+})
+
+elements.createBranchButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const branchName = elements.newBranchNameInput.value.trim()
+  if (!branchName) {
+    setBranchStatus('Enter a branch name before creating.', 'error')
+    setLastActionState('Enter a branch name before creating.', 'error')
+    return
+  }
+
+  const result = await runWorkflowCommand('createBranch', { projectPath, branchName })
+  if (!result?.ok) {
+    return
+  }
+
+  elements.newBranchNameInput.value = ''
+  setBranchStatus(`Created and switched to ${branchName}.`, 'success')
+  await refreshBranchList(projectPath)
+})
+
 elements.datasetSelect.addEventListener('change', async () => {
   const selectedDatasetPath = elements.datasetSelect.value
   if (!selectedDatasetPath) {
@@ -176,6 +309,7 @@ elements.datasetSelect.addEventListener('change', async () => {
   setCurrentProjectHeader(selectedDatasetPath, classificationForPath(selectedDatasetPath))
   setLastActionState('Active dataset changed.', 'success')
   await refreshFileBrowser(selectedDatasetPath)
+  await refreshBranchList(selectedDatasetPath)
 })
 
 elements.refreshFilesButton.addEventListener('click', async () => {
@@ -233,6 +367,7 @@ async function detectProjectType(projectPath) {
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
     setCurrentProjectHeader(projectPath, result.classification)
+    rememberRecentProject(projectPath)
     setLastActionState(`Project type detected: ${result.classification}.`, 'success')
     await refreshDatasetList(projectPath)
     await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
@@ -256,6 +391,15 @@ async function runWorkflowCommand(commandName, request) {
   try {
     const result = await api.runCommand(commandName, request)
     elements.commandOutput.innerHTML = renderCommandResult(result)
+
+    const nextProjectPath = request.projectPath ?? request.targetPath
+    if (result.ok && nextProjectPath) {
+      void refreshLastCommitMeta(nextProjectPath)
+      if (commandName === 'createBranch' || commandName === 'switchBranch') {
+        void refreshBranchList(nextProjectPath)
+      }
+    }
+
     if (result.ok) {
       setLastActionState(
         result.warnings?.length
@@ -299,7 +443,11 @@ async function refreshDatasetList(projectPath) {
       elements.datasetSelect.value = nextPath
       elements.commandProjectPath.value = nextPath
       setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
+      await refreshBranchList(nextPath)
+      return
     }
+
+    await refreshBranchList(projectPath)
   } catch (error) {
     setLastActionState('Could not load nested datasets.', 'warning')
     elements.commandOutput.textContent = String(error.message)
@@ -317,6 +465,61 @@ async function refreshFileBrowser(projectPath) {
   } catch (error) {
     state.fileListing = null
     elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
+  }
+}
+
+async function refreshBranchList(projectPath) {
+  if (!projectPath) {
+    elements.branchSelect.innerHTML = ''
+    elements.switchBranchButton.disabled = true
+    setBranchStatus('Load a project to manage branches.', 'idle')
+    return
+  }
+
+  setBranchStatus('Loading branches...', 'idle')
+
+  try {
+    const branchSnapshot = await api.listBranches(projectPath)
+    const branchNames = Array.isArray(branchSnapshot.branches) ? branchSnapshot.branches : []
+    elements.branchSelect.innerHTML = ''
+
+    if (branchNames.length === 0) {
+      const emptyOption = document.createElement('option')
+      emptyOption.value = ''
+      emptyOption.textContent = '(no local branches)'
+      elements.branchSelect.appendChild(emptyOption)
+      elements.switchBranchButton.disabled = true
+      setBranchStatus('No local branches found.', 'error')
+      return
+    }
+
+    for (const branchName of branchNames) {
+      const option = document.createElement('option')
+      option.value = branchName
+      option.textContent = branchName
+      elements.branchSelect.appendChild(option)
+    }
+
+    const currentBranch = branchSnapshot.currentBranch?.trim()
+    if (currentBranch && branchNames.includes(currentBranch)) {
+      elements.branchSelect.value = currentBranch
+      setBranchStatus(`Current branch: ${currentBranch}`, 'success')
+    } else if (branchSnapshot.detachedHead) {
+      setBranchStatus('Detached HEAD detected. Choose a branch to switch.', 'error')
+    } else {
+      setBranchStatus('Choose a branch to switch.', 'idle')
+    }
+
+    elements.switchBranchButton.disabled = false
+  } catch (error) {
+    elements.branchSelect.innerHTML = ''
+    const fallbackOption = document.createElement('option')
+    fallbackOption.value = ''
+    fallbackOption.textContent = '(branch list unavailable)'
+    elements.branchSelect.appendChild(fallbackOption)
+    elements.switchBranchButton.disabled = true
+    setBranchStatus('Could not load branches.', 'error')
+    elements.commandOutput.textContent = String(error.message)
   }
 }
 
@@ -376,8 +579,10 @@ function wireFolderPicker(button, input, options) {
 
     if (options.setAsCurrentProject) {
       setCurrentProjectHeader(selectedPath, getCurrentBadgeType())
+      rememberRecentProject(selectedPath)
       await refreshDatasetList(selectedPath)
       await refreshFileBrowser(selectedPath)
+      await refreshBranchList(selectedPath)
     }
 
     setLastActionState('Folder selected.', 'success')
@@ -484,6 +689,14 @@ function buildWorkflowStatusLine(result) {
     return 'Publish finished.'
   }
 
+  if (result.commandName === 'createBranch') {
+    return 'Branch created and checked out.'
+  }
+
+  if (result.commandName === 'switchBranch') {
+    return 'Branch switched.'
+  }
+
   return 'Action finished.'
 }
 
@@ -508,12 +721,22 @@ function actionLabel(commandName) {
     return 'Publish'
   }
 
+  if (commandName === 'createBranch') {
+    return 'Create Branch'
+  }
+
+  if (commandName === 'switchBranch') {
+    return 'Switch Branch'
+  }
+
   return 'Action'
 }
 
 function setCurrentProjectHeader(projectPath, classification) {
   elements.currentProjectPath.textContent = projectPath || 'No project selected'
   setProjectBadge(classification)
+  renderRecentProjects()
+  void refreshLastCommitMeta(projectPath)
 }
 
 function classificationForPath(projectPath) {
@@ -591,6 +814,295 @@ function setLastActionState(text, tone) {
   elements.lastActionState.textContent = text
 }
 
+function setBranchStatus(text, tone) {
+  elements.branchStatus.classList.remove('branch-status-idle', 'branch-status-success', 'branch-status-error')
+
+  if (tone === 'success') {
+    elements.branchStatus.classList.add('branch-status-success')
+  } else if (tone === 'error') {
+    elements.branchStatus.classList.add('branch-status-error')
+  } else {
+    elements.branchStatus.classList.add('branch-status-idle')
+  }
+
+  elements.branchStatus.textContent = text
+}
+
+function setCloneDrawerExpanded(expanded) {
+  if (expanded) {
+    elements.cloneDrawer.removeAttribute('hidden')
+    elements.cloneNavTriggerButton.setAttribute('aria-expanded', 'true')
+    return
+  }
+
+  elements.cloneDrawer.setAttribute('hidden', '')
+  elements.cloneNavTriggerButton.setAttribute('aria-expanded', 'false')
+}
+
+async function refreshLastCommitMeta(projectPath) {
+  const nextToken = state.commitMetaRequestToken + 1
+  state.commitMetaRequestToken = nextToken
+
+  if (!projectPath) {
+    setLastCommitMeta('Select a project to see last commit status.', 'idle')
+    return
+  }
+
+  try {
+    const lastCommit = await api.getLastCommit(projectPath)
+    if (state.commitMetaRequestToken !== nextToken) {
+      return
+    }
+
+    if (!lastCommit?.hasCommit) {
+      if (lastCommit?.reason === 'no-commits') {
+        setLastCommitMeta('No commits yet in this project.', 'alert')
+        return
+      }
+
+      if (lastCommit?.reason === 'not-git') {
+        setLastCommitMeta('Selected folder is not a git repository yet.', 'idle')
+        return
+      }
+
+      setLastCommitMeta('Last commit status unavailable.', 'idle')
+      return
+    }
+
+    const ageMs = Math.max(0, Date.now() - Number(lastCommit.timestamp) * 1000)
+    const relativeAge = formatAgeFromMilliseconds(ageMs)
+    const suffix = lastCommit.commitHash ? ` (${lastCommit.commitHash})` : ''
+    const commitSubject = (lastCommit.subject ?? '').trim()
+    const tooltip = commitSubject ? `Last commit message: ${commitSubject}` : ''
+    setLastCommitMeta(`Last commit ${relativeAge} ago${suffix}.`, 'reminder', tooltip)
+  } catch {
+    if (state.commitMetaRequestToken !== nextToken) {
+      return
+    }
+    setLastCommitMeta('Last commit status unavailable.', 'idle')
+  }
+}
+
+function setLastCommitMeta(text, tone, tooltip = '') {
+  elements.lastCommitMeta.classList.remove(
+    'hero-meta-idle',
+    'hero-meta-reminder',
+    'hero-meta-alert',
+    'hero-meta-has-tooltip'
+  )
+
+  if (tone === 'reminder') {
+    elements.lastCommitMeta.classList.add('hero-meta-reminder')
+  } else if (tone === 'alert') {
+    elements.lastCommitMeta.classList.add('hero-meta-alert')
+  } else {
+    elements.lastCommitMeta.classList.add('hero-meta-idle')
+  }
+
+  elements.lastCommitMeta.textContent = text
+
+  if (tooltip) {
+    elements.lastCommitMeta.classList.add('hero-meta-has-tooltip')
+    elements.lastCommitMeta.setAttribute('title', tooltip)
+    return
+  }
+
+  elements.lastCommitMeta.removeAttribute('title')
+}
+
+function formatAgeFromMilliseconds(ageMs) {
+  if (ageMs < 60 * 1000) {
+    return 'just now'
+  }
+
+  if (ageMs < 60 * 60 * 1000) {
+    const minutes = Math.floor(ageMs / (60 * 1000))
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
+  }
+
+  if (ageMs < DAY_IN_MS) {
+    const hours = Math.floor(ageMs / (60 * 60 * 1000))
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  }
+
+  if (ageMs < 7 * DAY_IN_MS) {
+    const days = Math.floor(ageMs / DAY_IN_MS)
+    return `${days} ${days === 1 ? 'day' : 'days'}`
+  }
+
+  const weeks = Math.floor(ageMs / (7 * DAY_IN_MS))
+  return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`
+}
+
+function buildQuickSaveMessage() {
+  const now = new Date()
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-')
+  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return `checkpoint ${date} ${time}`
+}
+
+function loadRecentProjects() {
+  try {
+    const raw = localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY)
+    const rawEmojis = localStorage.getItem(RECENT_PROJECT_EMOJIS_STORAGE_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    const parsedEmojis = rawEmojis ? JSON.parse(rawEmojis) : {}
+    state.recentProjects = sanitizeRecentProjects(parsed)
+    state.recentProjectEmojiByPath = sanitizeRecentProjectEmojiMap(parsedEmojis)
+  } catch {
+    state.recentProjects = []
+    state.recentProjectEmojiByPath = {}
+  }
+
+  for (const projectPath of state.recentProjects) {
+    ensureProjectEmoji(projectPath)
+  }
+
+  persistRecentProjects()
+  renderRecentProjects()
+}
+
+function persistRecentProjects() {
+  try {
+    localStorage.setItem(RECENT_PROJECTS_STORAGE_KEY, JSON.stringify(state.recentProjects))
+    localStorage.setItem(RECENT_PROJECT_EMOJIS_STORAGE_KEY, JSON.stringify(state.recentProjectEmojiByPath))
+  } catch {
+    // Ignore storage errors (for example private mode restrictions).
+  }
+}
+
+function sanitizeRecentProjects(candidate) {
+  if (!Array.isArray(candidate)) {
+    return []
+  }
+
+  const uniquePaths = []
+  for (const entry of candidate) {
+    if (typeof entry !== 'string') {
+      continue
+    }
+
+    const normalizedEntry = entry.trim()
+    if (!normalizedEntry || uniquePaths.includes(normalizedEntry)) {
+      continue
+    }
+
+    uniquePaths.push(normalizedEntry)
+    if (uniquePaths.length >= MAX_RECENT_PROJECTS) {
+      break
+    }
+  }
+
+  return uniquePaths
+}
+
+function sanitizeRecentProjectEmojiMap(candidate) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return {}
+  }
+
+  const safeMap = {}
+  for (const [projectPath, emoji] of Object.entries(candidate)) {
+    const normalizedPath = projectPath.trim()
+    if (!normalizedPath || typeof emoji !== 'string') {
+      continue
+    }
+
+    if (PROJECT_EMOJI_CHOICES.includes(emoji)) {
+      safeMap[normalizedPath] = emoji
+    }
+  }
+
+  return safeMap
+}
+
+function rememberRecentProject(projectPath) {
+  const normalizedPath = projectPath?.trim()
+  if (!normalizedPath) {
+    return
+  }
+
+  ensureProjectEmoji(normalizedPath)
+
+  state.recentProjects = [normalizedPath, ...state.recentProjects.filter((entry) => entry !== normalizedPath)].slice(
+    0,
+    MAX_RECENT_PROJECTS
+  )
+
+  persistRecentProjects()
+  renderRecentProjects()
+}
+
+function renderRecentProjects() {
+  const currentPath = elements.projectPath.value.trim()
+  const slots = []
+
+  for (const projectPath of state.recentProjects) {
+    const projectName = projectNameFromPath(projectPath)
+    const iconEmoji = projectEmojiForPath(projectPath)
+    const isActive = projectPath === currentPath
+    slots.push(
+      '<button type="button" class="recent-project-slot' +
+        `${isActive ? ' recent-project-slot-active' : ''}" ` +
+        `data-recent-project-path="${escapeHtml(projectPath)}" title="${escapeHtml(projectPath)}">` +
+        `<span class="recent-project-icon" aria-hidden="true">${escapeHtml(iconEmoji)}</span>` +
+        `<span class="recent-project-name">${escapeHtml(projectName)}</span>` +
+        '</button>'
+    )
+  }
+
+  const emptySlotCount = Math.max(0, MAX_RECENT_PROJECTS - slots.length)
+  for (let index = 0; index < emptySlotCount; index += 1) {
+    slots.push(
+      '<div class="recent-project-slot recent-project-slot-empty" aria-hidden="true">' +
+        '<span class="recent-project-icon recent-project-icon-empty">+</span>' +
+        '<span class="recent-project-name">Empty</span>' +
+        '</div>'
+    )
+  }
+
+  elements.recentProjectsOutput.innerHTML = `<div class="recent-projects-line">${slots.join('')}</div>`
+  elements.clearRecentProjectsButton.disabled = state.recentProjects.length === 0
+}
+
+function projectNameFromPath(projectPath) {
+  const normalized = String(projectPath).replaceAll('\\', '/').replace(/\/+$/, '')
+  const segments = normalized.split('/').filter(Boolean)
+  return segments.at(-1) ?? normalized
+}
+
+function projectEmojiForPath(projectPath) {
+  const normalizedPath = projectPath?.trim()
+  if (!normalizedPath) {
+    return '📁'
+  }
+
+  return state.recentProjectEmojiByPath[normalizedPath] ?? ensureProjectEmoji(normalizedPath)
+}
+
+function ensureProjectEmoji(projectPath) {
+  const normalizedPath = projectPath?.trim()
+  if (!normalizedPath) {
+    return '📁'
+  }
+
+  const existing = state.recentProjectEmojiByPath[normalizedPath]
+  if (existing) {
+    return existing
+  }
+
+  const usedEmojis = new Set(Object.values(state.recentProjectEmojiByPath))
+  const availablePool = PROJECT_EMOJI_CHOICES.filter((emoji) => !usedEmojis.has(emoji))
+  const selectionPool = availablePool.length ? availablePool : PROJECT_EMOJI_CHOICES
+  const selectedEmoji = selectionPool[Math.floor(Math.random() * selectionPool.length)]
+  state.recentProjectEmojiByPath[normalizedPath] = selectedEmoji
+  return selectedEmoji
+}
+
 function renderFileListing(listing, query) {
   const normalizedQuery = query.trim().toLowerCase()
   const filteredEntries = normalizedQuery
@@ -603,11 +1115,13 @@ function renderFileListing(listing, query) {
 
   const tree = buildFileTree(listing.rootPath, filteredEntries)
   const treeHtml = renderFileTreeNodes(tree.children, Boolean(normalizedQuery), 0)
+  const finderHeader =
+    '<div class="finder-header"><span>Item</span><span class="finder-header-action">Reveal</span></div>'
   const truncatedNote = listing.truncated
     ? '<p class="hint">Listing truncated. Narrow project scope or increase listing limits.</p>'
     : ''
 
-  return `<p class="hint">Use arrows to expand folders. Use Open to reveal in file manager.</p>${treeHtml}${truncatedNote}`
+  return `<p class="hint">Finder-style view: expand folders, click Open to reveal in file manager, and watch status badges for changed items.</p>${finderHeader}${treeHtml}${truncatedNote}`
 }
 
 function buildFileTree(rootPath, entries) {
@@ -615,10 +1129,17 @@ function buildFileTree(rootPath, entries) {
     name: '.',
     type: 'directory',
     absolutePath: rootPath,
+    gitStatus: null,
     children: new Map()
   }
-  const absolutePathByRelative = new Map(
-    entries.map((entry) => [entry.relativePath, entry.absolutePath])
+  const metadataByRelative = new Map(
+    entries.map((entry) => [
+      entry.relativePath,
+      {
+        absolutePath: entry.absolutePath,
+        gitStatus: entry.gitStatus ?? null
+      }
+    ])
   )
 
   for (const entry of entries) {
@@ -632,13 +1153,21 @@ function buildFileTree(rootPath, entries) {
       currentRelativePath = currentRelativePath ? `${currentRelativePath}/${segment}` : segment
 
       if (!currentNode.children.has(segment)) {
-        const absolutePath = isLeaf
-          ? entry.absolutePath
-          : absolutePathByRelative.get(currentRelativePath) ?? null
+        const pathMetadata = isLeaf
+          ? {
+              absolutePath: entry.absolutePath,
+              gitStatus: entry.gitStatus ?? null
+            }
+          : metadataByRelative.get(currentRelativePath) ?? {
+              absolutePath: null,
+              gitStatus: null
+            }
+
         currentNode.children.set(segment, {
           name: segment,
           type: isLeaf ? entry.type : 'directory',
-          absolutePath,
+          absolutePath: pathMetadata.absolutePath,
+          gitStatus: pathMetadata.gitStatus,
           children: new Map()
         })
       }
@@ -648,8 +1177,16 @@ function buildFileTree(rootPath, entries) {
         nextNode.absolutePath = entry.absolutePath
       }
 
+      if (isLeaf && !nextNode.gitStatus) {
+        nextNode.gitStatus = entry.gitStatus ?? null
+      }
+
       if (!isLeaf) {
         nextNode.type = 'directory'
+        const directoryStatus = metadataByRelative.get(currentRelativePath)?.gitStatus ?? null
+        if (directoryStatus) {
+          nextNode.gitStatus = directoryStatus
+        }
       }
       currentNode = nextNode
     }
@@ -671,15 +1208,20 @@ function renderFileTreeNodes(children, expandAll, depth) {
       const openButton = node.absolutePath
         ? `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>`
         : ''
+      const iconClass = node.type === 'directory' ? 'file-icon file-icon-folder' : 'file-icon file-icon-file'
+      const statusBadge = renderGitStatusBadge(node.gitStatus)
+      const label =
+        `<span class="finder-name-cell"><span class="${iconClass}" aria-hidden="true"></span>` +
+        `<span class="file-name">${escapeHtml(node.name)}</span>${statusBadge}</span>`
 
       if (node.type === 'directory') {
         const openAttribute = expandAll || depth === 0 ? ' open' : ''
         return (
           '<li class="file-node folder-node">' +
           `<details${openAttribute}>` +
-          '<summary>' +
-          `<span class="file-type">DIR</span> <span class="file-name">${escapeHtml(node.name)}</span>` +
-          openButton +
+          '<summary class="finder-row finder-row-folder">' +
+          label +
+          `<span class="finder-action-cell">${openButton}</span>` +
           '</summary>' +
           renderFileTreeNodes(node.children, expandAll, depth + 1) +
           '</details>' +
@@ -688,15 +1230,34 @@ function renderFileTreeNodes(children, expandAll, depth) {
       }
 
       return (
-        '<li class="file-node file-row">' +
-        `<span><span class="file-type">FILE</span> <span class="file-name">${escapeHtml(node.name)}</span></span>` +
-        openButton +
+        '<li class="file-node file-row finder-row">' +
+        label +
+        `<span class="finder-action-cell">${openButton}</span>` +
         '</li>'
       )
     })
     .join('')
 
   return `<ul class="file-list depth-${depth}">${items}</ul>`
+}
+
+function renderGitStatusBadge(gitStatus) {
+  if (!gitStatus) {
+    return ''
+  }
+
+  const labels = {
+    modified: 'Modified',
+    added: 'Added',
+    deleted: 'Deleted',
+    renamed: 'Renamed',
+    untracked: 'Untracked',
+    conflict: 'Conflict',
+    changed: 'Changed'
+  }
+
+  const label = labels[gitStatus] ?? 'Changed'
+  return `<span class="file-status file-status-${escapeHtml(gitStatus)}">${escapeHtml(label)}</span>`
 }
 
 function escapeHtml(text) {

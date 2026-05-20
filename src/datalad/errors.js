@@ -17,6 +17,37 @@ export function mapCommandError(commandName, runResult) {
   const stderr = runResult.stderr ?? ''
   const details = stderr.trim()
 
+  if (commandName === 'createBranch' && hasPattern(stderr, /already exists/)) {
+    return {
+      code: 'BRANCH_EXISTS',
+      title: 'Branch already exists',
+      message: 'A branch with this name already exists. Pick a different name or switch to the existing branch.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'switchBranch' && hasPattern(stderr, /pathspec|did not match any file|unknown revision/)) {
+    return {
+      code: 'BRANCH_NOT_FOUND',
+      title: 'Branch was not found',
+      message: 'The selected branch does not exist in this project.',
+      technicalDetails: details
+    }
+  }
+
+  if (
+    (commandName === 'createBranch' || commandName === 'switchBranch') &&
+    hasPattern(stderr, /local changes|would be overwritten|please commit your changes/)
+  ) {
+    return {
+      code: 'WORKTREE_DIRTY',
+      title: 'Please save or stash changes first',
+      message:
+        'Branch changes are blocked because local edits would be overwritten. Save your work first, then try again.',
+      technicalDetails: details
+    }
+  }
+
   if (hasPattern(stderr, /command not found|enoent|not recognized/)) {
     return {
       code: 'TOOLING_MISSING',
