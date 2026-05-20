@@ -110,6 +110,42 @@ test('checkEnvironment builds info report when all required tools are available'
   assert.equal(diagnostics.report.recoverySteps.length, 0)
 })
 
+test('checkEnvironment falls back to python when python3 is unavailable', async () => {
+  const runner = new FakeRunner()
+  runner.set('python3', ['--version'], {
+    exitCode: 127,
+    stdout: '',
+    stderr: 'command not found: python3',
+    failed: true
+  })
+  runner.set('python', ['--version'], {
+    exitCode: 0,
+    stdout: 'Python 3.10.14\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('datalad', ['--version'], {
+    exitCode: 0,
+    stdout: 'datalad 1.1.4\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['annex', 'version'], {
+    exitCode: 0,
+    stdout: 'git-annex version: 10.20240129\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const diagnostics = await adapter.checkEnvironment()
+
+  assert.equal(diagnostics.supported, true)
+  assert.equal(diagnostics.python.available, true)
+  assert.equal(diagnostics.python.version, 'Python 3.10.14')
+  assert.equal(diagnostics.report.recoverySteps.length, 0)
+})
+
 test('detectProject returns git classification when no datalad metadata exists', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-git-'))
   const runner = new FakeRunner()

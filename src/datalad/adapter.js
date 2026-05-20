@@ -19,7 +19,7 @@ export class DataLadAdapter {
 
   async checkEnvironment() {
     const [python, datalad, gitAnnex] = await Promise.all([
-      this.#checkTool('python3', ['--version']),
+      this.#checkPython(),
       this.#checkTool('datalad', ['--version']),
       this.#checkTool('git', ['annex', 'version'])
     ])
@@ -142,6 +142,67 @@ export class DataLadAdapter {
 
   getInterfaceContract() {
     return getAdapterInterfaceContract()
+  }
+
+  async #checkPython() {
+    const attemptedDetails = []
+
+    for (const candidate of this.#pythonCandidates()) {
+      const result = await this.runner.run(candidate.command, candidate.args)
+
+      if (result.failed) {
+        const details = (result.stderr || result.stdout || '').trim()
+        if (details) {
+          attemptedDetails.push(`${candidate.label}: ${details}`)
+        }
+        continue
+      }
+
+      const versionLine = this.#firstLine(result.stdout || result.stderr)
+      if (versionLine && /^Python\s+3(\D|$)/i.test(versionLine)) {
+        return {
+          available: true,
+          version: versionLine,
+          details: null
+        }
+      }
+
+      attemptedDetails.push(
+        `${candidate.label}: ${versionLine || 'returned an unknown version string'}`
+      )
+    }
+
+    return {
+      available: false,
+      version: null,
+      details:
+        attemptedDetails.join(' | ') || 'No supported Python 3 command was found in PATH.'
+    }
+  }
+
+  #pythonCandidates() {
+    const candidates = [
+      {
+        command: 'python3',
+        args: ['--version'],
+        label: 'python3 --version'
+      },
+      {
+        command: 'python',
+        args: ['--version'],
+        label: 'python --version'
+      }
+    ]
+
+    if (process.platform === 'win32') {
+      candidates.unshift({
+        command: 'py',
+        args: ['-3', '--version'],
+        label: 'py -3 --version'
+      })
+    }
+
+    return candidates
   }
 
   async #checkTool(command, args) {
