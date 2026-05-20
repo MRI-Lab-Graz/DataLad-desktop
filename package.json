@@ -7,10 +7,40 @@
   "description": "DataLad Desktop cross-platform project workflow app",
   "scripts": {
     "start": "electron .",
-    "test": "node --test"
+    "test": "node --test",
+    "package:dir": "electron-builder --dir",
+    "package:dist": "electron-builder",
+    "package:mac": "electron-builder --mac",
+    "package:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "org.datalad.desktop",
+    "productName": "DataLad Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "src/gui/assets/icons/datalad_desktop.icns"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/gui/assets/icons/datalad_desktop.ico"
+    },
+    "linux": {
+      "icon": "src/gui/assets/icons/datalad_desktop.png"
+    }
   },
   "devDependencies": {
-    "electron": "^42.1.0"
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1"
   },
   "engines": {
     "node": ">=20"

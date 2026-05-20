@@ -1,8 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { access, readdir, stat } from 'node:fs/promises'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { shell } from 'electron'
 import { DataLadAdapter } from '../datalad/adapter.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -10,6 +9,7 @@ const __dirname = dirname(__filename)
 
 const adapter = new DataLadAdapter()
 const APP_NAME = 'DataLad Desktop'
+const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
 
 function createMainWindow() {
@@ -18,8 +18,9 @@ function createMainWindow() {
     height: 820,
     minWidth: 980,
     minHeight: 700,
-    backgroundColor: '#f5f2e9',
+    backgroundColor: '#eef6fb',
     title: APP_NAME,
+    icon: APP_ICON_PATH,
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -29,6 +30,33 @@ function createMainWindow() {
   })
 
   mainWindow.loadFile(join(__dirname, 'renderer', 'index.html'))
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      void shell.openExternal(url)
+      return { action: 'deny' }
+    }
+
+    return { action: 'allow' }
+  })
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      event.preventDefault()
+      void shell.openExternal(url)
+    }
+  })
+}
+
+function applyAppIcon() {
+  const iconImage = nativeImage.createFromPath(APP_ICON_PATH)
+  if (iconImage.isEmpty()) {
+    return
+  }
+
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(iconImage)
+  }
 }
 
 ipcMain.handle('adapter:checkEnvironment', async () => {
@@ -180,6 +208,7 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
 
 app.whenReady().then(() => {
   app.setName(APP_NAME)
+  applyAppIcon()
   createMainWindow()
 
   app.on('activate', () => {
