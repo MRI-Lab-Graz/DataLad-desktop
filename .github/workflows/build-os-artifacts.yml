@@ -29,7 +29,7 @@ jobs:
       - name: Build macOS Intel artifacts
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run package:mac:x64
+        run: npm run package:mac:x64 -- --publish=never
 
       - name: Upload macOS Intel artifacts
         uses: actions/upload-artifact@v4
@@ -62,7 +62,7 @@ jobs:
       - name: Build macOS Apple Silicon artifacts
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run package:mac:arm64
+        run: npm run package:mac:arm64 -- --publish=never
 
       - name: Upload macOS Apple Silicon artifacts
         uses: actions/upload-artifact@v4
@@ -93,7 +93,7 @@ jobs:
         run: npm ci
 
       - name: Build Windows artifacts
-        run: npm run package:win:x64
+        run: npm run package:win:x64 -- --publish=never
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
