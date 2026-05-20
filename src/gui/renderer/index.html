@@ -18,60 +18,48 @@
       <header class="hero card reveal reveal-1">
         <div class="hero-top">
           <p class="eyebrow">DataLad Desktop</p>
-          <a
-            class="hero-link"
-            href="https://github.com/datalad"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open DataLad on GitHub"
-          >
-            <img src="../assets/icons/datalad_desktop.png" alt="" class="hero-link-icon" />
-            <span>github.com/datalad</span>
-          </a>
+          <div class="hero-meta-stack">
+            <a
+              class="hero-link"
+              href="https://github.com/datalad"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Open DataLad on GitHub"
+            >
+              <img src="../assets/icons/datalad_desktop.png" alt="" class="hero-link-icon" />
+              <span>github.com/datalad</span>
+            </a>
+            <p id="last-commit-meta" class="hero-meta hero-meta-idle">
+              Last commit status appears here after selecting a project.
+            </p>
+          </div>
         </div>
         <h1>DataLad Desktop</h1>
         <p class="lede">
           Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
-      </header>
 
-      <section class="card project-strip" aria-labelledby="current-project-title">
-        <div>
-          <p id="current-project-title" class="strip-label">Current Project</p>
-          <p id="current-project-path" class="strip-path">No project selected</p>
-        </div>
-        <div class="strip-state-group">
-          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
-          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
-        </div>
-      </section>
-
-      <main class="grid">
-        <section class="card reveal reveal-2" aria-labelledby="open-project-title">
-          <div class="section-head">
-            <h2 id="open-project-title">1. Open Project</h2>
-            <button id="check-env" class="button button-ghost">Check Setup</button>
+        <div class="hero-quick">
+          <div class="hero-quick-actions">
+            <button id="check-env" class="button button-ghost" type="button">Check Setup</button>
+            <button
+              id="clone-nav-trigger"
+              class="button button-primary"
+              type="button"
+              aria-expanded="false"
+              aria-controls="clone-drawer"
+            >
+              Clone Project
+            </button>
+            <button id="top-quick-save" class="button button-ghost" type="button">Quick Save</button>
           </div>
+          <p class="hero-quick-note">Start here for a new study project. Clone once, then continue below.</p>
+        </div>
 
-          <label class="field">
-            <span>Project Folder</span>
-            <div class="field-row">
-              <input id="project-path" type="text" placeholder="/path/to/project" />
-              <button id="pick-project-path" class="button button-ghost button-inline" type="button">Browse</button>
-            </div>
-          </label>
-
-          <div class="row-actions">
-            <button id="detect-project" class="button button-primary" type="button">Detect Project Type</button>
-          </div>
-
-          <div id="classification-output" class="panel panel-muted">Select a folder and detect its project type.</div>
-          <div id="environment-output" class="panel panel-muted">Setup check has not run yet.</div>
-        </section>
-
-        <section class="card reveal reveal-3" aria-labelledby="clone-title">
-          <div class="section-head">
-            <h2 id="clone-title">2. Clone DataLad Project (Optional)</h2>
+        <section id="clone-drawer" class="clone-drawer" aria-labelledby="clone-title" hidden>
+          <div class="clone-drawer-head">
+            <h2 id="clone-title">Clone DataLad Project</h2>
+            <button id="clone-drawer-close" class="button button-ghost button-inline" type="button">Hide</button>
           </div>
 
           <label class="field">
@@ -91,10 +79,53 @@
             <button id="clone-project" class="button button-primary" type="button">Clone Project</button>
           </div>
         </section>
+      </header>
+
+      <section class="card recent-projects reveal reveal-2" aria-labelledby="recent-projects-title">
+        <div class="section-head recent-projects-head">
+          <h2 id="recent-projects-title">Latest Projects</h2>
+          <button id="clear-recent-projects" class="button button-ghost button-inline" type="button">Clear</button>
+        </div>
+        <p class="lede-small">Jump between recent projects quickly.</p>
+        <div id="recent-projects-output" class="recent-projects-row"></div>
+      </section>
+
+      <section class="card project-strip" aria-labelledby="current-project-title">
+        <div>
+          <p id="current-project-title" class="strip-label">Current Project</p>
+          <p id="current-project-path" class="strip-path">No project selected</p>
+        </div>
+        <div class="strip-state-group">
+          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
+          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
+        </div>
+      </section>
+
+      <main class="grid">
+        <section class="card reveal reveal-3" aria-labelledby="open-project-title">
+          <div class="section-head">
+            <h2 id="open-project-title">1. Open Project</h2>
+          </div>
+
+          <label class="field">
+            <span>Project Folder</span>
+            <div class="field-row">
+              <input id="project-path" type="text" placeholder="/path/to/project" />
+              <button id="pick-project-path" class="button button-ghost button-inline" type="button">Browse</button>
+            </div>
+          </label>
+
+          <div class="row-actions">
+            <button id="detect-project" class="button button-primary" type="button">Detect Project Type</button>
+          </div>
+
+          <div id="classification-output" class="panel panel-muted">Select a folder and detect its project type.</div>
+          <div id="environment-output" class="panel panel-muted">Setup check has not run yet.</div>
+        </section>
 
         <section class="card reveal reveal-4" aria-labelledby="project-actions-title">
           <div class="section-head">
-            <h2 id="project-actions-title">3. Work With Project</h2>
+            <h2 id="project-actions-title">2. Work With Project</h2>
           </div>
 
           <label class="field">
@@ -114,6 +145,31 @@
               <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
             </div>
           </label>
+
+          <section class="branch-box" aria-labelledby="branch-management-title">
+            <div class="section-head branch-head">
+              <h3 id="branch-management-title">Branch</h3>
+              <button id="refresh-branches" class="button button-ghost button-inline" type="button">Refresh</button>
+            </div>
+
+            <label class="field">
+              <span>Current / Switch To</span>
+              <div class="field-row">
+                <select id="branch-select"></select>
+                <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Create New Branch</span>
+              <div class="field-row">
+                <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
+                <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
+              </div>
+            </label>
+
+            <p id="branch-status" class="branch-status branch-status-idle">Load a project to manage branches.</p>
+          </section>
 
           <label class="field">
             <span>Save Message</span>
@@ -137,7 +193,7 @@
 
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
           <div class="section-head">
-            <h2 id="files-title">4. Files</h2>
+            <h2 id="files-title">3. Files</h2>
             <div class="section-actions">
               <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
               <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>

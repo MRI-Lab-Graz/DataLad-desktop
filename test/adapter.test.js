@@ -308,6 +308,36 @@ test('listDatasets returns only root dataset when no .gitmodules exists', async 
   assert.equal(datasets[0].relativePath, '.')
 })
 
+test('listBranches returns current branch and local branch names', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-list-branches-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'branch', '--format=%(refname:short)'], {
+    exitCode: 0,
+    stdout: 'feature-z\nmain\nfeature-a\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'branch', '--show-current'], {
+    exitCode: 0,
+    stdout: 'main\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const branches = await adapter.listBranches(root)
+
+  assert.equal(branches.currentBranch, 'main')
+  assert.equal(branches.detachedHead, false)
+  assert.deepEqual(branches.branches, ['feature-a', 'feature-z', 'main'])
+})
+
 test('runCommand routes save through curated datalad invocation', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'], {
@@ -328,6 +358,44 @@ test('runCommand routes save through curated datalad invocation', async () => {
   assert.equal(runner.calls.length, 1)
   assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'])
   assert.deepEqual(result.warnings, [])
+})
+
+test('runCommand routes createBranch through curated git invocation', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'checkout', '-b', 'feature/new-ui'], {
+    exitCode: 0,
+    stdout: 'Switched to a new branch feature/new-ui\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createBranch', {
+    projectPath: '/tmp/project',
+    branchName: 'feature/new-ui'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'checkout', '-b', 'feature/new-ui'])
+})
+
+test('runCommand routes switchBranch through curated git invocation', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'checkout', 'main'], {
+    exitCode: 0,
+    stdout: 'Switched to branch main\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('switchBranch', {
+    projectPath: '/tmp/project',
+    branchName: 'main'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'checkout', 'main'])
 })
 
 test('runCommand returns non-fatal clone advisories from stderr output', async () => {
@@ -388,11 +456,60 @@ test('runCommand rejects invalid request shape before shell execution', async ()
   assert.equal(runner.calls.length, 0)
 })
 
+test('getLastCommit returns latest commit metadata for git projects', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-last-commit-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%n%h%n%s'], {
+    exitCode: 0,
+    stdout: '1716200000\na1b2c3d\ncheckpoint\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const commit = await adapter.getLastCommit(root)
+
+  assert.equal(commit.hasCommit, true)
+  assert.equal(commit.timestamp, 1716200000)
+  assert.equal(commit.commitHash, 'a1b2c3d')
+  assert.equal(commit.subject, 'checkpoint')
+})
+
+test('getLastCommit returns no-commits when repository has no history yet', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-last-empty-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%n%h%n%s'], {
+    exitCode: 128,
+    stdout: '',
+    stderr: 'fatal: your current branch main does not have any commits yet',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const commit = await adapter.getLastCommit(root)
+
+  assert.equal(commit.hasCommit, false)
+  assert.equal(commit.reason, 'no-commits')
+})
+
 test('getInterfaceContract returns stable schema metadata', () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const contract = adapter.getInterfaceContract()
 
-  assert.equal(contract.version, '0.3.0')
+  assert.equal(contract.version, '0.4.0')
   assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
   assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
+  assert.deepEqual(contract.commands.createBranch.required, ['projectPath', 'branchName'])
 })

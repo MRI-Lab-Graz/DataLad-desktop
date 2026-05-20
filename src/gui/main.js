@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { access, readdir, stat } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
@@ -77,6 +78,14 @@ ipcMain.handle('adapter:getContract', async () => {
 
 ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
   return adapter.listDatasets(projectPath)
+})
+
+ipcMain.handle('adapter:listBranches', async (_event, projectPath) => {
+  return adapter.listBranches(projectPath)
+})
+
+ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
+  return adapter.getLastCommit(projectPath)
 })
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
@@ -198,12 +207,171 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
 
   await walk(normalizedRoot, 0)
 
+  const gitStatusByPath = await readGitStatusMap(normalizedRoot)
+  const changedPaths = [...gitStatusByPath.keys()]
+  const entriesWithStatus = entries.map((entry) => {
+    if (entry.type === 'file') {
+      return {
+        ...entry,
+        gitStatus: gitStatusByPath.get(entry.relativePath) ?? null
+      }
+    }
+
+    const hasChangedDescendant = changedPaths.some(
+      (candidatePath) =>
+        candidatePath === entry.relativePath || candidatePath.startsWith(`${entry.relativePath}/`)
+    )
+
+    return {
+      ...entry,
+      gitStatus: hasChangedDescendant ? 'changed' : null
+    }
+  })
+
   return {
     rootPath: normalizedRoot,
     maxDepth,
     truncated,
-    entries
+    entries: entriesWithStatus
   }
+}
+
+async function readGitStatusMap(rootPath) {
+  const gitResult = await runCommand('git', [
+    '-C',
+    rootPath,
+    '-c',
+    'core.quotePath=false',
+    'status',
+    '--porcelain',
+    '--untracked-files=all'
+  ])
+
+  if (gitResult.failed) {
+    return new Map()
+  }
+
+  const statusByPath = new Map()
+  const lines = gitResult.stdout.split(/\r?\n/).filter(Boolean)
+  for (const line of lines) {
+    if (line.length < 4) {
+      continue
+    }
+
+    const statusCode = line.slice(0, 2)
+    const pathPortion = line.slice(3).trim()
+    if (!pathPortion) {
+      continue
+    }
+
+    let nextPath = pathPortion
+    if ((statusCode.includes('R') || statusCode.includes('C')) && pathPortion.includes(' -> ')) {
+      nextPath = pathPortion.split(' -> ').at(-1)?.trim() ?? pathPortion
+    }
+
+    const normalizedPath = normalizeStatusPath(nextPath)
+    if (!normalizedPath) {
+      continue
+    }
+
+    const mappedStatus = mapStatusCode(statusCode)
+    if (!mappedStatus) {
+      continue
+    }
+
+    const existingStatus = statusByPath.get(normalizedPath)
+    statusByPath.set(normalizedPath, mergeStatusPriority(existingStatus, mappedStatus))
+  }
+
+  return statusByPath
+}
+
+function normalizeStatusPath(pathValue) {
+  return pathValue
+    .replaceAll('\\', '/')
+    .replace(/^\.\//, '')
+    .trim()
+}
+
+function mapStatusCode(statusCode) {
+  if (statusCode === '??') {
+    return 'untracked'
+  }
+
+  if (statusCode.includes('U')) {
+    return 'conflict'
+  }
+
+  if (statusCode.includes('D')) {
+    return 'deleted'
+  }
+
+  if (statusCode.includes('R')) {
+    return 'renamed'
+  }
+
+  if (statusCode.includes('A')) {
+    return 'added'
+  }
+
+  if (statusCode.includes('M')) {
+    return 'modified'
+  }
+
+  return 'changed'
+}
+
+function mergeStatusPriority(left, right) {
+  if (!left) {
+    return right
+  }
+
+  const ranking = {
+    conflict: 6,
+    deleted: 5,
+    renamed: 4,
+    added: 3,
+    modified: 2,
+    untracked: 1,
+    changed: 0
+  }
+
+  return (ranking[right] ?? 0) > (ranking[left] ?? 0) ? right : left
+}
+
+async function runCommand(command, args) {
+  return new Promise((resolveCommand) => {
+    const processHandle = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    processHandle.stdout.on('data', (chunk) => {
+      stdout += String(chunk)
+    })
+
+    processHandle.stderr.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+
+    processHandle.on('error', () => {
+      resolveCommand({
+        stdout,
+        stderr,
+        failed: true
+      })
+    })
+
+    processHandle.on('close', (exitCode) => {
+      resolveCommand({
+        stdout,
+        stderr,
+        failed: (exitCode ?? 1) !== 0
+      })
+    })
+  })
 }
 
 app.whenReady().then(() => {
