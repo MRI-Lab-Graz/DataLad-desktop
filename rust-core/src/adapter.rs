@@ -1126,6 +1126,9 @@ mod tests {
     use crate::process_runner::{CommandResult, CommandRunner, RunOptions};
     use serde_json::{json, to_value};
     use std::collections::HashMap;
+    use std::fs::{create_dir_all, write};
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Default)]
     struct FakeRunner {
@@ -1134,6 +1137,17 @@ mod tests {
 
     impl FakeRunner {
         fn with_response(mut self, command: &str, args: &[&str], response: CommandResult) -> Self {
+            let key = format!("{}::{}", command, args.join(" "));
+            self.responses.insert(key, response);
+            self
+        }
+
+        fn with_response_owned(
+            mut self,
+            command: &str,
+            args: Vec<String>,
+            response: CommandResult,
+        ) -> Self {
             let key = format!("{}::{}", command, args.join(" "));
             self.responses.insert(key, response);
             self
@@ -1176,6 +1190,32 @@ mod tests {
         }
     }
 
+    fn ok_result_owned(command: &str, args: &[String], stdout: &str) -> CommandResult {
+        CommandResult {
+            command: command.to_string(),
+            args: args.to_vec(),
+            exit_code: 0,
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+            failed: false,
+        }
+    }
+
+    fn unique_temp_dir(prefix: &str) -> PathBuf {
+        let now_nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be monotonic")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "{}-{}-{}",
+            prefix,
+            std::process::id(),
+            now_nanos
+        ));
+        create_dir_all(&path).expect("temp dir should be created");
+        path
+    }
+
     #[test]
     fn check_environment_reports_missing_tools() {
         let runner = FakeRunner::default()
@@ -1203,6 +1243,28 @@ mod tests {
         assert!(!diagnostics.datalad.available);
         assert!(!diagnostics.git_annex.available);
         assert_eq!(diagnostics.report.severity, "warning");
+    }
+
+    #[test]
+    fn interface_contract_serialization_matches_expected_fields() {
+        let adapter = DataLadAdapterCore::new(FakeRunner::default());
+        let contract = adapter.get_interface_contract();
+
+        let serialized = to_value(&contract).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized contract should be an object");
+
+        assert!(object.contains_key("classificationValues"));
+        assert!(!object.contains_key("classification_values"));
+
+        let commands = object
+            .get("commands")
+            .and_then(Value::as_object)
+            .expect("commands should be an object");
+
+        assert!(commands.contains_key("save"));
+        assert!(commands.contains_key("cloneInstall"));
     }
 
     #[test]
@@ -1617,5 +1679,298 @@ mod tests {
 
         assert!(!result.has_commit);
         assert_eq!(result.reason.as_deref(), Some("no-commits"));
+    }
+
+    #[test]
+    fn list_datasets_serialization_matches_expected_fields() {
+        let project_dir = unique_temp_dir("dlad-rust-list-datasets");
+        let project_path = project_dir.to_string_lossy().to_string();
+
+        write(
+            project_dir.join(".gitmodules"),
+            "[submodule \"inputs\"]\n\tpath = inputs\n\turl = ../inputs.git\n"
+                .to_string()
+                + "[submodule \"derivatives\"]\n\tpath = derivatives/fmriprep\n\turl = ../derivatives.git\n",
+        )
+        .expect(".gitmodules should be written");
+
+        let rev_parse_args = vec![
+            "-C".to_string(),
+            project_path.clone(),
+            "rev-parse".to_string(),
+            "--is-inside-work-tree".to_string(),
+        ];
+
+        let runner = FakeRunner::default().with_response_owned(
+            "git",
+            rev_parse_args.clone(),
+            ok_result_owned("git", &rev_parse_args, "true\n"),
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let datasets = adapter
+            .list_datasets(&project_path)
+            .expect("list_datasets should succeed");
+
+        assert_eq!(datasets.len(), 3);
+        assert_eq!(datasets[0].relative_path, ".");
+
+        let serialized = to_value(&datasets).expect("serialization should succeed");
+        let list = serialized
+            .as_array()
+            .expect("serialized datasets should be an array");
+        let first = list[0]
+            .as_object()
+            .expect("serialized dataset entry should be an object");
+
+        assert!(first.contains_key("relativePath"));
+        assert!(!first.contains_key("relative_path"));
+        assert_eq!(first.get("kind").and_then(Value::as_str), Some("root"));
+
+        let second = list[1]
+            .as_object()
+            .expect("serialized dataset entry should be an object");
+        assert_eq!(
+            second.get("relativePath").and_then(Value::as_str),
+            Some("inputs")
+        );
+    }
+
+    #[test]
+    fn list_branches_serialization_matches_expected_fields() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "branch", "--format=%(refname:short)"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "branch", "--format=%(refname:short)"],
+                    "feature-z\nmain\nfeature-a\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "branch", "--show-current"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "branch", "--show-current"],
+                    "main\n",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .list_branches(project_path)
+            .expect("list_branches should succeed");
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized branch result should be an object");
+
+        assert!(object.contains_key("projectPath"));
+        assert!(object.contains_key("currentBranch"));
+        assert!(object.contains_key("detachedHead"));
+        assert!(!object.contains_key("project_path"));
+        assert!(!object.contains_key("current_branch"));
+        assert!(!object.contains_key("detached_head"));
+        assert_eq!(
+            object.get("currentBranch").and_then(Value::as_str),
+            Some("main")
+        );
+    }
+
+    #[test]
+    fn get_last_commit_serialization_matches_expected_fields() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                    "1716200000\0a1b2c3d\0checkpoint\0checkpoint\n\nwith details\n",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter.get_last_commit(project_path);
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized commit result should be an object");
+
+        assert!(object.contains_key("hasCommit"));
+        assert!(object.contains_key("commitHash"));
+        assert!(!object.contains_key("has_commit"));
+        assert!(!object.contains_key("commit_hash"));
+        assert!(!object.contains_key("reason"));
+        assert_eq!(
+            object.get("commitHash").and_then(Value::as_str),
+            Some("a1b2c3d")
+        );
+    }
+
+    #[test]
+    fn get_last_commit_no_commit_serialization_includes_reason() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                err_result(
+                    "git",
+                    &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                    "fatal: your current branch main does not have any commits yet",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter.get_last_commit(project_path);
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized commit result should be an object");
+
+        assert_eq!(object.get("hasCommit").and_then(Value::as_bool), Some(false));
+        assert_eq!(object.get("reason").and_then(Value::as_str), Some("no-commits"));
+        assert!(!object.contains_key("commitHash"));
+    }
+
+    #[test]
+    fn detect_project_serialization_uses_classification_source_key() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "datalad",
+                &["-C", project_path, "status", "--dataset", ".", "--json"],
+                ok_result(
+                    "datalad",
+                    &["-C", project_path, "status", "--dataset", ".", "--json"],
+                    "{\"status\":\"ok\"}\n",
+                ),
+            )
+            .with_response(
+                "datalad",
+                &["-C", project_path, "subdatasets", "--result-renderer", "disabled"],
+                ok_result(
+                    "datalad",
+                    &["-C", project_path, "subdatasets", "--result-renderer", "disabled"],
+                    "inputs\n",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .detect_project(project_path)
+            .expect("detect_project should succeed");
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized detect_project result should be an object");
+
+        assert!(object.contains_key("projectPath"));
+        assert!(object.contains_key("classificationSource"));
+        assert!(!object.contains_key("project_path"));
+        assert!(!object.contains_key("classification_source"));
+
+        let source = object
+            .get("classificationSource")
+            .and_then(Value::as_object)
+            .expect("classificationSource should be present for dataset classifications");
+        assert_eq!(
+            source.get("dataset").and_then(Value::as_str),
+            Some("datalad-status-probe")
+        );
+        assert_eq!(
+            source.get("subdatasets").and_then(Value::as_str),
+            Some("datalad-subdatasets-probe")
+        );
+    }
+
+    #[test]
+    fn detect_project_git_serialization_omits_classification_source() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "datalad",
+                &["-C", project_path, "status", "--dataset", ".", "--json"],
+                err_result(
+                    "datalad",
+                    &["-C", project_path, "status", "--dataset", ".", "--json"],
+                    "NoDatasetFound: no dataset found at this location",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .detect_project(project_path)
+            .expect("detect_project should succeed");
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let object = serialized
+            .as_object()
+            .expect("serialized detect_project result should be an object");
+
+        assert_eq!(
+            object.get("classification").and_then(Value::as_str),
+            Some("git")
+        );
+        assert!(!object.contains_key("classificationSource"));
     }
 }
