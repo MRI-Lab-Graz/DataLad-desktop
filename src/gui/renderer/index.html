@@ -93,28 +93,34 @@
       </section>
 
       <main class="grid">
-        <section class="card reveal reveal-3" aria-labelledby="open-project-title">
+        <section class="card reveal reveal-3 full-span open-project-strip" aria-labelledby="open-project-title">
           <div class="section-head">
             <h2 id="open-project-title">1. Open Project</h2>
           </div>
 
-          <label class="field">
-            <span>Project Folder</span>
-            <div class="field-row">
-              <input id="project-path" type="text" placeholder="/path/to/project" />
-              <button id="pick-project-path" class="button button-ghost button-inline" type="button">Browse</button>
+          <div class="open-project-grid">
+            <div class="open-project-controls">
+              <label class="field">
+                <span>Project Folder</span>
+                <div class="field-row">
+                  <input id="project-path" type="text" placeholder="/path/to/project" />
+                  <button id="pick-project-path" class="button button-ghost button-inline" type="button">Browse</button>
+                </div>
+              </label>
+
+              <div class="row-actions">
+                <button id="detect-project" class="button button-primary" type="button">Check Project Folder</button>
+              </div>
             </div>
-          </label>
 
-          <div class="row-actions">
-            <button id="detect-project" class="button button-primary" type="button">Check Project Folder</button>
+            <div class="open-project-panels">
+              <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
+              <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Use Check Setup above.</div>
+            </div>
           </div>
-
-          <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
-          <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Use Check Setup above.</div>
         </section>
 
-        <section class="card reveal reveal-4" aria-labelledby="project-actions-title">
+        <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <div class="section-head">
             <h2 id="project-actions-title">2. Work With Project</h2>
           </div>
@@ -144,7 +150,7 @@
             </div>
 
             <label class="field">
-              <span>Current / Switch To</span>
+              <span>Switch To Branch</span>
               <div class="field-row">
                 <select id="branch-select"></select>
                 <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
@@ -152,23 +158,52 @@
             </label>
 
             <label class="field">
-              <span>Create New Branch</span>
+              <span>New Branch Name</span>
               <div class="field-row">
                 <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
                 <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
               </div>
             </label>
 
-            <p id="branch-status" class="branch-status branch-status-idle">Load a project to manage branches.</p>
+            <p id="branch-status" class="branch-status branch-status-idle">Choose a project to manage branches.</p>
+          </section>
+
+          <section class="status-box" aria-labelledby="working-tree-title">
+            <div class="section-head branch-head">
+              <h3 id="working-tree-title">Working Tree</h3>
+            </div>
+            <div id="working-tree-summary" class="panel panel-muted panel-compact">
+              Choose a project to see local changes.
+            </div>
+          </section>
+
+          <section class="status-box" aria-labelledby="changed-files-title">
+            <div class="section-head branch-head">
+              <h3 id="changed-files-title">Files To Save</h3>
+              <div class="section-actions">
+                <button id="changed-files-select-all" class="button button-ghost button-inline" type="button">
+                  All
+                </button>
+                <button id="changed-files-select-none" class="button button-ghost button-inline" type="button">
+                  None
+                </button>
+              </div>
+            </div>
+            <p class="lede-small">Select files here first. Manual paths are optional below.</p>
+            <div id="changed-files-output" class="panel panel-muted panel-compact">
+              No changed files yet.
+            </div>
           </section>
 
           <label class="field">
             <span>Save Message</span>
-            <input id="message" type="text" placeholder="checkpoint" />
+            <input id="message" type="text" placeholder="Describe this checkpoint" />
           </label>
 
+          <p id="save-guidance" class="hint-inline">Add a short save message to continue.</p>
+
           <label class="field">
-            <span>Optional Paths (comma separated)</span>
+            <span>Manual File Paths (optional, comma separated)</span>
             <input id="paths" type="text" placeholder="results.csv, notes.md" />
           </label>
 
@@ -179,7 +214,16 @@
             <button id="publish-project" class="button button-primary" type="button">Publish</button>
           </div>
 
-          <div id="command-output" class="panel panel-muted">Run a workflow action to see a short status update.</div>
+          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+
+          <section class="status-box" aria-labelledby="recent-commits-title">
+            <div class="section-head branch-head">
+              <h3 id="recent-commits-title">Recent Commits</h3>
+            </div>
+            <div id="recent-commits-output" class="panel panel-muted panel-compact">
+              Recent saves appear here.
+            </div>
+          </section>
         </section>
 
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">

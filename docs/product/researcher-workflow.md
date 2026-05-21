@@ -30,3 +30,13 @@ For DataLad-enabled projects, the compact action group should include:
 - **Publish**
 
 Clone/Install should live in onboarding and project-opening flow, not as a permanent toolbar action.
+
+## Guided version-control additions (MVP-safe)
+
+To keep daily scientific version control smooth without adding advanced Git complexity:
+
+1. Show a compact working-tree summary (changed, staged, unstaged, untracked, conflicts).
+2. Let users select changed files directly for Save; keep manual path entry as fallback.
+3. Keep Save guarded: require a message, warn/block on conflicts, and show a clear post-save summary.
+4. Before branch switch/create, check for dirty state and guide users to save first while still allowing an informed continue path when safe.
+5. Show a lightweight recent-commit list for quick confidence checks after Save and branch actions.

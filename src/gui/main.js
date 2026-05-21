@@ -103,6 +103,16 @@ ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
   return adapter.getLastCommit(projectPath)
 })
 
+ipcMain.handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
+  return adapter.getWorkingTreeStatus(projectPath)
+})
+
+ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
+  const projectPath = payload.projectPath
+  const options = payload.options ?? {}
+  return adapter.listRecentCommits(projectPath, options)
+})
+
 ipcMain.handle('app:getWorkspaceRoot', async () => {
   return process.cwd()
 })

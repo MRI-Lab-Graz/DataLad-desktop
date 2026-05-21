@@ -6,7 +6,10 @@ const state = {
   fileListing: null,
   commitMetaRequestToken: 0,
   recentProjects: [],
-  recentProjectEmojiByPath: {}
+  recentProjectEmojiByPath: {},
+  workingTreeSnapshot: null,
+  selectedChangedPaths: new Set(),
+  recentCommits: []
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -41,6 +44,11 @@ const elements = {
   createBranchButton: document.getElementById('create-branch'),
   newBranchNameInput: document.getElementById('new-branch-name'),
   branchStatus: document.getElementById('branch-status'),
+  workingTreeSummary: document.getElementById('working-tree-summary'),
+  changedFilesOutput: document.getElementById('changed-files-output'),
+  changedFilesSelectAllButton: document.getElementById('changed-files-select-all'),
+  changedFilesSelectNoneButton: document.getElementById('changed-files-select-none'),
+  recentCommitsOutput: document.getElementById('recent-commits-output'),
   cloneProjectButton: document.getElementById('clone-project'),
   saveProjectButton: document.getElementById('save-project'),
   getDataButton: document.getElementById('get-data'),
@@ -50,6 +58,7 @@ const elements = {
   refreshFilesButton: document.getElementById('refresh-files'),
   filesSearchInput: document.getElementById('files-search'),
   message: document.getElementById('message'),
+  saveGuidance: document.getElementById('save-guidance'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
   detectProjectButton: document.getElementById('detect-project'),
@@ -71,6 +80,12 @@ setCurrentProjectHeader(elements.commandProjectPath.value.trim(), 'unknown')
 await refreshDatasetList(elements.commandProjectPath.value.trim())
 await refreshFileBrowser(elements.commandProjectPath.value.trim())
 await refreshBranchList(elements.commandProjectPath.value.trim())
+await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim(), {
+  preserveSelection: false,
+  includeCommandOutputOnFailure: false
+})
+await refreshRecentCommits(elements.commandProjectPath.value.trim(), { includeCommandOutputOnFailure: false })
+updateSaveButtonState()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -126,6 +141,17 @@ elements.topQuickSaveButton.addEventListener('click', async () => {
     return
   }
 
+  const latestStatus = await refreshWorkingTreeStatus(projectPath)
+  if (!latestStatus) {
+    return
+  }
+
+  if (latestStatus.conflictCount > 0) {
+    elements.commandOutput.textContent = 'Quick Save is blocked while conflicts are present.'
+    setLastActionState('Resolve conflicts before saving.', 'error')
+    return
+  }
+
   const message = elements.message.value.trim() || buildQuickSaveMessage()
   if (!elements.message.value.trim()) {
     elements.message.value = message
@@ -134,8 +160,49 @@ elements.topQuickSaveButton.addEventListener('click', async () => {
   await runWorkflowCommand('save', {
     projectPath,
     message,
-    paths: parsePaths(elements.paths.value)
+    paths: gatherSavePaths()
   })
+})
+
+elements.changedFilesSelectAllButton.addEventListener('click', () => {
+  const filePaths = (state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path)
+  state.selectedChangedPaths = new Set(filePaths)
+  renderChangedFilesSelection()
+  updateSaveButtonState()
+})
+
+elements.changedFilesSelectNoneButton.addEventListener('click', () => {
+  state.selectedChangedPaths = new Set()
+  renderChangedFilesSelection()
+  updateSaveButtonState()
+})
+
+elements.changedFilesOutput.addEventListener('input', (event) => {
+  const checkbox = event.target.closest('[data-changed-path]')
+  if (!checkbox) {
+    return
+  }
+
+  const relativePath = checkbox.getAttribute('data-changed-path')
+  if (!relativePath) {
+    return
+  }
+
+  if (checkbox.checked) {
+    state.selectedChangedPaths.add(relativePath)
+  } else {
+    state.selectedChangedPaths.delete(relativePath)
+  }
+
+  updateSaveButtonState()
+})
+
+elements.message.addEventListener('input', () => {
+  updateSaveButtonState()
+})
+
+elements.paths.addEventListener('input', () => {
+  updateSaveButtonState()
 })
 
 elements.checkEnvButton.addEventListener('click', async () => {
@@ -193,13 +260,35 @@ elements.saveProjectButton.addEventListener('click', async () => {
   if (!message) {
     elements.commandOutput.textContent = 'Add a save message before running Save.'
     setLastActionState('Add a save message first.', 'error')
+    updateSaveButtonState()
+    return
+  }
+
+  const latestStatus = await refreshWorkingTreeStatus(projectPath)
+  if (!latestStatus) {
+    return
+  }
+
+  if (latestStatus.conflictCount > 0) {
+    elements.commandOutput.textContent =
+      'Save is blocked while conflicts are present. Resolve conflicts, then try again.'
+    setLastActionState('Resolve conflicts before saving.', 'error')
+    updateSaveButtonState()
+    return
+  }
+
+  const selectedPaths = gatherSavePaths()
+  if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
+    elements.commandOutput.textContent =
+      'Select at least one changed file or provide manual paths before saving.'
+    setLastActionState('Select files to save first.', 'error')
     return
   }
 
   await runWorkflowCommand('save', {
     projectPath,
     message,
-    paths: parsePaths(elements.paths.value)
+    paths: selectedPaths
   })
 })
 
@@ -267,6 +356,11 @@ elements.switchBranchButton.addEventListener('click', async () => {
     return
   }
 
+  const safeToProceed = await ensureBranchActionSafety(projectPath, 'switch branches')
+  if (!safeToProceed) {
+    return
+  }
+
   const result = await runWorkflowCommand('switchBranch', { projectPath, branchName })
   if (!result?.ok) {
     return
@@ -286,6 +380,11 @@ elements.createBranchButton.addEventListener('click', async () => {
   if (!branchName) {
     setBranchStatus('Enter a branch name before creating.', 'error')
     setLastActionState('Enter a branch name before creating.', 'error')
+    return
+  }
+
+  const safeToProceed = await ensureBranchActionSafety(projectPath, 'create a branch')
+  if (!safeToProceed) {
     return
   }
 
@@ -310,6 +409,8 @@ elements.datasetSelect.addEventListener('change', async () => {
   setLastActionState('Active data folder changed.', 'success')
   await refreshFileBrowser(selectedDatasetPath)
   await refreshBranchList(selectedDatasetPath)
+  await refreshWorkingTreeStatus(selectedDatasetPath)
+  await refreshRecentCommits(selectedDatasetPath)
 })
 
 elements.refreshFilesButton.addEventListener('click', async () => {
@@ -364,6 +465,9 @@ async function detectProjectType(projectPath) {
     setLastActionState(`Project check finished: ${friendlyProjectTypeLabel(result.classification)}.`, 'success')
     await refreshDatasetList(projectPath)
     await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
+    await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim() || projectPath)
+    await refreshRecentCommits(elements.commandProjectPath.value.trim() || projectPath)
+    updateSaveButtonState()
   } catch (error) {
     elements.classificationOutput.textContent = String(error.message)
     setLastActionState('Could not check this project folder.', 'error')
@@ -383,14 +487,27 @@ function readProjectPath() {
 async function runWorkflowCommand(commandName, request) {
   try {
     const result = await api.runCommand(commandName, request)
-    elements.commandOutput.innerHTML = renderCommandResult(result)
 
     const nextProjectPath = request.projectPath ?? request.targetPath
+    let saveSummary = null
     if (result.ok && nextProjectPath) {
       void refreshLastCommitMeta(nextProjectPath)
       if (commandName === 'createBranch' || commandName === 'switchBranch') {
         void refreshBranchList(nextProjectPath)
       }
+
+      if (commandName === 'save') {
+        saveSummary = await buildSaveSummary(nextProjectPath, request.paths ?? [])
+      }
+
+      void refreshWorkingTreeStatus(nextProjectPath)
+      void refreshRecentCommits(nextProjectPath)
+    }
+
+    elements.commandOutput.innerHTML = renderCommandResult(result, saveSummary)
+
+    if (!result.ok && nextProjectPath) {
+      void refreshWorkingTreeStatus(nextProjectPath)
     }
 
     if (result.ok) {
@@ -437,10 +554,16 @@ async function refreshDatasetList(projectPath) {
       elements.commandProjectPath.value = nextPath
       setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
       await refreshBranchList(nextPath)
+      await refreshWorkingTreeStatus(nextPath)
+      await refreshRecentCommits(nextPath)
+      updateSaveButtonState()
       return
     }
 
     await refreshBranchList(projectPath)
+    await refreshWorkingTreeStatus(projectPath)
+    await refreshRecentCommits(projectPath)
+    updateSaveButtonState()
   } catch (error) {
     setLastActionState('Could not load nested datasets.', 'warning')
     elements.commandOutput.textContent = String(error.message)
@@ -516,6 +639,64 @@ async function refreshBranchList(projectPath) {
   }
 }
 
+async function refreshWorkingTreeStatus(
+  projectPath,
+  { preserveSelection = true, includeCommandOutputOnFailure = true } = {}
+) {
+  if (!projectPath) {
+    state.workingTreeSnapshot = null
+    state.selectedChangedPaths = new Set()
+    renderWorkingTreeSummary()
+    renderChangedFilesSelection()
+    updateSaveButtonState()
+    return null
+  }
+
+  try {
+    const snapshot = await api.getWorkingTreeStatus(projectPath)
+    state.workingTreeSnapshot = snapshot
+    syncSelectedChangedPaths(snapshot.files ?? [], preserveSelection)
+    renderWorkingTreeSummary()
+    renderChangedFilesSelection()
+    updateSaveButtonState()
+    return snapshot
+  } catch (error) {
+    state.workingTreeSnapshot = null
+    state.selectedChangedPaths = new Set()
+    renderWorkingTreeSummary(`Could not load working tree status: ${String(error.message)}`)
+    renderChangedFilesSelection()
+    updateSaveButtonState()
+
+    if (includeCommandOutputOnFailure) {
+      elements.commandOutput.textContent = String(error.message)
+    }
+
+    return null
+  }
+}
+
+async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure = true } = {}) {
+  if (!projectPath) {
+    state.recentCommits = []
+    renderRecentCommitList()
+    return []
+  }
+
+  try {
+    const history = await api.listRecentCommits(projectPath, { limit: 20 })
+    state.recentCommits = history.commits ?? []
+    renderRecentCommitList()
+    return state.recentCommits
+  } catch (error) {
+    state.recentCommits = []
+    renderRecentCommitList(`Could not load recent commits: ${String(error.message)}`)
+    if (includeCommandOutputOnFailure) {
+      elements.commandOutput.textContent = String(error.message)
+    }
+    return []
+  }
+}
+
 async function revealPath(targetPath) {
   try {
     await api.revealPath(targetPath)
@@ -576,6 +757,9 @@ function wireFolderPicker(button, input, options) {
       await refreshDatasetList(selectedPath)
       await refreshFileBrowser(selectedPath)
       await refreshBranchList(selectedPath)
+      await refreshWorkingTreeStatus(selectedPath)
+      await refreshRecentCommits(selectedPath)
+      updateSaveButtonState()
     }
 
     setLastActionState('Folder selected.', 'success')
@@ -625,11 +809,231 @@ function renderEnvironment(diagnostics) {
   )
 }
 
-function renderCommandResult(result) {
+function syncSelectedChangedPaths(files, preserveSelection) {
+  const availablePaths = new Set(files.map((entry) => entry.path))
+
+  if (!preserveSelection || state.selectedChangedPaths.size === 0) {
+    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
+    return
+  }
+
+  const nextSelection = new Set()
+  for (const selectedPath of state.selectedChangedPaths) {
+    if (availablePaths.has(selectedPath)) {
+      nextSelection.add(selectedPath)
+    }
+  }
+
+  if (nextSelection.size === 0 && files.length > 0) {
+    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
+    return
+  }
+
+  state.selectedChangedPaths = nextSelection
+}
+
+function renderWorkingTreeSummary(overrideMessage = null) {
+  if (overrideMessage) {
+    elements.workingTreeSummary.textContent = overrideMessage
+    return
+  }
+
+  const snapshot = state.workingTreeSnapshot
+  if (!snapshot) {
+    elements.workingTreeSummary.textContent = 'Select a project to load local change status.'
+    return
+  }
+
+  if (snapshot.clean) {
+    elements.workingTreeSummary.innerHTML =
+      '<div class="working-tree-grid">' +
+      '<span class="status-chip status-chip-good">Clean</span>' +
+      '<span class="status-chip">Staged 0</span>' +
+      '<span class="status-chip">Unstaged 0</span>' +
+      '<span class="status-chip">Untracked 0</span>' +
+      '<span class="status-chip">Conflicts 0</span>' +
+      '</div>'
+    return
+  }
+
+  const conflictsClass = snapshot.conflictCount > 0 ? ' status-chip-urgent' : ''
+  elements.workingTreeSummary.innerHTML =
+    '<div class="working-tree-grid">' +
+    `<span class="status-chip">Changed ${snapshot.totalChanged}</span>` +
+    `<span class="status-chip">Staged ${snapshot.stagedCount}</span>` +
+    `<span class="status-chip">Unstaged ${snapshot.unstagedCount}</span>` +
+    `<span class="status-chip">Untracked ${snapshot.untrackedCount}</span>` +
+    `<span class="status-chip${conflictsClass}">Conflicts ${snapshot.conflictCount}</span>` +
+    '</div>'
+}
+
+function renderChangedFilesSelection() {
+  const files = state.workingTreeSnapshot?.files ?? []
+  if (files.length === 0) {
+    elements.changedFilesOutput.textContent = 'No changed files detected.'
+    elements.changedFilesSelectAllButton.disabled = true
+    elements.changedFilesSelectNoneButton.disabled = true
+    return
+  }
+
+  const list = files
+    .map((entry) => {
+      const checked = state.selectedChangedPaths.has(entry.path) ? ' checked' : ''
+      const stagedBadge = entry.staged ? '<span class="status-chip">staged</span>' : ''
+      const conflictedBadge = entry.conflicted ? '<span class="status-chip status-chip-urgent">conflict</span>' : ''
+      return (
+        '<li class="changed-file-item">' +
+        `<label class="changed-file-label">` +
+        `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
+        `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
+        '</label>' +
+        `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}</span>` +
+        '</li>'
+      )
+    })
+    .join('')
+
+  elements.changedFilesOutput.innerHTML = `<ul class="changed-files-list">${list}</ul>`
+  elements.changedFilesSelectAllButton.disabled = false
+  elements.changedFilesSelectNoneButton.disabled = false
+}
+
+function renderRecentCommitList(overrideMessage = null) {
+  if (overrideMessage) {
+    elements.recentCommitsOutput.textContent = overrideMessage
+    return
+  }
+
+  if (!state.recentCommits.length) {
+    elements.recentCommitsOutput.textContent = 'No commits yet in this project.'
+    return
+  }
+
+  const rows = state.recentCommits
+    .map((entry) => {
+      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const hash = entry.commitHash || 'unknown'
+      const subject = entry.subject || '(no subject)'
+      const author = entry.author || 'Unknown author'
+
+      return (
+        '<li class="history-item">' +
+        '<div class="history-item-head">' +
+        `<span class="history-hash">${escapeHtml(hash)}</span>` +
+        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        '</div>' +
+        `<div class="history-subject">${escapeHtml(subject)}</div>` +
+        `<div class="history-author">${escapeHtml(author)}</div>` +
+        '</li>'
+      )
+    })
+    .join('')
+
+  elements.recentCommitsOutput.innerHTML = `<ul class="history-list">${rows}</ul>`
+}
+
+function gatherSavePaths() {
+  const selectedPaths = [...state.selectedChangedPaths]
+  if (selectedPaths.length > 0) {
+    return selectedPaths
+  }
+
+  return parsePaths(elements.paths.value)
+}
+
+function updateSaveButtonState() {
+  const hasMessage = Boolean(elements.message.value.trim())
+  const snapshot = state.workingTreeSnapshot
+  const hasSelection = gatherSavePaths().length > 0
+  const hasConflicts = Boolean(snapshot?.conflictCount)
+  const hasChanges = Boolean(snapshot && !snapshot.clean)
+
+  const canSave = hasMessage && (!hasChanges || hasSelection) && !hasConflicts
+  elements.saveProjectButton.disabled = !canSave
+
+  if (!hasMessage) {
+    elements.saveGuidance.textContent = 'Enter a save message to enable Save.'
+    elements.saveGuidance.classList.remove('hint-inline-warning')
+    return
+  }
+
+  if (hasConflicts) {
+    elements.saveGuidance.textContent = 'Conflicts detected. Resolve conflicts before saving.'
+    elements.saveGuidance.classList.add('hint-inline-warning')
+    return
+  }
+
+  if (hasChanges && !hasSelection) {
+    elements.saveGuidance.textContent = 'Select changed files or add manual paths before saving.'
+    elements.saveGuidance.classList.add('hint-inline-warning')
+    return
+  }
+
+  if (hasChanges) {
+    elements.saveGuidance.textContent = 'Ready to save selected changes.'
+    elements.saveGuidance.classList.remove('hint-inline-warning')
+    return
+  }
+
+  elements.saveGuidance.textContent = 'No local changes detected. Save remains available if needed.'
+  elements.saveGuidance.classList.remove('hint-inline-warning')
+}
+
+async function ensureBranchActionSafety(projectPath, actionDescription) {
+  const snapshot = await refreshWorkingTreeStatus(projectPath)
+  if (!snapshot) {
+    return false
+  }
+
+  if (snapshot.conflictCount > 0) {
+    setBranchStatus('Resolve conflicts before changing branches.', 'error')
+    setLastActionState('Resolve conflicts before branch actions.', 'error')
+    elements.commandOutput.textContent = 'Branch action blocked because merge conflicts are present.'
+    return false
+  }
+
+  if (snapshot.clean) {
+    return true
+  }
+
+  const confirmText =
+    `You have ${snapshot.totalChanged} unsaved file changes. ` +
+    `It may be safer to save before you ${actionDescription}. Continue anyway?`
+
+  const shouldProceed = window.confirm(confirmText)
+  if (!shouldProceed) {
+    setBranchStatus('Branch action canceled. Save work first, then retry.', 'idle')
+    setLastActionState('Branch action canceled.', 'idle')
+    return false
+  }
+
+  return true
+}
+
+async function buildSaveSummary(projectPath, savedPaths) {
+  try {
+    const commitMeta = await api.getLastCommit(projectPath)
+    if (!commitMeta?.hasCommit) {
+      return null
+    }
+
+    const fileSummary = savedPaths.length > 0 ? `${savedPaths.length} selected file(s)` : 'full dataset scope'
+    const hashSummary = commitMeta.commitHash ? ` ${commitMeta.commitHash}` : ''
+    return `Saved ${fileSummary}. Latest commit:${hashSummary}.`
+  } catch {
+    return null
+  }
+}
+
+function renderCommandResult(result, summary = null) {
   const statusLine = buildWorkflowStatusLine(result)
   const warningCount = result.warnings?.length ?? 0
 
   let html = `<p><strong>${escapeHtml(statusLine)}</strong></p>`
+
+  if (summary) {
+    html += `<p>${escapeHtml(summary)}</p>`
+  }
 
   if (warningCount > 0) {
     html +=
