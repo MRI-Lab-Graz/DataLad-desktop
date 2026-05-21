@@ -1,0 +1,18 @@
+[package]
+name = "datalad_desktop_rust_node"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "N-API bridge for DataLad Desktop Rust core"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+datalad_desktop_core = { path = "../../rust-core" }
+napi = { version = "2", default-features = false, features = ["napi8", "serde-json"] }
+napi-derive = "2"
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"

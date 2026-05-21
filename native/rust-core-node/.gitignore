@@ -1,0 +1,7 @@
+# Build outputs
+*.node
+index.d.ts
+
+# Local package artifacts
+node_modules/
+target/

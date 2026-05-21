@@ -1,0 +1,15 @@
+{
+  "name": "@datalad-desktop/rust-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "description": "Node bridge for DataLad Desktop Rust adapter core",
+  "scripts": {
+    "build": "npx @napi-rs/cli build --platform --release",
+    "build:debug": "npx @napi-rs/cli build --platform",
+    "test:rust": "cargo test"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4"
+  }
+}

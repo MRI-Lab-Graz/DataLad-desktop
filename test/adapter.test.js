@@ -465,9 +465,9 @@ test('getLastCommit returns latest commit metadata for git projects', async () =
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%n%h%n%s'], {
+  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%x00%h%x00%s%x00%B'], {
     exitCode: 0,
-    stdout: '1716200000\na1b2c3d\ncheckpoint\n',
+    stdout: '1716200000\u0000a1b2c3d\u0000checkpoint\u0000checkpoint\n\nwith details\n',
     stderr: '',
     failed: false
   })
@@ -479,6 +479,7 @@ test('getLastCommit returns latest commit metadata for git projects', async () =
   assert.equal(commit.timestamp, 1716200000)
   assert.equal(commit.commitHash, 'a1b2c3d')
   assert.equal(commit.subject, 'checkpoint')
+  assert.equal(commit.message, 'checkpoint\n\nwith details')
 })
 
 test('getLastCommit returns no-commits when repository has no history yet', async () => {
@@ -490,7 +491,7 @@ test('getLastCommit returns no-commits when repository has no history yet', asyn
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%n%h%n%s'], {
+  runner.set('git', ['-C', root, 'log', '-1', '--format=%ct%x00%h%x00%s%x00%B'], {
     exitCode: 128,
     stdout: '',
     stderr: 'fatal: your current branch main does not have any commits yet',
