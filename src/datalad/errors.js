@@ -48,6 +48,29 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (
+    (commandName === 'update' || commandName === 'switchBranch' || commandName === 'createBranch') &&
+    hasPattern(stderr, /conflict|merge conflict|unmerged files|you need to resolve your current index first/)
+  ) {
+    return {
+      code: 'MERGE_CONFLICT',
+      title: 'Resolve conflicts before continuing',
+      message:
+        'This action stopped because merge conflicts were detected. Resolve conflicts, then retry your branch or update action.',
+      technicalDetails: details
+    }
+  }
+
+  if (hasPattern(stderr, /you have not concluded your merge|merge_head exists|merge in progress/)) {
+    return {
+      code: 'MERGE_IN_PROGRESS',
+      title: 'Merge already in progress',
+      message:
+        'This repository already has an unfinished merge. Finish or abort the merge before running this action.',
+      technicalDetails: details
+    }
+  }
+
   if (hasPattern(stderr, /command not found|enoent|not recognized/)) {
     return {
       code: 'TOOLING_MISSING',

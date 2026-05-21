@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
   listBranches: (projectPath) => ipcRenderer.invoke('adapter:listBranches', projectPath),
   getLastCommit: (projectPath) => ipcRenderer.invoke('adapter:getLastCommit', projectPath),
+  getWorkingTreeStatus: (projectPath) => ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath),
+  listRecentCommits: (projectPath, options) =>
+    ipcRenderer.invoke('adapter:listRecentCommits', {
+      projectPath,
+      options
+    }),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>

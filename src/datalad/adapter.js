@@ -20,6 +20,15 @@ const CURATED_COMMANDS = new Set([
 ])
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
+const STATUS_PRIORITY = {
+  conflict: 6,
+  deleted: 5,
+  renamed: 4,
+  added: 3,
+  modified: 2,
+  untracked: 1,
+  changed: 0
+}
 
 export class DataLadAdapter {
   constructor({ runner } = {}) {
@@ -234,6 +243,152 @@ export class DataLadAdapter {
     }
   }
 
+  async getWorkingTreeStatus(projectPath) {
+    await this.#ensureGitProject(projectPath)
+
+    const result = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain',
+      '--untracked-files=all'
+    ])
+
+    if (result.failed) {
+      throw new Error(
+        `Could not read working tree status for project: ${projectPath} (${result.stderr.trim() || 'unknown error'})`
+      )
+    }
+
+    const filesByPath = new Map()
+    let stagedCount = 0
+    let unstagedCount = 0
+    let untrackedCount = 0
+    let conflictCount = 0
+
+    for (const line of (result.stdout ?? '').split(/\r?\n/)) {
+      if (!line || line.length < 3) {
+        continue
+      }
+
+      const statusCode = line.slice(0, 2)
+      const pathPortion = line.slice(3).trim()
+      if (!pathPortion) {
+        continue
+      }
+
+      const normalizedPath = this.#normalizeStatusPath(pathPortion, statusCode)
+      if (!normalizedPath) {
+        continue
+      }
+
+      const staged = statusCode[0] !== ' ' && statusCode[0] !== '?'
+      const unstaged = statusCode[1] !== ' ' && statusCode[1] !== '?'
+      const conflicted = statusCode.includes('U') || statusCode === 'AA' || statusCode === 'DD'
+      const status = this.#mapStatusCode(statusCode)
+
+      if (staged) {
+        stagedCount += 1
+      }
+
+      if (unstaged) {
+        unstagedCount += 1
+      }
+
+      if (statusCode === '??') {
+        untrackedCount += 1
+      }
+
+      if (conflicted) {
+        conflictCount += 1
+      }
+
+      const existing = filesByPath.get(normalizedPath)
+      const nextStatus = this.#mergeStatusPriority(existing?.status, status)
+
+      filesByPath.set(normalizedPath, {
+        path: normalizedPath,
+        status: nextStatus,
+        statusCode,
+        staged: Boolean(existing?.staged || staged),
+        unstaged: Boolean(existing?.unstaged || unstaged),
+        conflicted: Boolean(existing?.conflicted || conflicted)
+      })
+    }
+
+    const files = [...filesByPath.values()].sort((left, right) => left.path.localeCompare(right.path))
+
+    return {
+      projectPath,
+      clean: files.length === 0,
+      totalChanged: files.length,
+      stagedCount,
+      unstagedCount,
+      untrackedCount,
+      conflictCount,
+      files
+    }
+  }
+
+  async listRecentCommits(projectPath, options = {}) {
+    await this.#ensureGitProject(projectPath)
+
+    const requestedLimit = Number.parseInt(options.limit, 10)
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(requestedLimit, 1), 100)
+      : 20
+
+    const result = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      'log',
+      '-n',
+      String(limit),
+      '--format=%ct%x00%h%x00%an%x00%s'
+    ])
+
+    if (result.failed) {
+      const diagnostics = `${result.stderr ?? ''}\n${result.stdout ?? ''}`
+      if (NO_COMMITS_PATTERN.test(diagnostics)) {
+        return {
+          projectPath,
+          commits: []
+        }
+      }
+
+      throw new Error(
+        `Could not list recent commits for project: ${projectPath} (${result.stderr.trim() || 'unknown error'})`
+      )
+    }
+
+    const commits = []
+    for (const line of (result.stdout ?? '').split(/\r?\n/)) {
+      if (!line.trim()) {
+        continue
+      }
+
+      const [timestampRaw, commitHash, author, subject] = line.split('\u0000')
+      const timestamp = Number.parseInt(timestampRaw, 10)
+      if (!Number.isFinite(timestamp)) {
+        continue
+      }
+
+      commits.push({
+        timestamp,
+        commitHash: (commitHash ?? '').trim(),
+        author: (author ?? '').trim(),
+        subject: (subject ?? '').trim()
+      })
+    }
+
+    return {
+      projectPath,
+      commits
+    }
+  }
+
   getInterfaceContract() {
     return getAdapterInterfaceContract()
   }
@@ -318,6 +473,54 @@ export class DataLadAdapter {
 
   #firstLine(text) {
     return (text ?? '').split(/\r?\n/, 1)[0].trim() || null
+  }
+
+  #normalizeStatusPath(pathPortion, statusCode) {
+    let nextPath = pathPortion
+    if ((statusCode.includes('R') || statusCode.includes('C')) && pathPortion.includes(' -> ')) {
+      nextPath = pathPortion.split(' -> ').at(-1)?.trim() ?? pathPortion
+    }
+
+    return nextPath
+      .replaceAll('\\\\', '/')
+      .replace(/^\.\//, '')
+      .trim()
+  }
+
+  #mapStatusCode(statusCode) {
+    if (statusCode === '??') {
+      return 'untracked'
+    }
+
+    if (statusCode.includes('U')) {
+      return 'conflict'
+    }
+
+    if (statusCode.includes('D')) {
+      return 'deleted'
+    }
+
+    if (statusCode.includes('R')) {
+      return 'renamed'
+    }
+
+    if (statusCode.includes('A')) {
+      return 'added'
+    }
+
+    if (statusCode.includes('M')) {
+      return 'modified'
+    }
+
+    return 'changed'
+  }
+
+  #mergeStatusPriority(left, right) {
+    if (!left) {
+      return right
+    }
+
+    return (STATUS_PRIORITY[right] ?? 0) > (STATUS_PRIORITY[left] ?? 0) ? right : left
   }
 
   async #ensureGitProject(projectPath) {

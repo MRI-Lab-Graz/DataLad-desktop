@@ -505,6 +505,119 @@ test('getLastCommit returns no-commits when repository has no history yet', asyn
   assert.equal(commit.reason, 'no-commits')
 })
 
+test('getWorkingTreeStatus returns clean state when no changes exist', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-status-clean-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], {
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const status = await adapter.getWorkingTreeStatus(root)
+
+  assert.equal(status.clean, true)
+  assert.equal(status.totalChanged, 0)
+  assert.equal(status.stagedCount, 0)
+  assert.equal(status.unstagedCount, 0)
+  assert.equal(status.untrackedCount, 0)
+  assert.equal(status.conflictCount, 0)
+  assert.deepEqual(status.files, [])
+})
+
+test('getWorkingTreeStatus parses staged, unstaged, untracked, and conflict changes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-status-mixed-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], {
+    exitCode: 0,
+    stdout: 'M  notes.md\n M analysis.py\n?? raw/new.csv\nUU conflict.txt\nR  old.txt -> renamed.txt\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const status = await adapter.getWorkingTreeStatus(root)
+
+  assert.equal(status.clean, false)
+  assert.equal(status.totalChanged, 5)
+  assert.equal(status.stagedCount, 3)
+  assert.equal(status.unstagedCount, 2)
+  assert.equal(status.untrackedCount, 1)
+  assert.equal(status.conflictCount, 1)
+
+  const renamed = status.files.find((entry) => entry.path === 'renamed.txt')
+  assert.equal(renamed?.status, 'renamed')
+  assert.equal(renamed?.staged, true)
+
+  const conflict = status.files.find((entry) => entry.path === 'conflict.txt')
+  assert.equal(conflict?.conflicted, true)
+  assert.equal(conflict?.status, 'conflict')
+})
+
+test('listRecentCommits returns commit metadata in log order', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-history-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'log', '-n', '2', '--format=%ct%x00%h%x00%an%x00%s'], {
+    exitCode: 0,
+    stdout: '1716200000\u0000a1b2c3d\u0000Ada Lovelace\u0000Save figures\n1716100000\u0000d4e5f6g\u0000Grace Hopper\u0000Initial import\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const history = await adapter.listRecentCommits(root, { limit: 2 })
+
+  assert.equal(history.commits.length, 2)
+  assert.deepEqual(history.commits[0], {
+    timestamp: 1716200000,
+    commitHash: 'a1b2c3d',
+    author: 'Ada Lovelace',
+    subject: 'Save figures'
+  })
+})
+
+test('listRecentCommits returns empty list when repository has no commits', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-history-empty-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s'], {
+    exitCode: 128,
+    stdout: '',
+    stderr: 'fatal: your current branch main has no commits yet',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const history = await adapter.listRecentCommits(root)
+
+  assert.deepEqual(history.commits, [])
+})
+
 test('getInterfaceContract returns stable schema metadata', () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const contract = adapter.getInterfaceContract()
