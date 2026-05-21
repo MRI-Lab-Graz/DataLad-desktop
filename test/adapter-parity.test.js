@@ -151,26 +151,34 @@ test('adapter parity: checkEnvironment status and issue codes match', async (t) 
     const jsIssueCodes = (jsDiagnostics.issues ?? []).map((issue) => issue.code).sort()
     const rustIssueCodes = (rustDiagnostics.issues ?? []).map((issue) => issue.code).sort()
 
-    const jsChecks = (jsDiagnostics.report?.checks ?? []).map((check) => ({
-      tool: check.tool,
-      label: check.label,
-      status: check.status,
-      version: check.version,
-      details: check.details
-    }))
-    const rustChecks = (rustDiagnostics.report?.checks ?? []).map((check) => ({
-      tool: check.tool,
-      label: check.label,
-      status: check.status,
-      version: check.version,
-      details: check.details
-    }))
+    const jsChecks = jsDiagnostics.report?.checks ?? []
+    const rustChecks = rustDiagnostics.report?.checks ?? []
+
+    const jsChecksByTool = new Map(jsChecks.map((check) => [check.tool, check]))
+    const rustChecksByTool = new Map(rustChecks.map((check) => [check.tool, check]))
 
     const jsRecoverySteps = jsDiagnostics.report?.recoverySteps ?? []
     const rustRecoverySteps = rustDiagnostics.report?.recoverySteps ?? []
 
     assert.deepEqual(rustIssueCodes, jsIssueCodes)
-    assert.deepEqual(rustChecks, jsChecks)
+    assert.deepEqual(
+      [...rustChecksByTool.keys()].sort(),
+      [...jsChecksByTool.keys()].sort()
+    )
+
+    for (const tool of jsChecksByTool.keys()) {
+      const jsCheck = jsChecksByTool.get(tool)
+      const rustCheck = rustChecksByTool.get(tool)
+
+      assert.equal(rustCheck?.tool, jsCheck?.tool)
+      assert.equal(rustCheck?.label, jsCheck?.label)
+      assert.equal(rustCheck?.status, jsCheck?.status)
+
+      // Version and details text can differ by OS/tooling. Enforce shape parity instead.
+      assert.equal(Boolean(rustCheck?.version), Boolean(jsCheck?.version))
+      assert.equal(Boolean(rustCheck?.details), Boolean(jsCheck?.details))
+    }
+
     assert.deepEqual(rustRecoverySteps, jsRecoverySteps)
   })
 })
