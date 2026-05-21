@@ -146,14 +146,31 @@ test('adapter parity: checkEnvironment status and issue codes match', async (t) 
     assert.equal(rustDiagnostics.supported, jsDiagnostics.supported)
     assert.equal(rustDiagnostics.report?.severity, jsDiagnostics.report?.severity)
     assert.equal(rustDiagnostics.report?.headline, jsDiagnostics.report?.headline)
+    assert.equal(rustDiagnostics.report?.summary, jsDiagnostics.report?.summary)
 
     const jsIssueCodes = (jsDiagnostics.issues ?? []).map((issue) => issue.code).sort()
     const rustIssueCodes = (rustDiagnostics.issues ?? []).map((issue) => issue.code).sort()
 
-    const jsCheckTools = (jsDiagnostics.report?.checks ?? []).map((check) => check.tool).sort()
-    const rustCheckTools = (rustDiagnostics.report?.checks ?? []).map((check) => check.tool).sort()
+    const jsChecks = (jsDiagnostics.report?.checks ?? []).map((check) => ({
+      tool: check.tool,
+      label: check.label,
+      status: check.status,
+      version: check.version,
+      details: check.details
+    }))
+    const rustChecks = (rustDiagnostics.report?.checks ?? []).map((check) => ({
+      tool: check.tool,
+      label: check.label,
+      status: check.status,
+      version: check.version,
+      details: check.details
+    }))
+
+    const jsRecoverySteps = jsDiagnostics.report?.recoverySteps ?? []
+    const rustRecoverySteps = rustDiagnostics.report?.recoverySteps ?? []
 
     assert.deepEqual(rustIssueCodes, jsIssueCodes)
-    assert.deepEqual(rustCheckTools, jsCheckTools)
+    assert.deepEqual(rustChecks, jsChecks)
+    assert.deepEqual(rustRecoverySteps, jsRecoverySteps)
   })
 })

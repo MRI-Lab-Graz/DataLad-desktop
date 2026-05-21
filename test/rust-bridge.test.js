@@ -59,6 +59,11 @@ test('tryLoadRustAdapter reports useful status when feature flag is enabled', as
       assert.ok(result.adapter)
       assert.equal(typeof result.adapter.checkEnvironment, 'function')
 
+      const diagnostics = result.adapter.checkEnvironment()
+      assert.equal(typeof diagnostics.supported, 'boolean')
+      assert.ok(Array.isArray(diagnostics.issues))
+      assert.equal(typeof diagnostics.report?.severity, 'string')
+
       const rustContract = result.adapter.getInterfaceContract()
       const jsContract = getAdapterInterfaceContract()
 
@@ -105,4 +110,27 @@ test('validateRustAdapterContract rejects command set mismatch', () => {
 
   const error = validateRustAdapterContract(fakeAdapter)
   assert.match(error ?? '', /supported command set mismatch/)
+})
+
+test('validateRustAdapterContract rejects non-object contracts', () => {
+  const fakeAdapter = {
+    getInterfaceContract() {
+      return null
+    }
+  }
+
+  const error = validateRustAdapterContract(fakeAdapter)
+  assert.match(error ?? '', /did not return an object/)
+})
+
+test('validateRustAdapterContract reports thrown validation errors', () => {
+  const fakeAdapter = {
+    getInterfaceContract() {
+      throw new Error('adapter exploded')
+    }
+  }
+
+  const error = validateRustAdapterContract(fakeAdapter)
+  assert.match(error ?? '', /contract validation failed/)
+  assert.match(error ?? '', /adapter exploded/)
 })
