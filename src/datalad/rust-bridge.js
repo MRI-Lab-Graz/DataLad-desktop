@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { getAdapterInterfaceContract } from './schema.js'
 
 const require = createRequire(import.meta.url)
 const RUST_ADAPTER_ENABLE_ENV = 'DATALAD_DESKTOP_USE_RUST_ADAPTER'
@@ -15,6 +16,31 @@ function hasAdapterShape(candidate) {
     typeof candidate.detectProject === 'function' &&
     typeof candidate.runCommand === 'function' &&
     typeof candidate.getInterfaceContract === 'function'
+}
+
+export function validateRustAdapterContract(adapter) {
+  try {
+    const rustContract = adapter.getInterfaceContract()
+    const jsContract = getAdapterInterfaceContract()
+
+    if (!rustContract || typeof rustContract !== 'object') {
+      return 'adapter.getInterfaceContract() did not return an object'
+    }
+
+    if (rustContract.version !== jsContract.version) {
+      return `interface version mismatch (rust=${rustContract.version ?? 'unknown'}, js=${jsContract.version})`
+    }
+
+    const rustCommandNames = Object.keys(rustContract.commands ?? {}).sort()
+    const jsCommandNames = Object.keys(jsContract.commands ?? {}).sort()
+    if (rustCommandNames.join(',') !== jsCommandNames.join(',')) {
+      return 'supported command set mismatch between Rust and JavaScript adapters'
+    }
+
+    return null
+  } catch (error) {
+    return `contract validation failed: ${error?.message ?? String(error)}`
+  }
 }
 
 export function tryLoadRustAdapter() {
@@ -38,6 +64,12 @@ export function tryLoadRustAdapter() {
 
       if (!hasAdapterShape(adapter)) {
         errors.push(`${modulePath}: module loaded but adapter interface was incomplete`)
+        continue
+      }
+
+      const compatibilityError = validateRustAdapterContract(adapter)
+      if (compatibilityError) {
+        errors.push(`${modulePath}: ${compatibilityError}`)
         continue
       }
 

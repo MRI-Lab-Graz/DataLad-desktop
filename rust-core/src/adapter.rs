@@ -1124,7 +1124,7 @@ fn read_subdataset_paths_from_gitmodules(project_path: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::process_runner::{CommandResult, CommandRunner, RunOptions};
-    use serde_json::json;
+    use serde_json::{json, to_value};
     use std::collections::HashMap;
 
     #[derive(Default)]
@@ -1253,6 +1253,121 @@ mod tests {
     }
 
     #[test]
+    fn run_command_success_serialization_matches_expected_fields() {
+        let request = json!({
+            "source": "https://example.org/ds.git",
+            "targetPath": "/tmp/ds"
+        });
+
+        let runner = FakeRunner::default().with_response(
+            "datalad",
+            &["clone", "https://example.org/ds.git", "/tmp/ds"],
+            CommandResult {
+                command: "datalad".to_string(),
+                args: vec![
+                    "clone".to_string(),
+                    "https://example.org/ds.git".to_string(),
+                    "/tmp/ds".to_string(),
+                ],
+                exit_code: 0,
+                stdout: "install(ok): /tmp/ds (dataset)".to_string(),
+                stderr: "additional clone note".to_string(),
+                failed: false,
+            },
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .run_command("cloneInstall", &request)
+            .expect("run_command should succeed");
+
+        assert!(result.ok);
+        assert_eq!(result.command_name, "cloneInstall");
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.warnings.len(), 1);
+        assert_eq!(result.warnings[0].code, "CLONE_STDERR_OUTPUT");
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let serialized_obj = serialized
+            .as_object()
+            .expect("serialized result should be an object");
+
+        assert!(serialized_obj.contains_key("commandName"));
+        assert!(serialized_obj.contains_key("exitCode"));
+        assert!(serialized_obj.contains_key("userError"));
+        assert!(!serialized_obj.contains_key("command_name"));
+        assert!(!serialized_obj.contains_key("exit_code"));
+
+        assert_eq!(
+            serialized_obj.get("commandName").and_then(Value::as_str),
+            Some("cloneInstall")
+        );
+        assert_eq!(
+            serialized_obj.get("exitCode").and_then(Value::as_i64),
+            Some(0)
+        );
+        assert!(
+            serialized_obj
+                .get("userError")
+                .expect("userError key should exist")
+                .is_null()
+        );
+    }
+
+    #[test]
+    fn run_command_failure_serialization_matches_expected_fields() {
+        let request = json!({
+            "projectPath": "/tmp/project"
+        });
+
+        let runner = FakeRunner::default().with_response(
+            "datalad",
+            &["-C", "/tmp/project", "push"],
+            CommandResult {
+                command: "datalad".to_string(),
+                args: vec![
+                    "-C".to_string(),
+                    "/tmp/project".to_string(),
+                    "push".to_string(),
+                ],
+                exit_code: 1,
+                stdout: String::new(),
+                stderr: "No configured push target for this dataset".to_string(),
+                failed: true,
+            },
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .run_command("push", &request)
+            .expect("run_command should return structured error result");
+
+        assert!(!result.ok);
+        assert!(result.failed);
+        assert_eq!(result.command_name, "push");
+        assert_eq!(
+            result
+                .user_error
+                .as_ref()
+                .map(|error| error.code.as_str()),
+            Some("REMOTE_MISSING")
+        );
+
+        let serialized = to_value(&result).expect("serialization should succeed");
+        let user_error = serialized
+            .get("userError")
+            .and_then(Value::as_object)
+            .expect("userError object should be present");
+
+        assert_eq!(
+            user_error.get("code").and_then(Value::as_str),
+            Some("REMOTE_MISSING")
+        );
+        assert!(user_error.contains_key("technicalDetails"));
+        assert!(!user_error.contains_key("technical_details"));
+    }
+
+    #[test]
     fn detect_project_classifies_git_when_no_dataset() {
         let project_path = "/tmp/project";
 
@@ -1342,5 +1457,165 @@ mod tests {
                 .map(|source| source.subdatasets.clone()),
             Some("datalad-subdatasets-probe".to_string())
         );
+    }
+
+    #[test]
+    fn run_command_extracts_clone_warnings() {
+        let request = json!({
+            "source": "https://example.org/ds.git",
+            "targetPath": "/tmp/ds"
+        });
+
+        let stderr = [
+            "[INFO] Remote origin not usable by git-annex; setting annex-ignore",
+            "[INFO] https://example.org/ds.git/config download failed: Not Found",
+            "[INFO] access to 1 dataset sibling s3-BACKUP not auto-enabled",
+        ]
+        .join("\n");
+
+        let runner = FakeRunner::default().with_response(
+            "datalad",
+            &["clone", "https://example.org/ds.git", "/tmp/ds"],
+            CommandResult {
+                command: "datalad".to_string(),
+                args: vec![
+                    "clone".to_string(),
+                    "https://example.org/ds.git".to_string(),
+                    "/tmp/ds".to_string(),
+                ],
+                exit_code: 0,
+                stdout: "install(ok): /tmp/ds (dataset)".to_string(),
+                stderr,
+                failed: false,
+            },
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .run_command("cloneInstall", &request)
+            .expect("run_command should succeed");
+
+        let warning_codes = result
+            .warnings
+            .iter()
+            .map(|warning| warning.code.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            warning_codes,
+            vec![
+                "ORIGIN_NOT_ANNEX_REMOTE",
+                "REMOTE_CONFIG_NOT_FOUND",
+                "SIBLING_NOT_AUTO_ENABLED"
+            ]
+        );
+    }
+
+    #[test]
+    fn list_branches_returns_sorted_branches_and_current() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "branch", "--format=%(refname:short)"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "branch", "--format=%(refname:short)"],
+                    "feature-z\nmain\nfeature-a\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "branch", "--show-current"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "branch", "--show-current"],
+                    "main\n",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .list_branches(project_path)
+            .expect("list_branches should succeed");
+
+        assert_eq!(result.current_branch.as_deref(), Some("main"));
+        assert!(!result.detached_head);
+        assert_eq!(result.branches, vec!["feature-a", "feature-z", "main"]);
+    }
+
+    #[test]
+    fn get_last_commit_parses_commit_payload() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                    "1716200000\0a1b2c3d\0checkpoint\0checkpoint\n\nwith details\n",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter.get_last_commit(project_path);
+
+        assert!(result.has_commit);
+        assert_eq!(result.timestamp, Some(1716200000));
+        assert_eq!(result.commit_hash.as_deref(), Some("a1b2c3d"));
+        assert_eq!(result.subject.as_deref(), Some("checkpoint"));
+        assert_eq!(result.message.as_deref(), Some("checkpoint\n\nwith details"));
+    }
+
+    #[test]
+    fn get_last_commit_reports_no_commits_reason() {
+        let project_path = "/tmp/project";
+
+        let runner = FakeRunner::default()
+            .with_response(
+                "git",
+                &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                ok_result(
+                    "git",
+                    &["-C", project_path, "rev-parse", "--is-inside-work-tree"],
+                    "true\n",
+                ),
+            )
+            .with_response(
+                "git",
+                &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                err_result(
+                    "git",
+                    &["-C", project_path, "log", "-1", "--format=%ct%x00%h%x00%s%x00%B"],
+                    "fatal: your current branch main does not have any commits yet",
+                ),
+            );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter.get_last_commit(project_path);
+
+        assert!(!result.has_commit);
+        assert_eq!(result.reason.as_deref(), Some("no-commits"));
     }
 }
