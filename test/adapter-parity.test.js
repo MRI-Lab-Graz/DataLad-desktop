@@ -37,6 +37,24 @@ function loadRustAdapterOrSkip(t) {
   return rustState.adapter
 }
 
+async function rejectedMessage(asyncCall) {
+  try {
+    await asyncCall()
+    assert.fail('Expected async call to reject')
+  } catch (error) {
+    return String(error?.message ?? error)
+  }
+}
+
+function thrownMessage(syncCall) {
+  try {
+    syncCall()
+    assert.fail('Expected sync call to throw')
+  } catch (error) {
+    return String(error?.message ?? error)
+  }
+}
+
 test('adapter parity: getInterfaceContract matches JS adapter', async (t) => {
   await withRustFlag('1', async () => {
     const jsAdapter = new DataLadAdapter()
@@ -97,6 +115,20 @@ test('adapter parity: request validation failures are equivalent', async (t) => 
       }),
       /paths must be an array/
     )
+
+    const jsMessage = await rejectedMessage(() =>
+      jsAdapter.runCommand('save', {
+        projectPath: '/tmp/project'
+      })
+    )
+
+    const rustMessage = thrownMessage(() =>
+      rustAdapter.runCommand('save', {
+        projectPath: '/tmp/project'
+      })
+    )
+
+    assert.equal(rustMessage, jsMessage)
   })
 })
 
@@ -112,10 +144,16 @@ test('adapter parity: checkEnvironment status and issue codes match', async (t) 
     const rustDiagnostics = rustAdapter.checkEnvironment()
 
     assert.equal(rustDiagnostics.supported, jsDiagnostics.supported)
+    assert.equal(rustDiagnostics.report?.severity, jsDiagnostics.report?.severity)
+    assert.equal(rustDiagnostics.report?.headline, jsDiagnostics.report?.headline)
 
     const jsIssueCodes = (jsDiagnostics.issues ?? []).map((issue) => issue.code).sort()
     const rustIssueCodes = (rustDiagnostics.issues ?? []).map((issue) => issue.code).sort()
 
+    const jsCheckTools = (jsDiagnostics.report?.checks ?? []).map((check) => check.tool).sort()
+    const rustCheckTools = (rustDiagnostics.report?.checks ?? []).map((check) => check.tool).sort()
+
     assert.deepEqual(rustIssueCodes, jsIssueCodes)
+    assert.deepEqual(rustCheckTools, jsCheckTools)
   })
 })

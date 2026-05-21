@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { tryLoadRustAdapter } from '../src/datalad/rust-bridge.js'
+import { tryLoadRustAdapter, validateRustAdapterContract } from '../src/datalad/rust-bridge.js'
+import { getAdapterInterfaceContract } from '../src/datalad/schema.js'
 
 const RUST_FLAG = 'DATALAD_DESKTOP_USE_RUST_ADAPTER'
 
@@ -57,10 +58,51 @@ test('tryLoadRustAdapter reports useful status when feature flag is enabled', as
       assert.equal(result.enabled, true)
       assert.ok(result.adapter)
       assert.equal(typeof result.adapter.checkEnvironment, 'function')
+
+      const rustContract = result.adapter.getInterfaceContract()
+      const jsContract = getAdapterInterfaceContract()
+
+      assert.equal(rustContract.version, jsContract.version)
+      assert.deepEqual(
+        Object.keys(rustContract.commands ?? {}).sort(),
+        Object.keys(jsContract.commands ?? {}).sort()
+      )
       return
     }
 
     assert.equal(result.enabled, false)
     assert.match(result.reason ?? '', /Could not load Rust adapter/) 
   })
+})
+
+test('validateRustAdapterContract rejects version mismatch', () => {
+  const jsContract = getAdapterInterfaceContract()
+  const fakeAdapter = {
+    getInterfaceContract() {
+      return {
+        ...jsContract,
+        version: '999.0.0'
+      }
+    }
+  }
+
+  const error = validateRustAdapterContract(fakeAdapter)
+  assert.match(error ?? '', /interface version mismatch/)
+})
+
+test('validateRustAdapterContract rejects command set mismatch', () => {
+  const jsContract = getAdapterInterfaceContract()
+  const fakeAdapter = {
+    getInterfaceContract() {
+      return {
+        ...jsContract,
+        commands: {
+          save: jsContract.commands.save
+        }
+      }
+    }
+  }
+
+  const error = validateRustAdapterContract(fakeAdapter)
+  assert.match(error ?? '', /supported command set mismatch/)
 })

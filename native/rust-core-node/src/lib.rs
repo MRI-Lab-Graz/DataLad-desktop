@@ -76,3 +76,59 @@ impl Adapter {
 pub fn create_adapter() -> Adapter {
     Adapter::new()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn adapter_exposes_expected_contract_shape() {
+        let adapter = Adapter::new();
+        let contract = adapter
+            .get_interface_contract()
+            .expect("get_interface_contract should succeed");
+
+        assert_eq!(
+            contract.get("version").and_then(Value::as_str),
+            Some("0.4.0")
+        );
+
+        let commands = contract
+            .get("commands")
+            .and_then(Value::as_object)
+            .expect("commands object should be present");
+        assert!(commands.contains_key("save"));
+        assert!(commands.contains_key("cloneInstall"));
+    }
+
+    #[test]
+    fn adapter_run_command_surfaces_validation_errors() {
+        let adapter = Adapter::new();
+        let error = adapter
+            .run_command(
+                "save".to_string(),
+                json!({
+                    "projectPath": "/tmp/project",
+                    "message": "checkpoint",
+                    "paths": "not-an-array"
+                }),
+            )
+            .expect_err("run_command should return validation error");
+
+        let error_text = error.to_string();
+        assert!(error_text.contains("paths must be an array"));
+    }
+
+    #[test]
+    fn adapter_check_environment_returns_diagnostics_shape() {
+        let adapter = Adapter::new();
+        let diagnostics = adapter
+            .check_environment()
+            .expect("check_environment should succeed");
+
+        assert!(diagnostics.get("supported").is_some());
+        assert!(diagnostics.get("report").is_some());
+        assert!(diagnostics.get("issues").is_some());
+    }
+}
