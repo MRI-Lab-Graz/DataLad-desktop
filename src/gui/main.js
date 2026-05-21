@@ -4,14 +4,29 @@ import { spawn } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
+import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const adapter = new DataLadAdapter()
+const adapter = createAdapter()
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
+
+function createAdapter() {
+  const rustAdapterState = tryLoadRustAdapter()
+  if (rustAdapterState.enabled) {
+    return rustAdapterState.adapter
+  }
+
+  if (rustAdapterState.reason) {
+    // Keep startup resilient while Rust bridge is being rolled out incrementally.
+    console.info(`[adapter] Using JavaScript adapter: ${rustAdapterState.reason}`)
+  }
+
+  return new DataLadAdapter()
+}
 
 function createMainWindow() {
   const mainWindow = new BrowserWindow({

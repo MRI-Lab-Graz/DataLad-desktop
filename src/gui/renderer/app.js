@@ -918,8 +918,10 @@ async function refreshLastCommitMeta(projectPath) {
     const ageMs = Math.max(0, Date.now() - Number(lastCommit.timestamp) * 1000)
     const relativeAge = formatAgeFromMilliseconds(ageMs)
     const suffix = lastCommit.commitHash ? ` (${lastCommit.commitHash})` : ''
+    const commitMessage = (lastCommit.message ?? '').trim()
     const commitSubject = (lastCommit.subject ?? '').trim()
-    const tooltip = commitSubject ? `Last commit message: ${commitSubject}` : ''
+    const tooltipSource = commitMessage || commitSubject
+    const tooltip = tooltipSource ? `Last commit message:\n${tooltipSource}` : ''
     setLastCommitMeta(`Last commit ${relativeAge} ago${suffix}.`, 'reminder', tooltip)
   } catch {
     if (state.commitMetaRequestToken !== nextToken) {
@@ -950,10 +952,14 @@ function setLastCommitMeta(text, tone, tooltip = '') {
   if (tooltip) {
     elements.lastCommitMeta.classList.add('hero-meta-has-tooltip')
     elements.lastCommitMeta.setAttribute('title', tooltip)
+    elements.lastCommitMeta.setAttribute('data-tooltip', tooltip)
+    elements.lastCommitMeta.setAttribute('tabindex', '0')
     return
   }
 
   elements.lastCommitMeta.removeAttribute('title')
+  elements.lastCommitMeta.removeAttribute('data-tooltip')
+  elements.lastCommitMeta.removeAttribute('tabindex')
 }
 
 function formatAgeFromMilliseconds(ageMs) {

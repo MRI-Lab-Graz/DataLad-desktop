@@ -24,9 +24,118 @@ Platform guidance:
 - macOS support remains required for cross-platform parity.
 - Cross-platform behavior should stay consistent across project detection, diagnostics, and DataLad actions.
 
+## Installation
+
+The app runs on macOS, Linux, and Windows. For MVP quality and QA depth, Windows and macOS currently have higher priority.
+
+### Prerequisites (all platforms)
+
+- Git
+- Node.js 20+ (with npm)
+- Python 3.9+
+- DataLad
+- git-annex
+
+Check what is already installed:
+
+```bash
+git --version
+node --version
+npm --version
+python3 --version
+datalad --version
+git annex version
+```
+
+### macOS
+
+Install prerequisites:
+
+```bash
+xcode-select --install
+brew install git git-annex node@20 python
+python3 -m pip install --user datalad
+```
+
+If `node` is not on your `PATH` after install, add Homebrew Node:
+
+```bash
+echo 'export PATH="$(brew --prefix node@20)/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+### Linux (Debian/Ubuntu)
+
+Install prerequisites:
+
+```bash
+sudo apt update
+sudo apt install -y git git-annex python3 python3-pip curl
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+python3 -m pip install --user datalad
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Windows
+
+Install prerequisites (PowerShell):
+
+```powershell
+winget install --id Git.Git -e
+winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Python.Python.3.12 -e
+python -m pip install --user datalad
+```
+
+Install git-annex using the official installer/package for Windows:
+
+- https://git-annex.branchable.com/install/windows/
+
+### Install and run DataLad Desktop
+
+```bash
+git clone https://github.com/<your-org>/DataLad-desktop.git
+cd DataLad-desktop
+npm install
+npm start
+```
+
+If `npm start` fails with `electron: command not found`, run:
+
+```bash
+npm install
+```
+
 ## Repository setup notes
 
 This repository now includes an initial implementation scaffold for the MVP DataLad adapter boundary, strict command schemas, onboarding diagnostics formatting, and tests for classification edge cases.
+
+Rust port bootstrap is now included for backend migration work:
+
+- Rust core crate: `rust-core/`
+- Native Node addon package: `native/rust-core-node/`
+- Optional Electron bridge (feature-flagged): `src/datalad/rust-bridge.js`
+- Main process fallback logic: `src/gui/main.js`
+
+The Rust adapter path is opt-in and currently disabled by default.
+
+To build the local native Rust module:
+
+```bash
+cd native/rust-core-node
+npm install
+npm run build
+```
+
+To enable Rust adapter loading in the app:
+
+```bash
+export DATALAD_DESKTOP_USE_RUST_ADAPTER=1
+```
+
+The app first tries loading `@datalad-desktop/rust-core` and then falls back to `native/rust-core-node/` for in-repo development. If neither native module is available, it automatically falls back to the JavaScript adapter.
 
 - Roadmap: `docs/roadmap.md`
 - Researcher workflow and UX rules: `docs/product/researcher-workflow.md`
@@ -49,6 +158,15 @@ Run baseline tests:
 
 ```bash
 npm test
+```
+
+Rust and bridge validation helpers:
+
+```bash
+npm run test:rust:core
+npm run test:rust:addon
+npm run test:bridge
+npm run test:parity
 ```
 
 ## Desktop app testing

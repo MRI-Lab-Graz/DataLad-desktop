@@ -8,6 +8,11 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
+    "test:rust:core": "cd rust-core && cargo test",
+    "test:rust:addon": "cd native/rust-core-node && cargo test",
+    "build:rust:addon": "cd native/rust-core-node && npm install && npm run build",
+    "test:bridge": "node --test test/rust-bridge.test.js",
+    "test:parity": "node --test test/adapter-parity.test.js",
     "package:dir": "electron-builder --dir",
     "package:dist": "electron-builder",
     "package:mac": "electron-builder --mac",

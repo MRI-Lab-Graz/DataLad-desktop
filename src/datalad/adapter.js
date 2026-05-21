@@ -197,7 +197,7 @@ export class DataLadAdapter {
       projectPath,
       'log',
       '-1',
-      '--format=%ct%n%h%n%s'
+      '--format=%ct%x00%h%x00%s%x00%B'
     ])
 
     if (result.failed) {
@@ -215,7 +215,7 @@ export class DataLadAdapter {
       }
     }
 
-    const [timestampLine, commitHashLine, subjectLine] = (result.stdout ?? '').split(/\r?\n/)
+    const [timestampLine, commitHashLine, subjectLine, ...messageParts] = (result.stdout ?? '').split('\u0000')
     const timestamp = Number.parseInt(timestampLine, 10)
 
     if (!Number.isFinite(timestamp)) {
@@ -229,7 +229,8 @@ export class DataLadAdapter {
       hasCommit: true,
       timestamp,
       commitHash: (commitHashLine ?? '').trim(),
-      subject: (subjectLine ?? '').trim()
+      subject: (subjectLine ?? '').trim(),
+      message: messageParts.join('\u0000').trim()
     }
   }
 
