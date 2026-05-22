@@ -1,0 +1,171 @@
+# Requires shell runners tagged `macos` and `windows` with Node.js 20+ and Rust on PATH.
+# The release job also needs an untagged Docker-capable runner or GitLab shared runner.
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v.*/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+stages:
+  - test
+  - build
+  - release
+
+default:
+  interruptible: true
+
+smoke_macos:
+  stage: test
+  tags:
+    - macos
+  variables:
+    CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  script:
+    - node --version
+    - npm --version
+    - npm ci
+    - npm test
+    - npm run package:dir
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+smoke_windows:
+  stage: test
+  tags:
+    - windows
+  variables:
+    CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  script:
+    - node --version
+    - npm --version
+    - npm ci
+    - npm test
+    - npm run package:dir
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+rust_validate_macos:
+  stage: test
+  tags:
+    - macos
+  script:
+    - node --version
+    - npm --version
+    - rustc --version
+    - cargo --version
+    - npm ci
+    - npm test
+    - npm run test:rust:core
+    - npm run test:rust:addon
+    - npm run build:rust:addon
+    - npm run test:bridge
+    - npm run test:parity
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+rust_validate_windows:
+  stage: test
+  tags:
+    - windows
+  script:
+    - node --version
+    - npm --version
+    - rustc --version
+    - cargo --version
+    - npm ci
+    - npm test
+    - npm run test:rust:core
+    - npm run test:rust:addon
+    - npm run build:rust:addon
+    - npm run test:bridge
+    - npm run test:parity
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+build_macos:
+  stage: build
+  tags:
+    - macos
+  variables:
+    CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+  script:
+    - node --version
+    - npm --version
+    - npm ci
+    - npm run package:mac:both -- --publish=never
+  artifacts:
+    name: 'datalad-desktop-macos-$CI_COMMIT_REF_SLUG'
+    paths:
+      - dist/*.dmg
+      - dist/*-mac.zip
+      - dist/latest-mac.yml
+      - dist/builder-debug.yml
+    expire_in: 14 days
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v.*/'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+build_windows:
+  stage: build
+  tags:
+    - windows
+  script:
+    - node --version
+    - npm --version
+    - npm ci
+    - npm run package:win:x64 -- --publish=never
+  artifacts:
+    name: 'datalad-desktop-windows-x64-$CI_COMMIT_REF_SLUG'
+    paths:
+      - dist/*.exe
+      - dist/*.blockmap
+      - dist/latest.yml
+      - dist/builder-debug.yml
+    expire_in: 14 days
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v.*/'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+release_gitlab:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - build_macos
+    - build_windows
+  script:
+    - echo "Creating GitLab release for $CI_COMMIT_TAG"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    name: 'DataLad Desktop $CI_COMMIT_TAG'
+    description: 'Packaged macOS and Windows artifacts built by GitLab CI.'
+    assets:
+      links:
+        - name: 'macOS artifact archive'
+          url: '${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/download?job=build_macos'
+        - name: 'Windows artifact archive'
+          url: '${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/download?job=build_windows'
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v.*/'
