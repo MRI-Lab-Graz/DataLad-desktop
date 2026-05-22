@@ -96,7 +96,7 @@ Install git-annex using the official installer/package for Windows:
 ### Install and run DataLad Desktop
 
 ```bash
-git clone https://github.com/<your-org>/DataLad-desktop.git
+git clone <your-repository-url>
 cd DataLad-desktop
 npm install
 npm start
@@ -224,6 +224,34 @@ Use the workflow [build-os-artifacts.yml](.github/workflows/build-os-artifacts.y
 Trigger it manually from Actions via **Build OS Artifacts** (`workflow_dispatch`) or automatically by pushing a tag like `v0.1.0`.
 
 When triggered by a `v*` tag, the same workflow also creates a GitHub Release and attaches the generated macOS and Windows artifacts.
+
+## GitLab CI Packaging
+
+Use [.gitlab-ci.yml](.gitlab-ci.yml) to build the same platform artifacts in GitLab CI:
+
+- macOS (builds both Intel x64 and Apple Silicon arm64)
+- Windows (x64)
+
+Before the pipeline will run successfully, register runners for both target platforms and tag them to match the CI file:
+
+- `macos`
+- `windows`
+
+Those runners should have Node.js 20+ and Rust available on `PATH`, plus whatever local signing/notarization settings you want for release builds. The macOS jobs disable automatic certificate discovery by default, matching the GitHub workflow.
+
+GitLab CI now covers three cases:
+
+- Branch pushes and merge requests run smoke tests plus Rust bridge validation on macOS and Windows.
+- Manual pipelines from the GitLab UI run packaging jobs so you can build artifacts on demand.
+- `v*` tags build release artifacts and then create a GitLab Release.
+
+Trigger artifact builds either by running a pipeline manually from GitLab (**Build > Pipelines > Run pipeline**) or by pushing a tag like `v0.1.0`.
+
+When triggered by a `v*` tag, the pipeline also creates a GitLab Release with links to the macOS and Windows job artifact archives.
+
+The release job is untagged and uses a container image, so it needs either GitLab shared runners or your own Linux runner with a Docker-capable executor.
+
+If your GitLab runner tags use different names, update the `tags:` entries in [.gitlab-ci.yml](.gitlab-ci.yml) to match your runner registration.
 
 Packaged icons are configured in package.json and use:
 
