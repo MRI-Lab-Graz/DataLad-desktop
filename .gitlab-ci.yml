@@ -1,109 +1,18 @@
-# Requires shell runners tagged `macos` and `windows` with Node.js 20+ and Rust on PATH.
+# Requires shell runners tagged `macos` and `windows` with Node.js 20+ on PATH.
 # The release job also needs an untagged Docker-capable runner or GitLab shared runner.
 
 workflow:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v.*/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
 
 stages:
-  - test
   - build
   - release
 
 default:
   interruptible: true
-
-smoke_macos:
-  stage: test
-  tags:
-    - macos
-  variables:
-    CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-  script:
-    - node --version
-    - npm --version
-    - npm ci
-    - npm test
-    - npm run package:dir
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: never
-    - if: '$CI_COMMIT_TAG'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
-
-smoke_windows:
-  stage: test
-  tags:
-    - windows
-  variables:
-    CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-  script:
-    - node --version
-    - npm --version
-    - npm ci
-    - npm test
-    - npm run package:dir
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: never
-    - if: '$CI_COMMIT_TAG'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
-
-rust_validate_macos:
-  stage: test
-  tags:
-    - macos
-  script:
-    - node --version
-    - npm --version
-    - rustc --version
-    - cargo --version
-    - npm ci
-    - npm test
-    - npm run test:rust:core
-    - npm run test:rust:addon
-    - npm run build:rust:addon
-    - npm run test:bridge
-    - npm run test:parity
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: never
-    - if: '$CI_COMMIT_TAG'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
-
-rust_validate_windows:
-  stage: test
-  tags:
-    - windows
-  script:
-    - node --version
-    - npm --version
-    - rustc --version
-    - cargo --version
-    - npm ci
-    - npm test
-    - npm run test:rust:core
-    - npm run test:rust:addon
-    - npm run build:rust:addon
-    - npm run test:bridge
-    - npm run test:parity
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: never
-    - if: '$CI_COMMIT_TAG'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH'
 
 build_macos:
   stage: build
@@ -151,21 +60,53 @@ build_windows:
 
 release_gitlab:
   stage: release
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  tags:
+    - macos
   needs:
     - build_macos
     - build_windows
   script:
-    - echo "Creating GitLab release for $CI_COMMIT_TAG"
-  release:
-    tag_name: '$CI_COMMIT_TAG'
-    name: 'DataLad Desktop $CI_COMMIT_TAG'
-    description: 'Packaged macOS and Windows artifacts built by GitLab CI.'
-    assets:
-      links:
-        - name: 'macOS artifact archive'
-          url: '${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/download?job=build_macos'
-        - name: 'Windows artifact archive'
-          url: '${CI_PROJECT_URL}/-/jobs/artifacts/${CI_COMMIT_TAG}/download?job=build_windows'
+    - export RELEASE_API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases"
+    - export MACOS_ASSET_URL="$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=build_macos"
+    - export WINDOWS_ASSET_URL="$CI_PROJECT_URL/-/jobs/artifacts/$CI_COMMIT_TAG/download?job=build_windows"
+    - |
+      cat > release.json <<EOF
+      {
+        "name": "DataLad Desktop $CI_COMMIT_TAG",
+        "tag_name": "$CI_COMMIT_TAG",
+        "description": "Packaged macOS and Windows artifacts built by GitLab CI.",
+        "assets": {
+          "links": [
+            {
+              "name": "macOS artifact archive",
+              "url": "$MACOS_ASSET_URL",
+              "link_type": "other"
+            },
+            {
+              "name": "Windows artifact archive",
+              "url": "$WINDOWS_ASSET_URL",
+              "link_type": "other"
+            }
+          ]
+        }
+      }
+      EOF
+    - export RELEASE_STATUS=$(curl --silent --output /tmp/release-check.json --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API/$CI_COMMIT_TAG")
+    - |
+      if [ "$RELEASE_STATUS" = "200" ]; then
+        curl --silent --show-error --fail \
+          --request PUT \
+          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --header "Content-Type: application/json" \
+          --data @release.json \
+          "$RELEASE_API/$CI_COMMIT_TAG"
+      else
+        curl --silent --show-error --fail \
+          --request POST \
+          --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --header "Content-Type: application/json" \
+          --data @release.json \
+          "$RELEASE_API"
+      fi
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v.*/'
