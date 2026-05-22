@@ -237,11 +237,10 @@ Before the pipeline will run successfully, register runners for both target plat
 - `macos`
 - `windows`
 
-Those runners should have Node.js 20+ and Rust available on `PATH`, plus whatever local signing/notarization settings you want for release builds. The macOS jobs disable automatic certificate discovery by default, matching the GitHub workflow.
+Those runners should have Node.js 20+ available on `PATH`, plus whatever local signing/notarization settings you want for release builds. The macOS jobs disable automatic certificate discovery by default, matching the GitHub workflow.
 
-GitLab CI now covers three cases:
+GitLab CI is currently limited to packaging so it mirrors the existing GitHub artifact workflow closely:
 
-- Branch pushes and merge requests run smoke tests plus Rust bridge validation on macOS and Windows.
 - Manual pipelines from the GitLab UI run packaging jobs so you can build artifacts on demand.
 - `v*` tags build release artifacts and then create a GitLab Release.
 
@@ -249,7 +248,9 @@ Trigger artifact builds either by running a pipeline manually from GitLab (**Bui
 
 When triggered by a `v*` tag, the pipeline also creates a GitLab Release with links to the macOS and Windows job artifact archives.
 
-The release job is untagged and uses a container image, so it needs either GitLab shared runners or your own Linux runner with a Docker-capable executor.
+If GitLab shows a job as pending with a message about `macos` or `windows` tags, that is not a YAML syntax problem. It means the project does not currently have an active runner registered with that tag, or the available runner is not allowed to run jobs for that branch or project.
+
+The release job now runs on the macOS runner and uses the GitLab Releases API with `CI_JOB_TOKEN`, so you do not need a separate Linux or Docker runner just to publish the release metadata.
 
 If your GitLab runner tags use different names, update the `tags:` entries in [.gitlab-ci.yml](.gitlab-ci.yml) to match your runner registration.
 
