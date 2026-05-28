@@ -1,10 +1,10 @@
 # DataLad Desktop
 
-DataLad Desktop is a researcher-first desktop app built from GitHub Desktop, adding a small set of DataLad-aware project actions while preserving the familiar project, commit, history, and branch workflow people already understand.
+DataLad Desktop is currently a researcher-first Electron prototype for a small set of DataLad-aware project actions. It is intended to inform a future shell decision, but this repository is not yet a GitHub Desktop fork and does not yet provide GitHub Desktop feature parity.
 
-## Product scope (MVP)
+## Product scope (current prototype)
 
-The first version keeps the GitHub Desktop shell and exposes only five DataLad actions:
+The current prototype focuses on five DataLad actions:
 
 - Clone/Install
 - Get
@@ -12,7 +12,7 @@ The first version keeps the GitHub Desktop shell and exposes only five DataLad a
 - Update
 - Push
 
-Git-only projects should continue to behave like normal GitHub Desktop projects.
+Git-only projects should remain usable without requiring DataLad-specific concepts.
 
 ## Platform target
 
@@ -110,7 +110,12 @@ npm install
 
 ## Repository setup notes
 
-This repository now includes an initial implementation scaffold for the MVP DataLad adapter boundary, strict command schemas, onboarding diagnostics formatting, and tests for classification edge cases.
+This repository currently contains:
+
+- a standalone Electron main/renderer prototype
+- a JavaScript DataLad adapter with structured command schemas and tests
+- environment diagnostics and project classification helpers
+- an opt-in Rust core plus Node bridge for backend migration work
 
 Rust port bootstrap is now included for backend migration work:
 
@@ -135,7 +140,7 @@ To enable Rust adapter loading in the app:
 export DATALAD_DESKTOP_USE_RUST_ADAPTER=1
 ```
 
-The app first tries loading `@datalad-desktop/rust-core` and then falls back to `native/rust-core-node/` for in-repo development. If neither native module is available, it automatically falls back to the JavaScript adapter.
+The app first tries loading `@datalad-desktop/rust-core` and then falls back to `native/rust-core-node/` for in-repo development. If neither native module is available, it falls back to the JavaScript adapter.
 
 - Roadmap: `docs/roadmap.md`
 - Researcher workflow and UX rules: `docs/product/researcher-workflow.md`
@@ -146,11 +151,11 @@ The app first tries loading `@datalad-desktop/rust-core` and then falls back to 
 
 ## Fork origin and upstream sync
 
-This project is intended to be seeded from GitHub Desktop and maintained with an explicit upstream sync strategy.
+This repository has not yet been rebased onto a GitHub Desktop fork baseline.
 
-- Upstream source repository: _TBD (GitHub Desktop)_
-- Upstream starting commit/tag: _TBD_
-- Upstream sync strategy: _TBD (document before implementation starts)_
+- Current shell status: standalone Electron prototype
+- GitHub Desktop fork baseline: not selected yet
+- Upstream sync strategy: not applicable until a fork decision is made
 
 ## Local validation
 
@@ -183,6 +188,7 @@ The window includes:
 - Environment diagnostics (with UI-ready recovery report)
 - Project classification (Git / Dataset / Superdataset)
 - Curated DataLad actions (Clone/Install, Get, Save, Update, Push)
+- Branch switching and recent commit inspection
 - Adapter interface contract snapshot
 
 ## Packaging builds

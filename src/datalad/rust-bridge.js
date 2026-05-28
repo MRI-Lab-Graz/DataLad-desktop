@@ -15,7 +15,12 @@ function hasAdapterShape(candidate) {
     typeof candidate.checkEnvironment === 'function' &&
     typeof candidate.detectProject === 'function' &&
     typeof candidate.runCommand === 'function' &&
-    typeof candidate.getInterfaceContract === 'function'
+    typeof candidate.getInterfaceContract === 'function' &&
+    typeof candidate.listDatasets === 'function' &&
+    typeof candidate.listBranches === 'function' &&
+    typeof candidate.getLastCommit === 'function' &&
+    typeof candidate.getWorkingTreeStatus === 'function' &&
+    typeof candidate.listRecentCommits === 'function'
 }
 
 export function validateRustAdapterContract(adapter) {

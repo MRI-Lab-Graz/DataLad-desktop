@@ -70,6 +70,28 @@ impl Adapter {
         to_value(self.inner.get_last_commit(&project_path))
             .map_err(|error| Error::from_reason(error.to_string()))
     }
+
+    #[napi(js_name = "getWorkingTreeStatus")]
+    pub fn get_working_tree_status(&self, project_path: String) -> napi::Result<Value> {
+        let result = self
+            .inner
+            .get_working_tree_status(&project_path)
+            .map_err(Error::from_reason)?;
+        to_value(result).map_err(|error| Error::from_reason(error.to_string()))
+    }
+
+    #[napi(js_name = "listRecentCommits")]
+    pub fn list_recent_commits(
+        &self,
+        project_path: String,
+        options: Option<Value>,
+    ) -> napi::Result<Value> {
+        let result = self
+            .inner
+            .list_recent_commits(&project_path, options.as_ref())
+            .map_err(Error::from_reason)?;
+        to_value(result).map_err(|error| Error::from_reason(error.to_string()))
+    }
 }
 
 #[napi(js_name = "createAdapter")]

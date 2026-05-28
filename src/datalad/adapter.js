@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
 import { ProcessRunner } from './process-runner.js'
+import { parseGitStatusPorcelain } from './status.js'
 import {
   assertCommandRequest,
   buildCommandResult,
@@ -20,15 +21,6 @@ const CURATED_COMMANDS = new Set([
 ])
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
-const STATUS_PRIORITY = {
-  conflict: 6,
-  deleted: 5,
-  renamed: 4,
-  added: 3,
-  modified: 2,
-  untracked: 1,
-  changed: 0
-}
 
 export class DataLadAdapter {
   constructor({ runner } = {}) {
@@ -261,74 +253,9 @@ export class DataLadAdapter {
         `Could not read working tree status for project: ${projectPath} (${result.stderr.trim() || 'unknown error'})`
       )
     }
-
-    const filesByPath = new Map()
-    let stagedCount = 0
-    let unstagedCount = 0
-    let untrackedCount = 0
-    let conflictCount = 0
-
-    for (const line of (result.stdout ?? '').split(/\r?\n/)) {
-      if (!line || line.length < 3) {
-        continue
-      }
-
-      const statusCode = line.slice(0, 2)
-      const pathPortion = line.slice(3).trim()
-      if (!pathPortion) {
-        continue
-      }
-
-      const normalizedPath = this.#normalizeStatusPath(pathPortion, statusCode)
-      if (!normalizedPath) {
-        continue
-      }
-
-      const staged = statusCode[0] !== ' ' && statusCode[0] !== '?'
-      const unstaged = statusCode[1] !== ' ' && statusCode[1] !== '?'
-      const conflicted = statusCode.includes('U') || statusCode === 'AA' || statusCode === 'DD'
-      const status = this.#mapStatusCode(statusCode)
-
-      if (staged) {
-        stagedCount += 1
-      }
-
-      if (unstaged) {
-        unstagedCount += 1
-      }
-
-      if (statusCode === '??') {
-        untrackedCount += 1
-      }
-
-      if (conflicted) {
-        conflictCount += 1
-      }
-
-      const existing = filesByPath.get(normalizedPath)
-      const nextStatus = this.#mergeStatusPriority(existing?.status, status)
-
-      filesByPath.set(normalizedPath, {
-        path: normalizedPath,
-        status: nextStatus,
-        statusCode,
-        staged: Boolean(existing?.staged || staged),
-        unstaged: Boolean(existing?.unstaged || unstaged),
-        conflicted: Boolean(existing?.conflicted || conflicted)
-      })
-    }
-
-    const files = [...filesByPath.values()].sort((left, right) => left.path.localeCompare(right.path))
-
     return {
       projectPath,
-      clean: files.length === 0,
-      totalChanged: files.length,
-      stagedCount,
-      unstagedCount,
-      untrackedCount,
-      conflictCount,
-      files
+      ...parseGitStatusPorcelain(result.stdout ?? '')
     }
   }
 
@@ -475,54 +402,6 @@ export class DataLadAdapter {
     return (text ?? '').split(/\r?\n/, 1)[0].trim() || null
   }
 
-  #normalizeStatusPath(pathPortion, statusCode) {
-    let nextPath = pathPortion
-    if ((statusCode.includes('R') || statusCode.includes('C')) && pathPortion.includes(' -> ')) {
-      nextPath = pathPortion.split(' -> ').at(-1)?.trim() ?? pathPortion
-    }
-
-    return nextPath
-      .replaceAll('\\\\', '/')
-      .replace(/^\.\//, '')
-      .trim()
-  }
-
-  #mapStatusCode(statusCode) {
-    if (statusCode === '??') {
-      return 'untracked'
-    }
-
-    if (statusCode.includes('U')) {
-      return 'conflict'
-    }
-
-    if (statusCode.includes('D')) {
-      return 'deleted'
-    }
-
-    if (statusCode.includes('R')) {
-      return 'renamed'
-    }
-
-    if (statusCode.includes('A')) {
-      return 'added'
-    }
-
-    if (statusCode.includes('M')) {
-      return 'modified'
-    }
-
-    return 'changed'
-  }
-
-  #mergeStatusPriority(left, right) {
-    if (!left) {
-      return right
-    }
-
-    return (STATUS_PRIORITY[right] ?? 0) > (STATUS_PRIORITY[left] ?? 0) ? right : left
-  }
-
   async #ensureGitProject(projectPath) {
     const result = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '--is-inside-work-tree'])
     if (result.failed) {
@@ -664,7 +543,7 @@ export class DataLadAdapter {
       case 'cloneInstall': {
         return {
           command: 'datalad',
-          args: ['clone', request.source, request.targetPath],
+          args: ['clone', '--', request.source, request.targetPath],
           options: {}
         }
       }
@@ -673,7 +552,7 @@ export class DataLadAdapter {
         const paths = request.paths ?? []
         return {
           command: 'datalad',
-          args: ['-C', projectPath, 'get', ...paths],
+          args: paths.length > 0 ? ['-C', projectPath, 'get', '--', ...paths] : ['-C', projectPath, 'get'],
           options: { cwd: projectPath }
         }
       }
@@ -683,7 +562,9 @@ export class DataLadAdapter {
         const paths = request.paths ?? []
         return {
           command: 'datalad',
-          args: ['-C', projectPath, 'save', '-m', message, ...paths],
+          args: paths.length > 0
+            ? ['-C', projectPath, 'save', '-m', message, '--', ...paths]
+            : ['-C', projectPath, 'save', '-m', message],
           options: { cwd: projectPath }
         }
       }

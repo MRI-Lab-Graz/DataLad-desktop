@@ -32,6 +32,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
 })
 
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
+const LEADING_DASH_FIELDS = Object.freeze({
+  createBranch: ['branchName'],
+  switchBranch: ['branchName']
+})
 
 /**
  * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
@@ -55,7 +59,20 @@ export function assertCommandRequest(commandName, request) {
   }
 
   if (Object.hasOwn(request, 'paths') && !Array.isArray(request.paths)) {
-    throw new Error(`Invalid request for ${commandName}: paths must be an array`) 
+    throw new Error(`Invalid request for ${commandName}: paths must be an array`)
+  }
+
+  for (const field of LEADING_DASH_FIELDS[commandName] ?? []) {
+    const value = request[field]
+    if (typeof value === 'string' && value.trim().startsWith('-')) {
+      throw new Error(`Invalid request for ${commandName}: ${field} cannot start with -`)
+    }
+  }
+
+  for (const pathValue of request.paths ?? []) {
+    if (typeof pathValue !== 'string' || !pathValue.trim()) {
+      throw new Error(`Invalid request for ${commandName}: each path must be a non-empty string`)
+    }
   }
 }
 

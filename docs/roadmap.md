@@ -1,140 +1,84 @@
 # Roadmap: DataLad Desktop
 
-## Vision
+## Current state
 
-DataLad Desktop is a new project, not a continuation of Gooey. It should be a researcher-first desktop application built from a GitHub Desktop fork, with a small and focused DataLad layer. The product center is the project, not the filesystem.
+This repository is currently a focused Electron prototype for DataLad workflows. It is not yet a GitHub Desktop fork and it does not currently preserve GitHub Desktop shell areas such as the native changes view, history UI, or project list.
 
-Main workflow:
+What exists today:
 
-1. Open a project
-2. Inspect changes
-3. Commit work
-4. Optionally create or switch branch
-5. Get data when needed
-6. Update from collaborators
-7. Publish when ready
+1. Project detection for Git, DataLad dataset, and DataLad superdataset.
+2. A thin adapter layer for environment checks, command execution, and researcher-facing error mapping.
+3. A renderer prototype for clone, get, save, update, publish, branch actions, file browsing, and diagnostics.
+4. A Rust core and Node bridge behind an opt-in feature flag.
 
-## Product principles
+## Product direction
 
-- Keep GitHub Desktop as the shell.
-- Add DataLad only where it helps researchers.
-- Support one active project at a time.
-- Keep the first version small.
-- Treat Gooey as reference only.
-- Keep MVP cross-platform (Windows and macOS), with Windows as the primary user platform for QA and polish priorities.
+The product goal is still a researcher-first desktop app where scientists can open a project, understand local state, fetch missing data, save work, update, and publish without needing to understand DataLad internals.
 
-## MVP command set
+The next roadmap is therefore split into two tracks:
 
-- Clone/Install
-- Get
-- Save
-- Update
-- Push
+1. Stabilize and secure the current prototype so it is truthful, reliable, and testable.
+2. Only then decide whether to keep evolving this standalone shell or replace it with a true GitHub Desktop fork baseline.
 
-Commands that stay in the background for MVP:
+## Near-term roadmap
 
-- `status`
-- `subdatasets`
-- `siblings`
-- `run`
-- metadata commands
+### Phase 1: Prototype stabilization
 
-## Phase plan
+- Keep the command set intentionally small: Clone/Install, Get, Save, Update, Push.
+- Maintain one adapter boundary for environment checks, detection, command execution, and structured results.
+- Keep Git-only projects usable without exposing unnecessary DataLad surface area.
+- Preserve a single active project model.
 
-### Phase 0: New repository
+### Phase 2: Security and safety
 
-- Create a new repository named `datalad-desktop`.
-- Decide visible fork vs fresh repo seeded from upstream code.
-- Record exact upstream GitHub Desktop commit/tag used.
-- Define upstream-sync strategy from the beginning.
-- Replace GitHub trademarks/logos/product wording with original DataLad Desktop branding.
+- Keep renderer resources local-only.
+- Enforce strict navigation and permission rules in Electron.
+- Prevent user-controlled command arguments from being parsed as flags.
+- Keep file reveal actions non-executing.
+- Add explicit handling for long-running commands, auth prompts, and timeouts.
 
-### Phase 1: Fork baseline
+### Phase 3: Workflow correctness
 
-- Build and run unmodified GitHub Desktop baseline locally.
-- Confirm Windows and macOS development setup.
-- Preserve core shell areas:
-  - changes view
-  - commit UI
-  - history
-  - branch workflows
-  - project list
-  - startup restore
-- Keep a clear product statement in this repository.
+- Keep working-tree status, file browser badges, and save selection in sync.
+- Preserve explicit user selection across refreshes.
+- Eliminate stale async responses overwriting the current project view.
+- Improve subdataset save semantics so parent and child dataset behavior is unambiguous.
+- Add cancellation and progress reporting for long-running DataLad actions.
 
-### Phase 2: DataLad foundation
+### Phase 4: Windows-first hardening
 
-- Add project classification:
-  - plain Git repository
-  - DataLad dataset
-  - DataLad superdataset
-- Add one thin DataLad adapter boundary responsible for:
-  - environment checks
-  - project detection
-  - curated command execution
-  - structured results
-  - progress reporting
-  - user-friendly error mapping
-- Do not scatter shell calls through UI code.
-- Add environment diagnostics for missing Python, DataLad, git-annex, or unsupported system state.
+- Validate PATH discovery and diagnostics for standard Windows installs.
+- Test working-tree status, file paths, and packaging behavior on Windows.
+- Document Windows credential-helper expectations for publish and update flows.
+- Add installer validation and signing/notarization work for release builds.
 
-### Phase 3: Researcher MVP
+### Phase 5: Packaging and release hygiene
 
-- Keep normal GitHub Desktop commit flow.
-- Route commit action through `datalad save` for DataLad-enabled projects when appropriate.
-- Add project badge: Git / Dataset / Superdataset.
-- Add compact DataLad action group:
-  - Get Data
-  - Update Project
-  - Publish
-- Put Clone/Install in project onboarding flow (not a persistent toolbar action).
-- Make missing-content states understandable and route users to Get Data.
-- Keep branch creation/switching as standard GitHub Desktop behavior.
+- Keep macOS, Windows, and Linux packaging definitions explicit.
+- Pin CI release actions and strengthen supply-chain provenance.
+- Add release smoke tests for packaged apps, not just source checkouts.
+- Separate packaging validation from product validation.
 
-### Phase 4: Project rules
+### Phase 6: Shell decision point
 
-- Active project is the top-level dataset or superdataset intentionally opened by the user.
-- Subdatasets are project structure, not implicit project switches.
-- Git-only projects behave as normal GitHub Desktop projects.
-- DataLad UI appears only when project classification requires it.
-- Normal flow should never force users to choose between `git commit` and `datalad save`.
+- Decide explicitly between:
+  - continuing this standalone Electron shell, or
+  - rebasing onto a real GitHub Desktop fork.
+- If the fork path is chosen, record the exact upstream baseline and sync strategy before claiming shell parity.
+- If the standalone path is chosen, rewrite product and UX docs to stop implying GitHub Desktop compatibility.
 
-### Phase 5: UX polish
+## Exit criteria for the current prototype
 
-- Make onboarding clear:
-  - open existing project
-  - clone DataLad project
-  - reopen recent project
-- Make update/publish failures understandable:
-  - missing remote
-  - missing credentials
-  - missing DataLad tooling
-  - unsupported configuration
-- Keep error language researcher-friendly unless technical details are necessary for recovery.
-- Validate that app still feels like GitHub Desktop, not Gooey with a skin.
+- The repository description matches the implemented product.
+- The JS and Rust adapter paths expose the same runtime contract.
+- The UI does not silently overwrite user intent during refreshes.
+- Windows and macOS users can complete clone, save, get, update, and publish with documented prerequisites.
+- Packaging and CI claims are backed by tested workflows.
 
-### Phase 6: Packaging and release
+## Explicit non-goals for the current phase
 
-- Build native packaging for the new Electron-based repository.
-- Reuse Gooey installer lessons only as reference.
-- Validate Windows and macOS installers early.
-- Add CI for build, test, packaging, and release automation.
-- Confirm branding is fully original before public release.
-
-## Definition of MVP done
-
-- A researcher can open a project and immediately see whether it is Git-only or DataLad-enabled.
-- The app preserves standard GitHub Desktop experience for changes, commit flow, history, and branches.
-- Get Data, Update Project, and Publish work for DataLad projects.
-- Normal commit flow works for DataLad projects through a DataLad-aware save path.
-- Git-only projects remain clean and uncluttered.
-- Windows and macOS builds launch and complete the main researcher workflow.
-
-## Explicit non-goals (MVP)
-
-- Generic DataLad command forms
-- Filesystem-first browsing as the main app model
-- Full metadata editing
-- Raw sibling-management UI
-- Reproducible execution workflows (`run`)
-- A broad command catalog mirroring full DataLad CLI
+- Claiming GitHub Desktop shell parity before that code is actually present.
+- Expanding to generic DataLad command forms.
+- Adding broad metadata management UI.
+- Mirroring the full DataLad CLI surface.
+- Treating filesystem browsing as the primary product model.
