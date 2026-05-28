@@ -8,8 +8,8 @@
   --teal: #0b6ca8;
   --teal-soft: #d9ebf7;
   --orange: #b06d2d;
-  --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
-  --display: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
+  --mono: 'SFMono-Regular', 'Cascadia Mono', 'Aptos Mono', 'Avenir Next Mono', ui-monospace, Menlo, monospace;
+  --display: 'Avenir Next', 'Segoe UI Variable', 'Aptos', 'Helvetica Neue', sans-serif;
   --shadow: 0 10px 32px rgba(9, 40, 61, 0.14);
 }
 

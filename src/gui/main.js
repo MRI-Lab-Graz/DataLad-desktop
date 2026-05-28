@@ -2,9 +2,10 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electro
 import { access, readdir, stat } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
+import { buildGitStatusMap } from '../datalad/status.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -12,6 +13,7 @@ const __dirname = dirname(__filename)
 const adapter = createAdapter()
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
+const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
 const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
 
 function createAdapter() {
@@ -41,11 +43,19 @@ function createMainWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: true
     }
   })
 
-  mainWindow.loadFile(join(__dirname, 'renderer', 'index.html'))
+  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false)
+  })
+
+  mainWindow.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault()
+  })
+
+  mainWindow.loadURL(APP_RENDERER_URL)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -53,13 +63,18 @@ function createMainWindow() {
       return { action: 'deny' }
     }
 
-    return { action: 'allow' }
+    return { action: 'deny' }
   })
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       event.preventDefault()
       void shell.openExternal(url)
+      return
+    }
+
+    if (url !== APP_RENDERER_URL) {
+      event.preventDefault()
     }
   })
 }
@@ -156,10 +171,7 @@ ipcMain.handle('fs:revealPath', async (_event, targetPath) => {
 
   const targetStat = await stat(normalizedTargetPath)
   if (targetStat.isDirectory()) {
-    const errorMessage = await shell.openPath(normalizedTargetPath)
-    if (errorMessage) {
-      throw new Error(errorMessage)
-    }
+    shell.showItemInFolder(normalizedTargetPath)
     return true
   }
 
@@ -276,92 +288,7 @@ async function readGitStatusMap(rootPath) {
     return new Map()
   }
 
-  const statusByPath = new Map()
-  const lines = gitResult.stdout.split(/\r?\n/).filter(Boolean)
-  for (const line of lines) {
-    if (line.length < 4) {
-      continue
-    }
-
-    const statusCode = line.slice(0, 2)
-    const pathPortion = line.slice(3).trim()
-    if (!pathPortion) {
-      continue
-    }
-
-    let nextPath = pathPortion
-    if ((statusCode.includes('R') || statusCode.includes('C')) && pathPortion.includes(' -> ')) {
-      nextPath = pathPortion.split(' -> ').at(-1)?.trim() ?? pathPortion
-    }
-
-    const normalizedPath = normalizeStatusPath(nextPath)
-    if (!normalizedPath) {
-      continue
-    }
-
-    const mappedStatus = mapStatusCode(statusCode)
-    if (!mappedStatus) {
-      continue
-    }
-
-    const existingStatus = statusByPath.get(normalizedPath)
-    statusByPath.set(normalizedPath, mergeStatusPriority(existingStatus, mappedStatus))
-  }
-
-  return statusByPath
-}
-
-function normalizeStatusPath(pathValue) {
-  return pathValue
-    .replaceAll('\\', '/')
-    .replace(/^\.\//, '')
-    .trim()
-}
-
-function mapStatusCode(statusCode) {
-  if (statusCode === '??') {
-    return 'untracked'
-  }
-
-  if (statusCode.includes('U')) {
-    return 'conflict'
-  }
-
-  if (statusCode.includes('D')) {
-    return 'deleted'
-  }
-
-  if (statusCode.includes('R')) {
-    return 'renamed'
-  }
-
-  if (statusCode.includes('A')) {
-    return 'added'
-  }
-
-  if (statusCode.includes('M')) {
-    return 'modified'
-  }
-
-  return 'changed'
-}
-
-function mergeStatusPriority(left, right) {
-  if (!left) {
-    return right
-  }
-
-  const ranking = {
-    conflict: 6,
-    deleted: 5,
-    renamed: 4,
-    added: 3,
-    modified: 2,
-    untracked: 1,
-    changed: 0
-  }
-
-  return (ranking[right] ?? 0) > (ranking[left] ?? 0) ? right : left
+  return buildGitStatusMap(gitResult.stdout)
 }
 
 async function runCommand(command, args) {

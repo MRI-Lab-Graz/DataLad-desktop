@@ -5,11 +5,20 @@ const state = {
   rootProjectClassification: 'unknown',
   fileListing: null,
   commitMetaRequestToken: 0,
+  requestTokens: {
+    datasets: 0,
+    files: 0,
+    branches: 0,
+    workingTree: 0,
+    recentCommits: 0
+  },
   recentProjects: [],
   recentProjectEmojiByPath: {},
   workingTreeSnapshot: null,
   selectedChangedPaths: new Set(),
-  recentCommits: []
+  hasExplicitChangedSelection: false,
+  recentCommits: [],
+  pendingCommands: new Set()
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -167,12 +176,14 @@ elements.topQuickSaveButton.addEventListener('click', async () => {
 elements.changedFilesSelectAllButton.addEventListener('click', () => {
   const filePaths = (state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path)
   state.selectedChangedPaths = new Set(filePaths)
+  state.hasExplicitChangedSelection = true
   renderChangedFilesSelection()
   updateSaveButtonState()
 })
 
 elements.changedFilesSelectNoneButton.addEventListener('click', () => {
   state.selectedChangedPaths = new Set()
+  state.hasExplicitChangedSelection = true
   renderChangedFilesSelection()
   updateSaveButtonState()
 })
@@ -194,6 +205,7 @@ elements.changedFilesOutput.addEventListener('input', (event) => {
     state.selectedChangedPaths.delete(relativePath)
   }
 
+  state.hasExplicitChangedSelection = true
   updateSaveButtonState()
 })
 
@@ -485,6 +497,13 @@ function readProjectPath() {
 }
 
 async function runWorkflowCommand(commandName, request) {
+  if (state.pendingCommands.has(commandName)) {
+    setLastActionState(`${actionLabel(commandName)} is already running.`, 'warning')
+    return null
+  }
+
+  state.pendingCommands.add(commandName)
+
   try {
     const result = await api.runCommand(commandName, request)
 
@@ -526,6 +545,9 @@ async function runWorkflowCommand(commandName, request) {
     elements.commandOutput.textContent = String(error.message)
     setLastActionState(`${actionLabel(commandName)} failed.`, 'error')
     return null
+  } finally {
+    state.pendingCommands.delete(commandName)
+    updateSaveButtonState()
   }
 }
 
@@ -534,8 +556,14 @@ async function refreshDatasetList(projectPath) {
     return
   }
 
+  const requestToken = nextRequestToken('datasets')
+
   try {
     const datasets = await api.listDatasets(projectPath)
+    if (!isLatestRequestToken('datasets', requestToken)) {
+      return null
+    }
+
     elements.datasetSelect.innerHTML = ''
 
     for (const dataset of datasets) {
@@ -565,9 +593,15 @@ async function refreshDatasetList(projectPath) {
     await refreshRecentCommits(projectPath)
     updateSaveButtonState()
   } catch (error) {
+    if (!isLatestRequestToken('datasets', requestToken)) {
+      return null
+    }
+
     setLastActionState('Could not load nested datasets.', 'warning')
     elements.commandOutput.textContent = String(error.message)
   }
+
+  return null
 }
 
 async function refreshFileBrowser(projectPath) {
@@ -575,10 +609,21 @@ async function refreshFileBrowser(projectPath) {
     return
   }
 
+  const requestToken = nextRequestToken('files')
+
   try {
-    state.fileListing = await api.listFileEntries(projectPath, { maxDepth: 4, maxEntries: 500 })
+    const listing = await api.listFileEntries(projectPath, { maxDepth: 4, maxEntries: 500 })
+    if (!isLatestRequestToken('files', requestToken)) {
+      return
+    }
+
+    state.fileListing = listing
     renderCurrentFileBrowser()
   } catch (error) {
+    if (!isLatestRequestToken('files', requestToken)) {
+      return
+    }
+
     state.fileListing = null
     elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
   }
@@ -592,10 +637,15 @@ async function refreshBranchList(projectPath) {
     return
   }
 
+  const requestToken = nextRequestToken('branches')
   setBranchStatus('Loading branches...', 'idle')
 
   try {
     const branchSnapshot = await api.listBranches(projectPath)
+    if (!isLatestRequestToken('branches', requestToken)) {
+      return
+    }
+
     const branchNames = Array.isArray(branchSnapshot.branches) ? branchSnapshot.branches : []
     elements.branchSelect.innerHTML = ''
 
@@ -628,6 +678,10 @@ async function refreshBranchList(projectPath) {
 
     elements.switchBranchButton.disabled = false
   } catch (error) {
+    if (!isLatestRequestToken('branches', requestToken)) {
+      return
+    }
+
     elements.branchSelect.innerHTML = ''
     const fallbackOption = document.createElement('option')
     fallbackOption.value = ''
@@ -646,14 +700,21 @@ async function refreshWorkingTreeStatus(
   if (!projectPath) {
     state.workingTreeSnapshot = null
     state.selectedChangedPaths = new Set()
+    state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary()
     renderChangedFilesSelection()
     updateSaveButtonState()
     return null
   }
 
+  const requestToken = nextRequestToken('workingTree')
+
   try {
     const snapshot = await api.getWorkingTreeStatus(projectPath)
+    if (!isLatestRequestToken('workingTree', requestToken)) {
+      return snapshot
+    }
+
     state.workingTreeSnapshot = snapshot
     syncSelectedChangedPaths(snapshot.files ?? [], preserveSelection)
     renderWorkingTreeSummary()
@@ -661,8 +722,13 @@ async function refreshWorkingTreeStatus(
     updateSaveButtonState()
     return snapshot
   } catch (error) {
+    if (!isLatestRequestToken('workingTree', requestToken)) {
+      return null
+    }
+
     state.workingTreeSnapshot = null
     state.selectedChangedPaths = new Set()
+    state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary(`Could not load working tree status: ${String(error.message)}`)
     renderChangedFilesSelection()
     updateSaveButtonState()
@@ -682,12 +748,22 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
     return []
   }
 
+  const requestToken = nextRequestToken('recentCommits')
+
   try {
     const history = await api.listRecentCommits(projectPath, { limit: 20 })
+    if (!isLatestRequestToken('recentCommits', requestToken)) {
+      return history.commits ?? []
+    }
+
     state.recentCommits = history.commits ?? []
     renderRecentCommitList()
     return state.recentCommits
   } catch (error) {
+    if (!isLatestRequestToken('recentCommits', requestToken)) {
+      return []
+    }
+
     state.recentCommits = []
     renderRecentCommitList(`Could not load recent commits: ${String(error.message)}`)
     if (includeCommandOutputOnFailure) {
@@ -812,7 +888,13 @@ function renderEnvironment(diagnostics) {
 function syncSelectedChangedPaths(files, preserveSelection) {
   const availablePaths = new Set(files.map((entry) => entry.path))
 
-  if (!preserveSelection || state.selectedChangedPaths.size === 0) {
+  if (!preserveSelection) {
+    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
+    state.hasExplicitChangedSelection = false
+    return
+  }
+
+  if (state.selectedChangedPaths.size === 0 && !state.hasExplicitChangedSelection) {
     state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
     return
   }
@@ -822,11 +904,6 @@ function syncSelectedChangedPaths(files, preserveSelection) {
     if (availablePaths.has(selectedPath)) {
       nextSelection.add(selectedPath)
     }
-  }
-
-  if (nextSelection.size === 0 && files.length > 0) {
-    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
-    return
   }
 
   state.selectedChangedPaths = nextSelection
@@ -1723,4 +1800,14 @@ function escapeHtml(text) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+function nextRequestToken(key) {
+  const nextToken = (state.requestTokens[key] ?? 0) + 1
+  state.requestTokens[key] = nextToken
+  return nextToken
+}
+
+function isLatestRequestToken(key, token) {
+  return state.requestTokens[key] === token
 }

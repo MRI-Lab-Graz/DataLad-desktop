@@ -5,7 +5,8 @@ pub mod process_runner;
 pub use adapter::{
     AdapterCommandResult, AdapterInterfaceContract, BranchListResult, CommandSchemaContract,
     CommandWarning, DataLadAdapterCore, DatasetEntry, LastCommitResult, ProjectClassificationSource,
-    ProjectDetectionResult, UserError, ADAPTER_INTERFACE_VERSION,
+    ProjectDetectionResult, RecentCommitEntry, RecentCommitsResult, UserError,
+    WorkingTreeFileEntry, WorkingTreeStatusResult, ADAPTER_INTERFACE_VERSION,
 };
 pub use diagnostics::{
     format_environment_diagnostics, EnvironmentDiagnostics, EnvironmentIssue, EnvironmentReport,

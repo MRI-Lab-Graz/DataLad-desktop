@@ -58,6 +58,11 @@ test('tryLoadRustAdapter reports useful status when feature flag is enabled', as
       assert.equal(result.enabled, true)
       assert.ok(result.adapter)
       assert.equal(typeof result.adapter.checkEnvironment, 'function')
+      assert.equal(typeof result.adapter.listDatasets, 'function')
+      assert.equal(typeof result.adapter.listBranches, 'function')
+      assert.equal(typeof result.adapter.getLastCommit, 'function')
+      assert.equal(typeof result.adapter.getWorkingTreeStatus, 'function')
+      assert.equal(typeof result.adapter.listRecentCommits, 'function')
 
       const diagnostics = result.adapter.checkEnvironment()
       assert.equal(typeof diagnostics.supported, 'boolean')

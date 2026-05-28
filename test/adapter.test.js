@@ -340,7 +340,7 @@ test('listBranches returns current branch and local branch names', async () => {
 
 test('runCommand routes save through curated datalad invocation', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'], {
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '-m', 'checkpoint', '--', 'results.csv'], {
     exitCode: 0,
     stdout: 'save ok\n',
     stderr: '',
@@ -356,7 +356,7 @@ test('runCommand routes save through curated datalad invocation', async () => {
 
   assert.equal(result.ok, true)
   assert.equal(runner.calls.length, 1)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-m', 'checkpoint', 'results.csv'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-m', 'checkpoint', '--', 'results.csv'])
   assert.deepEqual(result.warnings, [])
 })
 
@@ -400,7 +400,7 @@ test('runCommand routes switchBranch through curated git invocation', async () =
 
 test('runCommand returns non-fatal clone advisories from stderr output', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr:
@@ -451,6 +451,21 @@ test('runCommand rejects invalid request shape before shell execution', async ()
       paths: 'results.csv'
     }),
     /paths must be an array/
+  )
+
+  assert.equal(runner.calls.length, 0)
+})
+
+test('runCommand rejects branch names that would be parsed as flags', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(
+    adapter.runCommand('createBranch', {
+      projectPath: '/tmp/project',
+      branchName: '--orphan'
+    }),
+    /branchName cannot start with -/
   )
 
   assert.equal(runner.calls.length, 0)
@@ -566,6 +581,31 @@ test('getWorkingTreeStatus parses staged, unstaged, untracked, and conflict chan
   const conflict = status.files.find((entry) => entry.path === 'conflict.txt')
   assert.equal(conflict?.conflicted, true)
   assert.equal(conflict?.status, 'conflict')
+})
+
+test('getWorkingTreeStatus normalizes Windows separators from porcelain output', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-status-windows-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], {
+    exitCode: 0,
+    stdout: 'R  inputs\\old.csv -> inputs\\renamed.csv\n?? raw\\new.csv\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const status = await adapter.getWorkingTreeStatus(root)
+
+  assert.deepEqual(
+    status.files.map((entry) => entry.path),
+    ['inputs/renamed.csv', 'raw/new.csv']
+  )
 })
 
 test('listRecentCommits returns commit metadata in log order', async () => {

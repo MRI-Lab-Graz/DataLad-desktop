@@ -120,6 +120,51 @@ pub struct LastCommitResult {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkingTreeFileEntry {
+    pub path: String,
+    pub status: String,
+    #[serde(rename = "statusCode")]
+    pub status_code: String,
+    pub staged: bool,
+    pub unstaged: bool,
+    pub conflicted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkingTreeStatusResult {
+    #[serde(rename = "projectPath")]
+    pub project_path: String,
+    pub clean: bool,
+    #[serde(rename = "totalChanged")]
+    pub total_changed: usize,
+    #[serde(rename = "stagedCount")]
+    pub staged_count: usize,
+    #[serde(rename = "unstagedCount")]
+    pub unstaged_count: usize,
+    #[serde(rename = "untrackedCount")]
+    pub untracked_count: usize,
+    #[serde(rename = "conflictCount")]
+    pub conflict_count: usize,
+    pub files: Vec<WorkingTreeFileEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecentCommitEntry {
+    pub timestamp: i64,
+    #[serde(rename = "commitHash")]
+    pub commit_hash: String,
+    pub author: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RecentCommitsResult {
+    #[serde(rename = "projectPath")]
+    pub project_path: String,
+    pub commits: Vec<RecentCommitEntry>,
+}
+
 struct DatasetProbe {
     is_dataset: Option<bool>,
     source: String,
@@ -447,6 +492,180 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
         }
     }
 
+    pub fn get_working_tree_status(
+        &self,
+        project_path: &str,
+    ) -> Result<WorkingTreeStatusResult, String> {
+        self.ensure_git_project(project_path)?;
+
+        let args = vec![
+            "-C".to_string(),
+            project_path.to_string(),
+            "-c".to_string(),
+            "core.quotePath=false".to_string(),
+            "status".to_string(),
+            "--porcelain".to_string(),
+            "--untracked-files=all".to_string(),
+        ];
+        let result = self.runner.run("git", &args, &RunOptions::default());
+
+        if result.failed {
+            let message = non_empty(&result.stderr)
+                .or_else(|| non_empty(&result.stdout))
+                .unwrap_or_else(|| "unknown error".to_string());
+            return Err(format!(
+                "Could not read working tree status for project: {} ({})",
+                project_path, message
+            ));
+        }
+
+        let mut files_by_path = HashMap::<String, WorkingTreeFileEntry>::new();
+        let mut staged_count = 0;
+        let mut unstaged_count = 0;
+        let mut untracked_count = 0;
+        let mut conflict_count = 0;
+
+        for line in result.stdout.lines() {
+            if line.len() < 3 {
+                continue;
+            }
+
+            let status_code = line[0..2].to_string();
+            let path_portion = line[3..].trim();
+            if path_portion.is_empty() {
+                continue;
+            }
+
+            let normalized_path = normalize_status_path(path_portion, &status_code);
+            if normalized_path.is_empty() {
+                continue;
+            }
+
+            let staged = !matches!(status_code.chars().next(), Some(' ') | Some('?'));
+            let unstaged = !matches!(status_code.chars().nth(1), Some(' ') | Some('?'));
+            let conflicted = status_code.contains('U') || status_code == "AA" || status_code == "DD";
+            let status = map_status_code(&status_code);
+
+            if staged {
+                staged_count += 1;
+            }
+
+            if unstaged {
+                unstaged_count += 1;
+            }
+
+            if status_code == "??" {
+                untracked_count += 1;
+            }
+
+            if conflicted {
+                conflict_count += 1;
+            }
+
+            if let Some(existing) = files_by_path.get_mut(&normalized_path) {
+                existing.status = merge_status_priority(&existing.status, status);
+                existing.status_code = status_code;
+                existing.staged = existing.staged || staged;
+                existing.unstaged = existing.unstaged || unstaged;
+                existing.conflicted = existing.conflicted || conflicted;
+                continue;
+            }
+
+            files_by_path.insert(
+                normalized_path.clone(),
+                WorkingTreeFileEntry {
+                    path: normalized_path,
+                    status: status.to_string(),
+                    status_code,
+                    staged,
+                    unstaged,
+                    conflicted,
+                },
+            );
+        }
+
+        let mut files = files_by_path.into_values().collect::<Vec<_>>();
+        files.sort_by(|left, right| left.path.cmp(&right.path));
+
+        Ok(WorkingTreeStatusResult {
+            project_path: project_path.to_string(),
+            clean: files.is_empty(),
+            total_changed: files.len(),
+            staged_count,
+            unstaged_count,
+            untracked_count,
+            conflict_count,
+            files,
+        })
+    }
+
+    pub fn list_recent_commits(
+        &self,
+        project_path: &str,
+        options: Option<&Value>,
+    ) -> Result<RecentCommitsResult, String> {
+        self.ensure_git_project(project_path)?;
+
+        let limit = parse_recent_commit_limit(options);
+        let args = vec![
+            "-C".to_string(),
+            project_path.to_string(),
+            "log".to_string(),
+            "-n".to_string(),
+            limit.to_string(),
+            "--format=%ct%x00%h%x00%an%x00%s".to_string(),
+        ];
+        let result = self.runner.run("git", &args, &RunOptions::default());
+
+        if result.failed {
+            let diagnostics = format!("{}\n{}", result.stderr, result.stdout).to_lowercase();
+            if diagnostics.contains("does not have any commits yet")
+                || diagnostics.contains("has no commits yet")
+            {
+                return Ok(RecentCommitsResult {
+                    project_path: project_path.to_string(),
+                    commits: Vec::new(),
+                });
+            }
+
+            let message = non_empty(&result.stderr)
+                .or_else(|| non_empty(&result.stdout))
+                .unwrap_or_else(|| "unknown error".to_string());
+            return Err(format!(
+                "Could not list recent commits for project: {} ({})",
+                project_path, message
+            ));
+        }
+
+        let mut commits = Vec::new();
+        for line in result.stdout.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let parts = line.split('\0').collect::<Vec<_>>();
+            if parts.len() < 4 {
+                continue;
+            }
+
+            let Some(timestamp) = parts[0].trim().parse::<i64>().ok() else {
+                continue;
+            };
+
+            commits.push(RecentCommitEntry {
+                timestamp,
+                commit_hash: parts[1].trim().to_string(),
+                author: parts[2].trim().to_string(),
+                subject: parts[3].trim().to_string(),
+            });
+        }
+
+        Ok(RecentCommitsResult {
+            project_path: project_path.to_string(),
+            commits,
+        })
+    }
+
     fn check_python(&self) -> ToolStatus {
         let mut attempted_details = Vec::new();
 
@@ -682,6 +901,7 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "--".to_string(),
                     request_required_string(request, "source")?,
                     request_required_string(request, "targetPath")?,
                 ],
@@ -694,7 +914,11 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                     project_path.clone(),
                     "get".to_string(),
                 ];
-                args.extend(request_optional_paths(request)?);
+                let paths = request_optional_paths(request)?;
+                if !paths.is_empty() {
+                    args.push("--".to_string());
+                    args.extend(paths);
+                }
 
                 Ok(CommandSpec {
                     command: "datalad".to_string(),
@@ -715,7 +939,11 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                     "-m".to_string(),
                     message,
                 ];
-                args.extend(request_optional_paths(request)?);
+                let paths = request_optional_paths(request)?;
+                if !paths.is_empty() {
+                    args.push("--".to_string());
+                    args.extend(paths);
+                }
 
                 Ok(CommandSpec {
                     command: "datalad".to_string(),
@@ -839,6 +1067,86 @@ fn first_line(text: &str) -> Option<&str> {
     text.lines().next().map(str::trim).filter(|line| !line.is_empty())
 }
 
+fn normalize_status_path(path_portion: &str, status_code: &str) -> String {
+    let next_path = if (status_code.contains('R') || status_code.contains('C'))
+        && path_portion.contains(" -> ")
+    {
+        path_portion
+            .rsplit(" -> ")
+            .next()
+            .unwrap_or(path_portion)
+    } else {
+        path_portion
+    };
+
+    next_path
+        .replace('\\', "/")
+        .trim_start_matches("./")
+        .trim()
+        .to_string()
+}
+
+fn map_status_code(status_code: &str) -> &'static str {
+    if status_code == "??" {
+        return "untracked";
+    }
+
+    if status_code.contains('U') {
+        return "conflict";
+    }
+
+    if status_code.contains('D') {
+        return "deleted";
+    }
+
+    if status_code.contains('R') {
+        return "renamed";
+    }
+
+    if status_code.contains('A') {
+        return "added";
+    }
+
+    if status_code.contains('M') {
+        return "modified";
+    }
+
+    "changed"
+}
+
+fn status_priority(status: &str) -> usize {
+    match status {
+        "conflict" => 6,
+        "deleted" => 5,
+        "renamed" => 4,
+        "added" => 3,
+        "modified" => 2,
+        "untracked" => 1,
+        _ => 0,
+    }
+}
+
+fn merge_status_priority(left: &str, right: &str) -> String {
+    if status_priority(right) > status_priority(left) {
+        right.to_string()
+    } else {
+        left.to_string()
+    }
+}
+
+fn parse_recent_commit_limit(options: Option<&Value>) -> i64 {
+    let requested_limit = options
+        .and_then(|value| value.get("limit"))
+        .and_then(|value| {
+            value
+                .as_i64()
+                .or_else(|| value.as_str().and_then(|text| text.parse::<i64>().ok()))
+        })
+        .unwrap_or(20);
+
+    requested_limit.clamp(1, 100)
+}
+
 fn non_empty(text: &str) -> Option<String> {
     let trimmed = text.trim().to_string();
     if trimmed.is_empty() {
@@ -920,6 +1228,17 @@ fn assert_command_request(command_name: &str, request: &Value) -> Result<(), Str
                 "Invalid request for {}: paths must be an array",
                 command_name
             ));
+        }
+    }
+
+    if matches!(command_name, "createBranch" | "switchBranch") {
+        if let Some(branch_name) = request.get("branchName").and_then(Value::as_str) {
+            if branch_name.trim().starts_with('-') {
+                return Err(format!(
+                    "Invalid request for {}: branchName cannot start with -",
+                    command_name
+                ));
+            }
         }
     }
 
@@ -1284,6 +1603,7 @@ mod tests {
                 "save",
                 "-m",
                 "checkpoint",
+                "--",
                 "a.txt",
                 "b.txt",
             ],
@@ -1295,6 +1615,7 @@ mod tests {
                     "save",
                     "-m",
                     "checkpoint",
+                    "--",
                     "a.txt",
                     "b.txt",
                 ],
@@ -1323,11 +1644,12 @@ mod tests {
 
         let runner = FakeRunner::default().with_response(
             "datalad",
-            &["clone", "https://example.org/ds.git", "/tmp/ds"],
+            &["clone", "--", "https://example.org/ds.git", "/tmp/ds"],
             CommandResult {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "--".to_string(),
                     "https://example.org/ds.git".to_string(),
                     "/tmp/ds".to_string(),
                 ],
@@ -1537,11 +1859,12 @@ mod tests {
 
         let runner = FakeRunner::default().with_response(
             "datalad",
-            &["clone", "https://example.org/ds.git", "/tmp/ds"],
+            &["clone", "--", "https://example.org/ds.git", "/tmp/ds"],
             CommandResult {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "--".to_string(),
                     "https://example.org/ds.git".to_string(),
                     "/tmp/ds".to_string(),
                 ],
@@ -1571,6 +1894,22 @@ mod tests {
                 "SIBLING_NOT_AUTO_ENABLED"
             ]
         );
+    }
+
+    #[test]
+    fn run_command_rejects_branch_names_that_start_with_dash() {
+        let adapter = DataLadAdapterCore::new(FakeRunner::default());
+        let error = adapter
+            .run_command(
+                "createBranch",
+                &json!({
+                    "projectPath": "/tmp/project",
+                    "branchName": "--orphan"
+                }),
+            )
+            .expect_err("run_command should reject branch names that look like flags");
+
+        assert!(error.contains("branchName cannot start with -"));
     }
 
     #[test]
