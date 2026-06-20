@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DataLadAdapter } from '../src/datalad/adapter.js'
+import { DataLadAdapter, createDataLadAdapter } from '../src/datalad/adapter.js'
 
 class FakeRunner {
   constructor() {
@@ -666,4 +666,62 @@ test('getInterfaceContract returns stable schema metadata', () => {
   assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
   assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
   assert.deepEqual(contract.commands.createBranch.required, ['projectPath', 'branchName'])
+})
+
+test('runCommand routes get without explicit paths to a bare datalad get', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'get'], {
+    exitCode: 0,
+    stdout: 'get ok\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('get', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'get'])
+})
+
+test('runCommand routes update through datalad update --merge', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'update', '--merge'], {
+    exitCode: 0,
+    stdout: 'update ok\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('update', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'update', '--merge'])
+})
+
+test('runCommand adds a generic advisory when clone stderr has output that matches no known pattern', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+    exitCode: 0,
+    stdout: 'install(ok): /tmp/ds (dataset)\n',
+    stderr: '[INFO] some other informational clone output\n',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('cloneInstall', {
+    source: 'https://example.org/ds.git',
+    targetPath: '/tmp/ds'
+  })
+
+  assert.equal(result.warnings.length, 1)
+  assert.equal(result.warnings[0].code, 'CLONE_STDERR_OUTPUT')
+})
+
+test('createDataLadAdapter builds a usable adapter instance', () => {
+  const adapter = createDataLadAdapter({ runner: new FakeRunner() })
+
+  assert.ok(adapter instanceof DataLadAdapter)
+  assert.equal(adapter.getInterfaceContract().version, '0.4.0')
 })

@@ -42,6 +42,7 @@ The next roadmap is therefore split into two tracks:
 - Keep working-tree status, file browser badges, and save selection in sync.
 - Preserve explicit user selection across refreshes.
 - Eliminate stale async responses overwriting the current project view.
+- Add automatic working-tree refresh via filesystem watching, scoped to the active project root, debounced, ignoring `.git`/`.datalad`/`.git/annex` internals and OS noise files, and paused while a command is in flight. This is the proactive counterpart to eliminating stale async responses: instead of only guarding against races, detect real disk changes and refresh without requiring a manual click. No tray/background mode and no scheduled/automatic saves — the app stays a foreground, user-triggered Save tool, just with a live status view.
 - Improve subdataset save semantics so parent and child dataset behavior is unambiguous.
 - Add cancellation and progress reporting for long-running DataLad actions.
 

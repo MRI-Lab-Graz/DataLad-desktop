@@ -12,6 +12,7 @@ A researcher opens DataLad Desktop and selects one of their projects. They revie
 4. Show DataLad controls only for DataLad-enabled projects.
 5. Keep Git-only projects uncluttered by DataLad-specific UI.
 6. Keep language researcher-friendly; avoid annex/sibling internals unless required for recovery.
+7. Treat project status as live, not something the user must request: the working-tree view should reflect disk state automatically while a project is open, not only after an explicit refresh click.
 
 ## Project classification in UI
 
@@ -40,3 +41,4 @@ To keep daily scientific version control smooth without adding advanced Git comp
 3. Keep Save guarded: require a message, warn/block on conflicts, and show a clear post-save summary.
 4. Before branch switch/create, check for dirty state and guide users to save first while still allowing an informed continue path when safe.
 5. Show a lightweight recent-commit list for quick confidence checks after Save and branch actions.
+6. Auto-refresh the working-tree summary and file list when files change on disk (scoped to the active project, debounced), instead of relying on a manual refresh button as the primary mechanism. The watcher should ignore DataLad/git internals (`.git/`, `.datalad/`, `.git/annex/`) and OS noise files, and should pause while a Save/Get/Update/Publish command is in flight so it never races with that command's own status update. Manual refresh remains available as a fallback.
