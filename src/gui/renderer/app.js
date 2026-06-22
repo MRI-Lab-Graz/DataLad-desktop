@@ -10,7 +10,8 @@ const state = {
     files: 0,
     branches: 0,
     workingTree: 0,
-    recentCommits: 0
+    recentCommits: 0,
+    projectHealth: 0
   },
   recentProjects: [],
   recentProjectEmojiByPath: {},
@@ -18,7 +19,8 @@ const state = {
   selectedChangedPaths: new Set(),
   hasExplicitChangedSelection: false,
   recentCommits: [],
-  pendingCommands: new Set()
+  pendingCommands: new Set(),
+  projectHealthSnapshot: null
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -40,6 +42,9 @@ const elements = {
   pickCommandProjectPathButton: document.getElementById('pick-command-project-path'),
   currentProjectPath: document.getElementById('current-project-path'),
   currentProjectBadge: document.getElementById('current-project-badge'),
+  switchProjectButton: document.getElementById('switch-project'),
+  onboardingGroup: document.getElementById('onboarding-group'),
+  projectHealthOutput: document.getElementById('project-health-output'),
   lastActionState: document.getElementById('last-action-state'),
   lastCommitMeta: document.getElementById('last-commit-meta'),
   source: document.getElementById('source'),
@@ -135,6 +140,10 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
   elements.commandProjectPath.value = projectPath
   setCurrentProjectHeader(projectPath, 'unknown')
   await detectProjectType(projectPath)
+})
+
+elements.switchProjectButton.addEventListener('click', () => {
+  setOnboardingExpanded(true)
 })
 
 elements.clearRecentProjectsButton.addEventListener('click', () => {
@@ -521,6 +530,7 @@ async function runWorkflowCommand(commandName, request) {
 
       void refreshWorkingTreeStatus(nextProjectPath)
       void refreshRecentCommits(nextProjectPath)
+      void refreshProjectHealth(nextProjectPath)
     }
 
     elements.commandOutput.innerHTML = renderCommandResult(result, saveSummary)
@@ -703,6 +713,7 @@ async function refreshWorkingTreeStatus(
     state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary()
     renderChangedFilesSelection()
+    renderProjectHealth()
     updateSaveButtonState()
     return null
   }
@@ -719,6 +730,7 @@ async function refreshWorkingTreeStatus(
     syncSelectedChangedPaths(snapshot.files ?? [], preserveSelection)
     renderWorkingTreeSummary()
     renderChangedFilesSelection()
+    renderProjectHealth()
     updateSaveButtonState()
     return snapshot
   } catch (error) {
@@ -731,6 +743,7 @@ async function refreshWorkingTreeStatus(
     state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary(`Could not load working tree status: ${String(error.message)}`)
     renderChangedFilesSelection()
+    renderProjectHealth()
     updateSaveButtonState()
 
     if (includeCommandOutputOnFailure) {
@@ -1264,6 +1277,90 @@ function setCurrentProjectHeader(projectPath, classification) {
   setProjectBadge(classification)
   renderRecentProjects()
   void refreshLastCommitMeta(projectPath)
+  setOnboardingExpanded(!projectPath)
+  void refreshProjectHealth(projectPath)
+}
+
+function setOnboardingExpanded(expanded) {
+  elements.onboardingGroup.classList.toggle('onboarding-collapsed', !expanded)
+  elements.switchProjectButton.hidden = expanded
+}
+
+async function refreshProjectHealth(projectPath) {
+  if (!projectPath) {
+    state.projectHealthSnapshot = null
+    renderProjectHealth()
+    return null
+  }
+
+  const requestToken = nextRequestToken('projectHealth')
+
+  try {
+    const health = await api.getProjectHealth(projectPath)
+    if (!isLatestRequestToken('projectHealth', requestToken)) {
+      return health
+    }
+
+    state.projectHealthSnapshot = health
+    renderProjectHealth()
+    return health
+  } catch (error) {
+    if (!isLatestRequestToken('projectHealth', requestToken)) {
+      return null
+    }
+
+    state.projectHealthSnapshot = null
+    renderProjectHealth(`Could not read project health: ${String(error.message)}`)
+    return null
+  }
+}
+
+function renderProjectHealth(overrideMessage = null) {
+  if (overrideMessage) {
+    elements.projectHealthOutput.textContent = overrideMessage
+    return
+  }
+
+  const health = state.projectHealthSnapshot
+  if (!health) {
+    elements.projectHealthOutput.textContent = 'Select a project to see its save, sync, and data status.'
+    return
+  }
+
+  const tree = state.workingTreeSnapshot
+  const unsavedChip = tree
+    ? tree.clean
+      ? '<span class="status-chip status-chip-good">Saved</span>'
+      : `<span class="status-chip status-chip-urgent">Unsaved changes ${tree.totalChanged}</span>`
+    : '<span class="status-chip">Save status unknown</span>'
+
+  let syncChip = '<span class="status-chip">No remote tracked</span>'
+  if (health.hasUpstream) {
+    if (health.ahead === null || health.behind === null) {
+      syncChip = `<span class="status-chip">Tracking ${escapeHtml(health.upstream)}</span>`
+    } else if (health.ahead === 0 && health.behind === 0) {
+      syncChip = `<span class="status-chip status-chip-good">In sync with ${escapeHtml(health.upstream)}</span>`
+    } else {
+      const parts = []
+      if (health.ahead > 0) {
+        parts.push(`${health.ahead} to publish`)
+      }
+      if (health.behind > 0) {
+        parts.push(`${health.behind} to update`)
+      }
+      syncChip = `<span class="status-chip status-chip-warning">${escapeHtml(parts.join(', '))}</span>`
+    }
+  }
+
+  let missingChip = ''
+  if (health.annexSupported && health.missingContentCount > 0) {
+    missingChip = `<span class="status-chip status-chip-warning">Data not downloaded: ${health.missingContentCount}</span>`
+  } else if (health.annexSupported) {
+    missingChip = '<span class="status-chip status-chip-good">All data present</span>'
+  }
+
+  elements.projectHealthOutput.innerHTML =
+    `<div class="project-health-grid">${unsavedChip}${syncChip}${missingChip}</div>`
 }
 
 function classificationForPath(projectPath) {

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('dataladDesktop', {
   checkEnvironment: () => ipcRenderer.invoke('adapter:checkEnvironment'),
@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
       projectPath,
       options
     }),
+  getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>

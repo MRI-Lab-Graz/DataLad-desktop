@@ -45,6 +45,20 @@ body {
   grid-column: 1 / -1;
 }
 
+.onboarding-group {
+  display: grid;
+  gap: 18px;
+}
+
+.onboarding-group.onboarding-collapsed {
+  display: none;
+}
+
+.project-health {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
 .open-project-strip {
   padding-top: 14px;
   padding-bottom: 14px;
@@ -383,6 +397,22 @@ h2 {
   align-items: center;
 }
 
+.branch-details {
+  margin: 0 0 12px 0;
+}
+
+.branch-details summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 0.3rem 0;
+}
+
+.branch-details .branch-box {
+  margin-top: 8px;
+}
+
 .branch-box {
   margin: 0 0 12px 0;
   border: 1px solid rgba(152, 174, 188, 0.54);
@@ -464,6 +494,18 @@ h2 {
   background: rgba(214, 239, 228, 0.95);
   border-color: rgba(42, 130, 95, 0.36);
   color: #1e6a4e;
+}
+
+.status-chip-warning {
+  background: rgba(252, 240, 209, 0.96);
+  border-color: rgba(176, 134, 33, 0.4);
+  color: #7a5a0c;
+}
+
+.project-health-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .changed-files-list {
