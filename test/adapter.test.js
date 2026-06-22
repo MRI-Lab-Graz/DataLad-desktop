@@ -658,6 +658,77 @@ test('listRecentCommits returns empty list when repository has no commits', asyn
   assert.deepEqual(history.commits, [])
 })
 
+test('getProjectHealth reports ahead/behind and missing annex content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-health-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], {
+    exitCode: 0,
+    stdout: 'origin/main\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-list', '--left-right', '--count', 'origin/main...HEAD'], {
+    exitCode: 0,
+    stdout: '2\t1\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in', 'here'], {
+    exitCode: 0,
+    stdout: 'rawdata/scan1.nii.gz\nrawdata/scan2.nii.gz\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const health = await adapter.getProjectHealth(root)
+
+  assert.equal(health.hasUpstream, true)
+  assert.equal(health.upstream, 'origin/main')
+  assert.equal(health.behind, 2)
+  assert.equal(health.ahead, 1)
+  assert.equal(health.annexSupported, true)
+  assert.equal(health.missingContentCount, 2)
+})
+
+test('getProjectHealth degrades gracefully without an upstream or git-annex', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-health-bare-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], {
+    exitCode: 128,
+    stdout: '',
+    stderr: 'fatal: no upstream configured for branch main',
+    failed: true
+  })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in', 'here'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'git-annex is not initialized in this repository',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const health = await adapter.getProjectHealth(root)
+
+  assert.equal(health.hasUpstream, false)
+  assert.equal(health.ahead, null)
+  assert.equal(health.behind, null)
+  assert.equal(health.annexSupported, false)
+  assert.equal(health.missingContentCount, null)
+})
+
 test('getInterfaceContract returns stable schema metadata', () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const contract = adapter.getInterfaceContract()

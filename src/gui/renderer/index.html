@@ -70,30 +70,19 @@
         </section>
       </header>
 
-      <section class="card recent-projects reveal reveal-2" aria-labelledby="recent-projects-title">
-        <div class="section-head recent-projects-head">
-          <h2 id="recent-projects-title">Latest Projects</h2>
-          <button id="clear-recent-projects" class="button button-ghost button-inline" type="button">Clear</button>
-        </div>
-        <p class="lede-small">Jump between recent projects quickly.</p>
-        <div id="recent-projects-output" class="recent-projects-row"></div>
-      </section>
+      <section id="onboarding-group" class="onboarding-group">
+        <section class="card recent-projects reveal reveal-2" aria-labelledby="recent-projects-title">
+          <div class="section-head recent-projects-head">
+            <h2 id="recent-projects-title">Latest Projects</h2>
+            <button id="clear-recent-projects" class="button button-ghost button-inline" type="button">Clear</button>
+          </div>
+          <p class="lede-small">Jump between recent projects quickly.</p>
+          <div id="recent-projects-output" class="recent-projects-row"></div>
+        </section>
 
-      <section class="card project-strip" aria-labelledby="current-project-title">
-        <div>
-          <p id="current-project-title" class="strip-label">Current Project</p>
-          <p id="current-project-path" class="strip-path">No project selected</p>
-        </div>
-        <div class="strip-state-group">
-          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
-          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
-        </div>
-      </section>
-
-      <main class="grid">
-        <section class="card reveal reveal-3 full-span open-project-strip" aria-labelledby="open-project-title">
+        <section class="card reveal reveal-3 open-project-strip" aria-labelledby="open-project-title">
           <div class="section-head">
-            <h2 id="open-project-title">1. Open Project</h2>
+            <h2 id="open-project-title">Open Project</h2>
           </div>
 
           <div class="open-project-grid">
@@ -117,10 +106,35 @@
             </div>
           </div>
         </section>
+      </section>
 
+      <section class="card project-strip" aria-labelledby="current-project-title">
+        <div>
+          <p id="current-project-title" class="strip-label">Current Project</p>
+          <p id="current-project-path" class="strip-path">No project selected</p>
+        </div>
+        <div class="strip-state-group">
+          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
+          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
+          <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
+            Switch Project
+          </button>
+        </div>
+      </section>
+
+      <section class="card project-health reveal reveal-3" aria-labelledby="project-health-title">
+        <div class="section-head">
+          <h2 id="project-health-title">Project Health</h2>
+        </div>
+        <div id="project-health-output" class="panel panel-muted panel-compact">
+          Select a project to see its save, sync, and data status.
+        </div>
+      </section>
+
+      <main class="grid">
         <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <div class="section-head">
-            <h2 id="project-actions-title">2. Work With Project</h2>
+            <h2 id="project-actions-title">Save &amp; Sync</h2>
           </div>
 
           <label class="field">
@@ -141,30 +155,33 @@
             </div>
           </label>
 
-          <section class="branch-box" aria-labelledby="branch-management-title">
-            <div class="section-head branch-head">
-              <h3 id="branch-management-title">Branch</h3>
-              <button id="refresh-branches" class="button button-ghost button-inline" type="button">Refresh</button>
-            </div>
-
-            <label class="field">
-              <span>Switch To Branch</span>
-              <div class="field-row">
-                <select id="branch-select"></select>
-                <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
+          <details class="branch-details">
+            <summary>Branch (advanced)</summary>
+            <section class="branch-box" aria-labelledby="branch-management-title">
+              <div class="section-head branch-head">
+                <h3 id="branch-management-title">Branch</h3>
+                <button id="refresh-branches" class="button button-ghost button-inline" type="button">Refresh</button>
               </div>
-            </label>
 
-            <label class="field">
-              <span>New Branch Name</span>
-              <div class="field-row">
-                <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
-                <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
-              </div>
-            </label>
+              <label class="field">
+                <span>Switch To Branch</span>
+                <div class="field-row">
+                  <select id="branch-select"></select>
+                  <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
+                </div>
+              </label>
 
-            <p id="branch-status" class="branch-status branch-status-idle">Choose a project to manage branches.</p>
-          </section>
+              <label class="field">
+                <span>New Branch Name</span>
+                <div class="field-row">
+                  <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
+                  <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
+                </div>
+              </label>
+
+              <p id="branch-status" class="branch-status branch-status-idle">Choose a project to manage branches.</p>
+            </section>
+          </details>
 
           <section class="status-box" aria-labelledby="working-tree-title">
             <div class="section-head branch-head">
@@ -226,7 +243,7 @@
 
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
           <div class="section-head">
-            <h2 id="files-title">3. Files</h2>
+            <h2 id="files-title">Files</h2>
             <div class="section-actions">
               <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
               <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>

@@ -128,6 +128,10 @@ ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
   return adapter.listRecentCommits(projectPath, options)
 })
 
+ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
+  return adapter.getProjectHealth(projectPath)
+})
+
 ipcMain.handle('app:getWorkspaceRoot', async () => {
   return process.cwd()
 })

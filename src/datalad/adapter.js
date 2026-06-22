@@ -316,6 +316,21 @@ export class DataLadAdapter {
     }
   }
 
+  async getProjectHealth(projectPath) {
+    await this.#ensureGitProject(projectPath)
+
+    const [sync, missingContent] = await Promise.all([
+      this.#readSyncStatus(projectPath),
+      this.#readMissingContentStatus(projectPath)
+    ])
+
+    return {
+      projectPath,
+      ...sync,
+      ...missingContent
+    }
+  }
+
   getInterfaceContract() {
     return getAdapterInterfaceContract()
   }
@@ -407,6 +422,61 @@ export class DataLadAdapter {
     if (result.failed) {
       throw new Error(`Path is not a git repository: ${projectPath}`)
     }
+  }
+
+  async #readSyncStatus(projectPath) {
+    const upstreamResult = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      'rev-parse',
+      '--abbrev-ref',
+      '--symbolic-full-name',
+      '@{u}'
+    ])
+
+    if (upstreamResult.failed) {
+      return { hasUpstream: false, upstream: null, ahead: null, behind: null }
+    }
+
+    const upstream = this.#firstLine(upstreamResult.stdout)
+    const countResult = await this.runner.run('git', [
+      '-C',
+      projectPath,
+      'rev-list',
+      '--left-right',
+      '--count',
+      `${upstream}...HEAD`
+    ])
+
+    if (countResult.failed) {
+      return { hasUpstream: true, upstream, ahead: null, behind: null }
+    }
+
+    const [behindRaw, aheadRaw] = (countResult.stdout ?? '').trim().split(/\s+/)
+    const behind = Number.parseInt(behindRaw, 10)
+    const ahead = Number.parseInt(aheadRaw, 10)
+
+    return {
+      hasUpstream: true,
+      upstream,
+      ahead: Number.isFinite(ahead) ? ahead : null,
+      behind: Number.isFinite(behind) ? behind : null
+    }
+  }
+
+  async #readMissingContentStatus(projectPath) {
+    const result = await this.runner.run('git', ['-C', projectPath, 'annex', 'find', '--not', '--in', 'here'])
+
+    if (result.failed) {
+      return { annexSupported: false, missingContentCount: null }
+    }
+
+    const missingPaths = (result.stdout ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    return { annexSupported: true, missingContentCount: missingPaths.length }
   }
 
   async #probeDataLadDataset(projectPath) {
