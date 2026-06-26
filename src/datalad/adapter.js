@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
@@ -150,6 +150,62 @@ export class DataLadAdapter {
     return datasets
   }
 
+  async readGitignore(projectPath, relativeDatasetPath = '.') {
+    await this.#ensureGitProject(projectPath)
+
+    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const gitignorePath = join(datasetPath, '.gitignore')
+    const exists = await fileExists(gitignorePath)
+
+    return {
+      relativeDatasetPath,
+      content: exists ? await readFile(gitignorePath, 'utf8') : '',
+      exists
+    }
+  }
+
+  async addIgnorePatterns(projectPath, relativeDatasetPaths, patterns) {
+    await this.#ensureGitProject(projectPath)
+
+    const cleanPatterns = [...new Set((patterns ?? []).map((pattern) => pattern.trim()).filter(Boolean))]
+    const targetPaths = [...new Set(relativeDatasetPaths ?? [])]
+
+    const results = []
+    for (const relativeDatasetPath of targetPaths) {
+      results.push(await this.#addIgnorePatternsToDataset(projectPath, relativeDatasetPath, cleanPatterns))
+    }
+
+    return results
+  }
+
+  async #addIgnorePatternsToDataset(projectPath, relativeDatasetPath, cleanPatterns) {
+    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const gitignorePath = join(datasetPath, '.gitignore')
+    const exists = await fileExists(gitignorePath)
+    const existingContent = exists ? await readFile(gitignorePath, 'utf8') : ''
+    const existingLines = new Set(
+      existingContent
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    )
+
+    const addedPatterns = cleanPatterns.filter((pattern) => !existingLines.has(pattern))
+    if (addedPatterns.length === 0) {
+      return { relativeDatasetPath, addedPatterns: [], content: existingContent }
+    }
+
+    const prefix = existingContent.length === 0 || existingContent.endsWith('\n') ? existingContent : `${existingContent}\n`
+    const nextContent = `${prefix}${addedPatterns.join('\n')}\n`
+    await writeFile(gitignorePath, nextContent, 'utf8')
+
+    return { relativeDatasetPath, addedPatterns, content: nextContent }
+  }
+
+  #resolveDatasetPath(projectPath, relativeDatasetPath) {
+    return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
+  }
+
   async listBranches(projectPath) {
     await this.#ensureGitProject(projectPath)
 
@@ -238,6 +294,31 @@ export class DataLadAdapter {
   async getWorkingTreeStatus(projectPath) {
     await this.#ensureGitProject(projectPath)
 
+    const parsed = await this.#readGitStatus(projectPath)
+    const subdatasetPaths = new Set(await this.#readSubdatasetPathsFromGitModules(projectPath))
+
+    const files = await Promise.all(
+      parsed.files.map(async (file) => {
+        if (!subdatasetPaths.has(file.path)) {
+          return file
+        }
+
+        return {
+          ...file,
+          isSubmodule: true,
+          nestedFiles: await this.#collectSubmoduleStatus(projectPath, file.path)
+        }
+      })
+    )
+
+    return {
+      projectPath,
+      ...parsed,
+      files
+    }
+  }
+
+  async #readGitStatus(projectPath) {
     const result = await this.runner.run('git', [
       '-C',
       projectPath,
@@ -253,10 +334,45 @@ export class DataLadAdapter {
         `Could not read working tree status for project: ${projectPath} (${result.stderr.trim() || 'unknown error'})`
       )
     }
-    return {
-      projectPath,
-      ...parseGitStatusPorcelain(result.stdout ?? '')
+
+    return parseGitStatusPorcelain(result.stdout ?? '')
+  }
+
+  async #collectSubmoduleStatus(projectPath, relativeSubdatasetPath) {
+    const submodulePath = join(projectPath, relativeSubdatasetPath)
+    const result = await this.runner.run('git', [
+      '-C',
+      submodulePath,
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain',
+      '--untracked-files=all'
+    ])
+
+    if (result.failed) {
+      return []
     }
+
+    const parsed = parseGitStatusPorcelain(result.stdout ?? '')
+    const nestedSubdatasetPaths = new Set(await this.#readSubdatasetPathsFromGitModules(submodulePath))
+
+    return Promise.all(
+      parsed.files.map(async (file) => {
+        const combinedPath = `${relativeSubdatasetPath}/${file.path}`
+
+        if (!nestedSubdatasetPaths.has(file.path)) {
+          return { ...file, path: combinedPath }
+        }
+
+        return {
+          ...file,
+          path: combinedPath,
+          isSubmodule: true,
+          nestedFiles: await this.#collectSubmoduleStatus(projectPath, combinedPath)
+        }
+      })
+    )
   }
 
   async listRecentCommits(projectPath, options = {}) {

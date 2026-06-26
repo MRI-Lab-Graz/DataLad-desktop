@@ -54,6 +54,24 @@ body {
   display: none;
 }
 
+.setup-zone {
+  background: linear-gradient(180deg, var(--teal-soft), rgba(217, 235, 247, 0.55));
+  border: 1px solid var(--line);
+}
+
+.setup-zone-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 4px 0;
+}
+
+.setup-zone-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 14px;
+}
+
 .project-health {
   padding-top: 14px;
   padding-bottom: 14px;
@@ -520,6 +538,7 @@ h2 {
 
 .changed-file-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -527,6 +546,85 @@ h2 {
   border: 1px solid rgba(148, 171, 186, 0.42);
   background: rgba(251, 253, 255, 0.92);
   padding: 0.42rem 0.48rem;
+}
+
+.changed-files-list-nested {
+  flex-basis: 100%;
+  margin: 0.32rem 0 0 1.4rem;
+  max-height: none;
+  overflow: visible;
+}
+
+.changed-files-list-nested .changed-file-item {
+  background: rgba(241, 247, 250, 0.85);
+  padding: 0.32rem 0.42rem;
+}
+
+.ignore-rules-scope-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.ignore-rules-scope-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgba(148, 171, 186, 0.42);
+  border-radius: 10px;
+  background: rgba(251, 253, 255, 0.92);
+  padding: 0.32rem 0.56rem;
+  font-size: 0.85rem;
+}
+
+.ignore-rules-scope-tree {
+  max-height: 260px;
+  overflow: auto;
+  padding: 0.3rem 0.1rem 0.1rem;
+}
+
+.ignore-rules-scope-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.ignore-rules-scope-tree-list:not(.depth-0) {
+  margin-left: 1.1rem;
+  margin-top: 4px;
+}
+
+.ignore-rules-scope-node {
+  display: grid;
+  gap: 2px;
+}
+
+.ignore-rules-scope-folder {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.ignore-rules-textarea {
+  width: 100%;
+  border: 1px solid #b7cad8;
+  border-radius: 10px;
+  background: #fbfdff;
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.58rem 0.68rem;
+  resize: vertical;
+}
+
+.ignore-rules-textarea:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.22);
+  border-color: var(--teal);
 }
 
 .changed-file-label {

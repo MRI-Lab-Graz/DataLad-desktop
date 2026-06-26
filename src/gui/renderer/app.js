@@ -20,7 +20,10 @@ const state = {
   hasExplicitChangedSelection: false,
   recentCommits: [],
   pendingCommands: new Set(),
-  projectHealthSnapshot: null
+  projectHealthSnapshot: null,
+  datasets: [],
+  datasetsRootPath: null,
+  selectedIgnoreScopePaths: new Set()
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -62,6 +65,16 @@ const elements = {
   changedFilesOutput: document.getElementById('changed-files-output'),
   changedFilesSelectAllButton: document.getElementById('changed-files-select-all'),
   changedFilesSelectNoneButton: document.getElementById('changed-files-select-none'),
+  ignoreRulesScopeRoot: document.getElementById('ignore-rules-scope-root'),
+  ignoreRulesScopeSelectAllButton: document.getElementById('ignore-rules-scope-select-all'),
+  ignoreRulesScopeSelectNoneButton: document.getElementById('ignore-rules-scope-select-none'),
+  ignoreRulesScopeDetails: document.getElementById('ignore-rules-scope-details'),
+  ignoreRulesScopeSummaryLabel: document.getElementById('ignore-rules-scope-summary-label'),
+  ignoreRulesScopeTree: document.getElementById('ignore-rules-scope-tree'),
+  ignoreRulesPatterns: document.getElementById('ignore-rules-patterns'),
+  ignoreRulesApplyButton: document.getElementById('ignore-rules-apply'),
+  ignoreRulesAddOsJunkButton: document.getElementById('ignore-rules-add-os-junk'),
+  ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   cloneProjectButton: document.getElementById('clone-project'),
   saveProjectButton: document.getElementById('save-project'),
@@ -574,6 +587,10 @@ async function refreshDatasetList(projectPath) {
       return null
     }
 
+    state.datasets = datasets
+    state.datasetsRootPath = projectPath
+    renderIgnoreRulesScope()
+
     elements.datasetSelect.innerHTML = ''
 
     for (const dataset of datasets) {
@@ -612,6 +629,186 @@ async function refreshDatasetList(projectPath) {
   }
 
   return null
+}
+
+function buildIgnoreRulesScopeTree(datasets) {
+  const root = { name: null, path: '', children: new Map(), isDataset: false }
+
+  for (const dataset of datasets) {
+    const segments = dataset.relativePath.split('/')
+    let node = root
+    let pathSoFar = ''
+
+    segments.forEach((segment, index) => {
+      pathSoFar = pathSoFar ? `${pathSoFar}/${segment}` : segment
+      if (!node.children.has(segment)) {
+        node.children.set(segment, { name: segment, path: pathSoFar, children: new Map(), isDataset: false })
+      }
+      node = node.children.get(segment)
+      if (index === segments.length - 1) {
+        node.isDataset = true
+      }
+    })
+  }
+
+  return root
+}
+
+function renderIgnoreRulesScopeTreeNode(node, depth) {
+  const items = [...node.children.values()]
+    .map((child) => {
+      const nestedHtml = renderIgnoreRulesScopeTreeNode(child, depth + 1)
+      const checked = state.selectedIgnoreScopePaths.has(child.path) ? ' checked' : ''
+      const entryHtml = child.isDataset
+        ? '<label class="ignore-rules-scope-option">' +
+          `<input type="checkbox" class="ignore-rules-scope-toggle" data-scope-path="${escapeHtml(child.path)}"${checked} />` +
+          `<span>${escapeHtml(child.name)}</span>` +
+          '</label>'
+        : `<span class="ignore-rules-scope-folder">${escapeHtml(child.name)}/</span>`
+
+      return `<li class="ignore-rules-scope-node">${entryHtml}${nestedHtml}</li>`
+    })
+    .join('')
+
+  return items ? `<ul class="ignore-rules-scope-tree-list depth-${depth}">${items}</ul>` : ''
+}
+
+function renderIgnoreRulesScope() {
+  const datasets = state.datasets ?? []
+
+  const availableRelativePaths = new Set(datasets.map((dataset) => dataset.relativePath))
+  for (const selectedPath of [...state.selectedIgnoreScopePaths]) {
+    if (!availableRelativePaths.has(selectedPath)) {
+      state.selectedIgnoreScopePaths.delete(selectedPath)
+    }
+  }
+
+  const hasRoot = datasets.some((dataset) => dataset.relativePath === '.')
+  elements.ignoreRulesScopeRoot.disabled = !hasRoot
+  elements.ignoreRulesScopeRoot.checked = hasRoot && state.selectedIgnoreScopePaths.has('.')
+
+  const nestedDatasets = datasets.filter((dataset) => dataset.relativePath !== '.')
+  if (nestedDatasets.length === 0) {
+    elements.ignoreRulesScopeTree.innerHTML =
+      '<p class="hint-inline">Choose a project to manage ignore rules.</p>'
+    elements.ignoreRulesScopeSummaryLabel.textContent = 'Choose specific nested datasets'
+    elements.ignoreRulesScopeSelectAllButton.disabled = datasets.length === 0
+    elements.ignoreRulesScopeSelectNoneButton.disabled = datasets.length === 0
+  } else {
+    const tree = buildIgnoreRulesScopeTree(nestedDatasets)
+    elements.ignoreRulesScopeTree.innerHTML = renderIgnoreRulesScopeTreeNode(tree, 0)
+    elements.ignoreRulesScopeSummaryLabel.textContent = `Choose specific nested datasets (${nestedDatasets.length})`
+    elements.ignoreRulesScopeSelectAllButton.disabled = false
+    elements.ignoreRulesScopeSelectNoneButton.disabled = false
+  }
+
+  updateIgnoreRulesApplyState()
+}
+
+function updateIgnoreRulesApplyState() {
+  const hasScope = state.selectedIgnoreScopePaths.size > 0
+  const hasPatterns = elements.ignoreRulesPatterns.value.trim().length > 0
+  elements.ignoreRulesApplyButton.disabled = !(hasScope && hasPatterns)
+}
+
+elements.ignoreRulesScopeRoot.addEventListener('change', () => {
+  if (elements.ignoreRulesScopeRoot.checked) {
+    state.selectedIgnoreScopePaths.add('.')
+  } else {
+    state.selectedIgnoreScopePaths.delete('.')
+  }
+
+  updateIgnoreRulesApplyState()
+})
+
+elements.ignoreRulesScopeTree.addEventListener('change', (event) => {
+  const checkbox = event.target.closest('[data-scope-path]')
+  if (!checkbox) {
+    return
+  }
+
+  const relativePath = checkbox.getAttribute('data-scope-path')
+  if (!relativePath) {
+    return
+  }
+
+  if (checkbox.checked) {
+    state.selectedIgnoreScopePaths.add(relativePath)
+  } else {
+    state.selectedIgnoreScopePaths.delete(relativePath)
+  }
+
+  updateIgnoreRulesApplyState()
+})
+
+elements.ignoreRulesScopeSelectAllButton.addEventListener('click', () => {
+  state.selectedIgnoreScopePaths = new Set((state.datasets ?? []).map((dataset) => dataset.relativePath))
+  renderIgnoreRulesScope()
+})
+
+elements.ignoreRulesScopeSelectNoneButton.addEventListener('click', () => {
+  state.selectedIgnoreScopePaths = new Set()
+  renderIgnoreRulesScope()
+})
+
+elements.ignoreRulesPatterns.addEventListener('input', () => {
+  updateIgnoreRulesApplyState()
+})
+
+elements.ignoreRulesAddOsJunkButton.addEventListener('click', () => {
+  const commonPatterns = ['.DS_Store', '._*', 'Thumbs.db', 'Desktop.ini']
+  const existingLines = elements.ignoreRulesPatterns.value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const mergedLines = [...new Set([...existingLines, ...commonPatterns])]
+  elements.ignoreRulesPatterns.value = mergedLines.join('\n')
+  updateIgnoreRulesApplyState()
+})
+
+elements.ignoreRulesApplyButton.addEventListener('click', async () => {
+  const projectPath = state.datasetsRootPath
+  if (!projectPath) {
+    return
+  }
+
+  const patterns = elements.ignoreRulesPatterns.value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const scopePaths = [...state.selectedIgnoreScopePaths]
+
+  if (patterns.length === 0 || scopePaths.length === 0) {
+    return
+  }
+
+  elements.ignoreRulesApplyButton.disabled = true
+  try {
+    const results = await api.addIgnorePatterns(projectPath, scopePaths, patterns)
+    elements.ignoreRulesOutput.innerHTML = renderIgnoreRulesResult(results)
+    elements.ignoreRulesPatterns.value = ''
+    setLastActionState('Updated .gitignore for the selected scope.', 'success')
+    await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim() || projectPath)
+  } catch (error) {
+    elements.ignoreRulesOutput.textContent = String(error.message)
+    setLastActionState('Could not update .gitignore.', 'error')
+  } finally {
+    updateIgnoreRulesApplyState()
+  }
+})
+
+function renderIgnoreRulesResult(results) {
+  const rows = results
+    .map((result) => {
+      const label = result.relativeDatasetPath === '.' ? '(main project folder)' : result.relativeDatasetPath
+      const summary = result.addedPatterns.length
+        ? `added ${result.addedPatterns.join(', ')}`
+        : 'already up to date'
+      return `<li>${escapeHtml(label)}: ${escapeHtml(summary)}</li>`
+    })
+    .join('')
+
+  return `<ul class="history-list">${rows}</ul>`
 }
 
 async function refreshFileBrowser(projectPath) {
@@ -957,6 +1154,30 @@ function renderWorkingTreeSummary(overrideMessage = null) {
     '</div>'
 }
 
+function renderChangedFileItem(entry) {
+  const checked = state.selectedChangedPaths.has(entry.path) ? ' checked' : ''
+  const stagedBadge = entry.staged ? '<span class="status-chip">staged</span>' : ''
+  const conflictedBadge = entry.conflicted ? '<span class="status-chip status-chip-urgent">conflict</span>' : ''
+  const submoduleBadge = entry.isSubmodule ? '<span class="status-chip">subdataset</span>' : ''
+  const nestedFiles = entry.isSubmodule ? entry.nestedFiles ?? [] : []
+  const nestedList = nestedFiles.length
+    ? `<ul class="changed-files-list changed-files-list-nested">${nestedFiles
+        .map((nestedEntry) => renderChangedFileItem(nestedEntry))
+        .join('')}</ul>`
+    : ''
+
+  return (
+    '<li class="changed-file-item">' +
+    `<label class="changed-file-label">` +
+    `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
+    `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
+    '</label>' +
+    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}</span>` +
+    nestedList +
+    '</li>'
+  )
+}
+
 function renderChangedFilesSelection() {
   const files = state.workingTreeSnapshot?.files ?? []
   if (files.length === 0) {
@@ -966,22 +1187,7 @@ function renderChangedFilesSelection() {
     return
   }
 
-  const list = files
-    .map((entry) => {
-      const checked = state.selectedChangedPaths.has(entry.path) ? ' checked' : ''
-      const stagedBadge = entry.staged ? '<span class="status-chip">staged</span>' : ''
-      const conflictedBadge = entry.conflicted ? '<span class="status-chip status-chip-urgent">conflict</span>' : ''
-      return (
-        '<li class="changed-file-item">' +
-        `<label class="changed-file-label">` +
-        `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
-        `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
-        '</label>' +
-        `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}</span>` +
-        '</li>'
-      )
-    })
-    .join('')
+  const list = files.map((entry) => renderChangedFileItem(entry)).join('')
 
   elements.changedFilesOutput.innerHTML = `<ul class="changed-files-list">${list}</ul>`
   elements.changedFilesSelectAllButton.disabled = false

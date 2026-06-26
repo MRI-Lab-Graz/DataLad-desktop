@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DataLadAdapter, createDataLadAdapter } from '../src/datalad/adapter.js'
@@ -606,6 +606,94 @@ test('getWorkingTreeStatus normalizes Windows separators from porcelain output',
     status.files.map((entry) => entry.path),
     ['inputs/renamed.csv', 'raw/new.csv']
   )
+})
+
+test('getWorkingTreeStatus exposes nested file changes for modified submodules', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-status-submodule-'))
+  const subPath = join(root, 'sub-053')
+  await mkdir(subPath, { recursive: true })
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "sub-053"]\n\tpath = sub-053\n\turl = ../sub-053.git\n'
+  )
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], {
+    exitCode: 0,
+    stdout: ' M sub-053\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set(
+    'git',
+    ['-C', subPath, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'],
+    {
+      exitCode: 0,
+      stdout: ' M data/results.csv\n?? data/new-file.txt\n',
+      stderr: '',
+      failed: false
+    }
+  )
+
+  const adapter = new DataLadAdapter({ runner })
+  const status = await adapter.getWorkingTreeStatus(root)
+
+  const submodule = status.files.find((entry) => entry.path === 'sub-053')
+  assert.equal(submodule?.isSubmodule, true)
+  assert.deepEqual(
+    submodule?.nestedFiles.map((entry) => entry.path),
+    ['sub-053/data/new-file.txt', 'sub-053/data/results.csv']
+  )
+  assert.equal(submodule?.nestedFiles.find((entry) => entry.path === 'sub-053/data/results.csv')?.status, 'modified')
+})
+
+test('readGitignore reports missing file without error', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-gitignore-missing-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.readGitignore(root, '.')
+
+  assert.equal(result.exists, false)
+  assert.equal(result.content, '')
+})
+
+test('addIgnorePatterns creates a new .gitignore and skips already-present patterns', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-gitignore-add-'))
+  const subPath = join(root, 'sub-053')
+  await mkdir(subPath, { recursive: true })
+  await writeFile(join(subPath, '.gitignore'), '.DS_Store\n')
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const results = await adapter.addIgnorePatterns(root, ['.', 'sub-053'], ['.DS_Store', 'Thumbs.db'])
+
+  const rootResult = results.find((entry) => entry.relativeDatasetPath === '.')
+  assert.deepEqual(rootResult.addedPatterns, ['.DS_Store', 'Thumbs.db'])
+  assert.equal(await readFile(join(root, '.gitignore'), 'utf8'), '.DS_Store\nThumbs.db\n')
+
+  const subResult = results.find((entry) => entry.relativeDatasetPath === 'sub-053')
+  assert.deepEqual(subResult.addedPatterns, ['Thumbs.db'])
+  assert.equal(await readFile(join(subPath, '.gitignore'), 'utf8'), '.DS_Store\nThumbs.db\n')
 })
 
 test('listRecentCommits returns commit metadata in log order', async () => {

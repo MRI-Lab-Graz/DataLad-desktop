@@ -110,6 +110,14 @@ ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
   return adapter.listDatasets(projectPath)
 })
 
+ipcMain.handle('adapter:readGitignore', async (_event, payload = {}) => {
+  return adapter.readGitignore(payload.projectPath, payload.relativeDatasetPath)
+})
+
+ipcMain.handle('adapter:addIgnorePatterns', async (_event, payload = {}) => {
+  return adapter.addIgnorePatterns(payload.projectPath, payload.relativeDatasetPaths, payload.patterns)
+})
+
 ipcMain.handle('adapter:listBranches', async (_event, projectPath) => {
   return adapter.listBranches(projectPath)
 })
