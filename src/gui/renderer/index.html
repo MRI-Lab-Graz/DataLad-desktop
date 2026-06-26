@@ -131,6 +131,88 @@
         </div>
       </section>
 
+      <details class="card setup-zone" aria-labelledby="setup-zone-title">
+        <summary id="setup-zone-title" class="setup-zone-summary">⚙ Project Setup — Branches &amp; Ignore Rules</summary>
+        <div class="setup-zone-body">
+          <section class="branch-box" aria-labelledby="branch-management-title">
+            <div class="section-head branch-head">
+              <h3 id="branch-management-title">Branch</h3>
+              <button id="refresh-branches" class="button button-ghost button-inline" type="button">Refresh</button>
+            </div>
+
+            <label class="field">
+              <span>Switch To Branch</span>
+              <div class="field-row">
+                <select id="branch-select"></select>
+                <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>New Branch Name</span>
+              <div class="field-row">
+                <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
+                <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
+              </div>
+            </label>
+
+            <p id="branch-status" class="branch-status branch-status-idle">Choose a project to manage branches.</p>
+          </section>
+
+          <section class="status-box" aria-labelledby="ignore-rules-title">
+            <div class="section-head branch-head">
+              <h3 id="ignore-rules-title">Ignore Rules</h3>
+              <div class="section-actions">
+                <button id="ignore-rules-add-os-junk" class="button button-ghost button-inline" type="button">
+                  Add OS Junk Files
+                </button>
+              </div>
+            </div>
+            <p class="lede-small">
+              Some files should never be tracked or saved — like macOS <code>.DS_Store</code> files, editor
+              caches, or temporary outputs. Adding them to <code>.gitignore</code> keeps them out of "Files To
+              Save" for good. Nested datasets are separate repositories, so a pattern only takes effect in the
+              dataset(s) you apply it to below.
+            </p>
+            <div class="ignore-rules-scope-summary">
+              <label class="ignore-rules-scope-option">
+                <input type="checkbox" id="ignore-rules-scope-root" data-scope-path="." />
+                <span>Root dataset only</span>
+              </label>
+              <button id="ignore-rules-scope-select-all" class="button button-ghost button-inline" type="button">
+                All datasets
+              </button>
+              <button id="ignore-rules-scope-select-none" class="button button-ghost button-inline" type="button">
+                None
+              </button>
+            </div>
+            <details id="ignore-rules-scope-details" class="branch-details">
+              <summary id="ignore-rules-scope-summary-label">Choose specific nested datasets</summary>
+              <div id="ignore-rules-scope-tree" class="ignore-rules-scope-tree">
+                <p class="hint-inline">Choose a project to manage ignore rules.</p>
+              </div>
+            </details>
+            <label class="field">
+              <span>Patterns to ignore (one per line)</span>
+              <textarea
+                id="ignore-rules-patterns"
+                class="ignore-rules-textarea"
+                rows="3"
+                placeholder=".DS_Store&#10;Thumbs.db"
+              ></textarea>
+            </label>
+            <div class="action-strip">
+              <button id="ignore-rules-apply" class="button button-primary" type="button" disabled>
+                Add To .gitignore
+              </button>
+            </div>
+            <div id="ignore-rules-output" class="panel panel-muted panel-compact">
+              No ignore rules added yet.
+            </div>
+          </section>
+        </div>
+      </details>
+
       <main class="grid">
         <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <div class="section-head">
@@ -154,34 +236,6 @@
               <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
             </div>
           </label>
-
-          <details class="branch-details">
-            <summary>Branch (advanced)</summary>
-            <section class="branch-box" aria-labelledby="branch-management-title">
-              <div class="section-head branch-head">
-                <h3 id="branch-management-title">Branch</h3>
-                <button id="refresh-branches" class="button button-ghost button-inline" type="button">Refresh</button>
-              </div>
-
-              <label class="field">
-                <span>Switch To Branch</span>
-                <div class="field-row">
-                  <select id="branch-select"></select>
-                  <button id="switch-branch" class="button button-ghost button-inline" type="button">Switch</button>
-                </div>
-              </label>
-
-              <label class="field">
-                <span>New Branch Name</span>
-                <div class="field-row">
-                  <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
-                  <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
-                </div>
-              </label>
-
-              <p id="branch-status" class="branch-status branch-status-idle">Choose a project to manage branches.</p>
-            </section>
-          </details>
 
           <section class="status-box" aria-labelledby="working-tree-title">
             <div class="section-head branch-head">
