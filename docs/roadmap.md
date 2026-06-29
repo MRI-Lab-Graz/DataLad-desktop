@@ -79,7 +79,12 @@ The next roadmap is therefore split into two tracks:
 ## Explicit non-goals for the current phase
 
 - Claiming GitHub Desktop shell parity before that code is actually present.
-- Expanding to generic DataLad command forms.
+- Expanding the curated GUI action set to generic DataLad command forms.
 - Adding broad metadata management UI.
-- Mirroring the full DataLad CLI surface.
+- Building GUI buttons that mirror the full DataLad CLI surface.
 - Treating filesystem browsing as the primary product model.
+
+These non-goals are about the curated novice-facing action set (Get/Save/Update/Publish), not about
+power-user access in general. An opt-in, allowlisted-binary command console (`datalad`/`git`/`git-annex`,
+no shell) is in scope as the power-user escape hatch for commands the GUI doesn't cover — it does not grow
+the curated button set or change the default novice workflow.
