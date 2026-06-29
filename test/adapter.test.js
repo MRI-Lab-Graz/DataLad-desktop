@@ -821,7 +821,7 @@ test('getInterfaceContract returns stable schema metadata', () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const contract = adapter.getInterfaceContract()
 
-  assert.equal(contract.version, '0.4.0')
+  assert.equal(contract.version, '0.5.0')
   assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
   assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
   assert.deepEqual(contract.commands.createBranch.required, ['projectPath', 'branchName'])
@@ -878,9 +878,42 @@ test('runCommand adds a generic advisory when clone stderr has output that match
   assert.equal(result.warnings[0].code, 'CLONE_STDERR_OUTPUT')
 })
 
+test('runCommand builds a datalad create call for createProject', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '--', '/tmp/new-proj'], {
+    exitCode: 0,
+    stdout: 'create(ok): /tmp/new-proj (dataset)\n',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', { targetPath: '/tmp/new-proj' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '--', '/tmp/new-proj'])
+})
+
+test('runCommand maps createProject failure to researcher-facing non-empty-folder message', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '--', '/tmp/existing'], {
+    exitCode: 1,
+    // datalad reports this as a create(error) result line on stdout, not stderr.
+    stdout: 'create(error): /tmp/existing (dataset) [will not create a dataset in a non-empty directory, ' +
+      'use `--force` option to ignore]\n',
+    stderr: '',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', { targetPath: '/tmp/existing' })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'TARGET_NOT_EMPTY')
+})
+
 test('createDataLadAdapter builds a usable adapter instance', () => {
   const adapter = createDataLadAdapter({ runner: new FakeRunner() })
 
   assert.ok(adapter instanceof DataLadAdapter)
-  assert.equal(adapter.getInterfaceContract().version, '0.4.0')
+  assert.equal(adapter.getInterfaceContract().version, '0.5.0')
 })

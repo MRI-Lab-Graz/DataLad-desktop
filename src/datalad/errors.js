@@ -15,7 +15,23 @@ function hasPattern(text, pattern) {
  */
 export function mapCommandError(commandName, runResult) {
   const stderr = runResult.stderr ?? ''
+  const stdout = runResult.stdout ?? ''
   const details = stderr.trim()
+
+  // datalad prints this particular failure as a create(error) result line on
+  // stdout, not stderr, so this one check needs to look at both streams.
+  if (
+    commandName === 'createProject' &&
+    hasPattern(`${stdout}\n${stderr}`, /not empty|non-empty|already exists|refuse to create/)
+  ) {
+    return {
+      code: 'TARGET_NOT_EMPTY',
+      title: 'Folder already has content',
+      message:
+        'DataLad will not create a new project inside a folder that already has files in it. Choose an empty or brand-new folder.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
 
   if (commandName === 'createBranch' && hasPattern(stderr, /already exists/)) {
     return {

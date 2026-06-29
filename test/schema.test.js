@@ -44,6 +44,17 @@ test('assertCommandRequest accepts a valid request', () => {
   assert.doesNotThrow(() => assertCommandRequest('save', { projectPath: '/tmp/proj', message: 'msg', paths: ['a.txt'] }))
 })
 
+test('assertCommandRequest rejects createProject without a targetPath', () => {
+  assert.throws(
+    () => assertCommandRequest('createProject', {}),
+    /missing required field targetPath/
+  )
+})
+
+test('assertCommandRequest accepts a valid createProject request', () => {
+  assert.doesNotThrow(() => assertCommandRequest('createProject', { targetPath: '/tmp/new-proj' }))
+})
+
 test('assertRunnerResultShape rejects a result missing a required field', () => {
   assert.throws(
     () => assertRunnerResultShape({ command: 'datalad', args: [], exitCode: 0, stdout: '', stderr: '' }),

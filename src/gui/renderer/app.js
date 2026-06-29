@@ -61,6 +61,11 @@ const elements = {
   source: document.getElementById('source'),
   targetPath: document.getElementById('target-path'),
   pickTargetPathButton: document.getElementById('pick-target-path'),
+  cloneOutput: document.getElementById('clone-output'),
+  createProjectPath: document.getElementById('create-project-path'),
+  pickCreateProjectPathButton: document.getElementById('pick-create-project-path'),
+  createProjectButton: document.getElementById('create-project'),
+  createProjectOutput: document.getElementById('create-project-output'),
   datasetSelect: document.getElementById('dataset-select'),
   refreshDatasetsButton: document.getElementById('refresh-datasets'),
   branchSelect: document.getElementById('branch-select'),
@@ -138,6 +143,10 @@ wireFolderPicker(elements.pickCommandProjectPathButton, elements.commandProjectP
 
 wireFolderPicker(elements.pickTargetPathButton, elements.targetPath, {
   title: 'Select clone target folder'
+})
+
+wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
+  title: 'Select or create a new project folder'
 })
 
 elements.cloneNavTriggerButton.addEventListener('click', () => {
@@ -275,12 +284,18 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   const targetPath = elements.targetPath.value.trim()
 
   if (!source || !targetPath) {
-    elements.commandOutput.textContent = 'Provide both source URL and target folder for clone.'
+    elements.cloneOutput.textContent = 'Provide both source URL and target folder for clone.'
     setLastActionState('Add source URL and target folder.', 'error')
     return
   }
 
+  // Cloning happens in the onboarding area, which stays visible even when no
+  // project is open yet — render the result here too, not just into the
+  // Save & Sync panel, which is hidden until a project is actually open.
   const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath })
+  if (cloneResult) {
+    elements.cloneOutput.innerHTML = renderCommandResult(cloneResult)
+  }
   if (!cloneResult?.ok) {
     return
   }
@@ -289,6 +304,31 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   elements.projectPath.value = targetPath
   setCurrentProjectHeader(targetPath, 'unknown')
   setCloneDrawerExpanded(false)
+  await detectProjectType(targetPath)
+  await refreshDatasetList(targetPath)
+  await refreshFileBrowser(targetPath)
+})
+
+elements.createProjectButton.addEventListener('click', async () => {
+  const targetPath = elements.createProjectPath.value.trim()
+
+  if (!targetPath) {
+    elements.createProjectOutput.textContent = 'Choose a folder for the new project first.'
+    setLastActionState('Add a target folder first.', 'error')
+    return
+  }
+
+  const createResult = await runWorkflowCommand('createProject', { targetPath })
+  if (createResult) {
+    elements.createProjectOutput.innerHTML = renderCommandResult(createResult)
+  }
+  if (!createResult?.ok) {
+    return
+  }
+
+  elements.commandProjectPath.value = targetPath
+  elements.projectPath.value = targetPath
+  setCurrentProjectHeader(targetPath, 'unknown')
   await detectProjectType(targetPath)
   await refreshDatasetList(targetPath)
   await refreshFileBrowser(targetPath)
@@ -1380,6 +1420,10 @@ function buildWorkflowStatusLine(result) {
     return 'Project cloned successfully.'
   }
 
+  if (result.commandName === 'createProject') {
+    return 'New project created.'
+  }
+
   if (result.commandName === 'save') {
     return 'Project changes saved.'
   }
@@ -1410,6 +1454,10 @@ function buildWorkflowStatusLine(result) {
 function actionLabel(commandName) {
   if (commandName === 'cloneInstall') {
     return 'Clone'
+  }
+
+  if (commandName === 'createProject') {
+    return 'Create Project'
   }
 
   if (commandName === 'save') {

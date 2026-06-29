@@ -1,8 +1,12 @@
-export const ADAPTER_INTERFACE_VERSION = '0.4.0'
+export const ADAPTER_INTERFACE_VERSION = '0.5.0'
 
 export const COMMAND_SCHEMAS = Object.freeze({
   cloneInstall: {
     required: ['source', 'targetPath'],
+    optional: []
+  },
+  createProject: {
+    required: ['targetPath'],
     optional: []
   },
   get: {

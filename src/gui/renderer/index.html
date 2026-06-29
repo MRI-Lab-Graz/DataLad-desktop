@@ -71,6 +71,8 @@
           <div class="row-actions">
             <button id="clone-project" class="button button-primary" type="button">Clone Project</button>
           </div>
+
+          <div id="clone-output" class="panel panel-muted">Provide a source URL and target folder, then click Clone Project.</div>
         </section>
       </header>
 
@@ -107,6 +109,40 @@
             <div class="open-project-panels">
               <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
               <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Use Check Setup above.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card reveal reveal-3 open-project-strip" aria-labelledby="create-project-title">
+          <div class="section-head">
+            <h2 id="create-project-title">Create Project</h2>
+          </div>
+
+          <p class="lede-small">Start a brand-new DataLad project. The folder must be empty or not exist yet.</p>
+
+          <div class="open-project-grid">
+            <div class="open-project-controls">
+              <label class="field">
+                <span>New Project Folder</span>
+                <div class="field-row">
+                  <input id="create-project-path" type="text" placeholder="/path/to/new-project" />
+                  <button id="pick-create-project-path" class="button button-ghost button-inline" type="button">
+                    Browse
+                  </button>
+                </div>
+              </label>
+
+              <p class="hint-inline">Pick an empty folder, or type a new folder name to create it.</p>
+
+              <div class="row-actions">
+                <button id="create-project" class="button button-primary" type="button">Create Project</button>
+              </div>
+            </div>
+
+            <div class="open-project-panels">
+              <div id="create-project-output" class="panel panel-muted">
+                Choose an empty or new folder, then click Create Project.
+              </div>
             </div>
           </div>
         </section>
