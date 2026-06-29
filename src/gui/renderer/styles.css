@@ -379,6 +379,15 @@ h2 {
   font-size: 0.9rem;
 }
 
+.hero-quick-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
 .clone-drawer {
   margin-top: 0.95rem;
   border-radius: 14px;

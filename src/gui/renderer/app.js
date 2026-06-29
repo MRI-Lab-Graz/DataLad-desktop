@@ -23,13 +23,16 @@ const state = {
   projectHealthSnapshot: null,
   datasets: [],
   datasetsRootPath: null,
-  selectedIgnoreScopePaths: new Set()
+  selectedIgnoreScopePaths: new Set(),
+  consoleHistory: []
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_PROJECTS = 8
+const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
 const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
+const POWER_USER_MODE_STORAGE_KEY = 'dataladDesktop.powerUserMode'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
 const elements = {
@@ -94,7 +97,15 @@ const elements = {
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
-  contractOutput: document.getElementById('contract-output')
+  contractOutput: document.getElementById('contract-output'),
+  powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
+  powerUserConsole: document.getElementById('power-user-console'),
+  consoleProjectPath: document.getElementById('console-project-path'),
+  consoleBinary: document.getElementById('console-binary'),
+  consoleArgs: document.getElementById('console-args'),
+  consoleRunButton: document.getElementById('console-run'),
+  consoleOutput: document.getElementById('console-output'),
+  consoleHistoryOutput: document.getElementById('console-history-output')
 }
 
 loadRecentProjects()
@@ -113,6 +124,7 @@ await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim(), {
 })
 await refreshRecentCommits(elements.commandProjectPath.value.trim(), { includeCommandOutputOnFailure: false })
 updateSaveButtonState()
+initPowerUserConsole()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -1937,6 +1949,118 @@ function ensureProjectEmoji(projectPath) {
   const selectedEmoji = selectionPool[Math.floor(Math.random() * selectionPool.length)]
   state.recentProjectEmojiByPath[normalizedPath] = selectedEmoji
   return selectedEmoji
+}
+
+function initPowerUserConsole() {
+  let powerUserModeEnabled = false
+  try {
+    powerUserModeEnabled = localStorage.getItem(POWER_USER_MODE_STORAGE_KEY) === '1'
+  } catch {
+    powerUserModeEnabled = false
+  }
+
+  elements.powerUserModeToggle.checked = powerUserModeEnabled
+  setPowerUserConsoleVisible(powerUserModeEnabled)
+  elements.consoleProjectPath.value = elements.commandProjectPath.value
+
+  elements.powerUserModeToggle.addEventListener('change', () => {
+    const enabled = elements.powerUserModeToggle.checked
+    setPowerUserConsoleVisible(enabled)
+    try {
+      localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')
+    } catch {
+      // Ignore storage errors (for example private mode restrictions).
+    }
+  })
+
+  elements.commandProjectPath.addEventListener('input', () => {
+    elements.consoleProjectPath.value = elements.commandProjectPath.value
+  })
+
+  elements.consoleRunButton.addEventListener('click', runConsoleCommand)
+  elements.consoleHistoryOutput.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-console-history-index]')
+    if (!target) {
+      return
+    }
+
+    const index = Number(target.getAttribute('data-console-history-index'))
+    const entry = state.consoleHistory[index]
+    if (!entry) {
+      return
+    }
+
+    elements.consoleBinary.value = entry.binary
+    elements.consoleArgs.value = entry.argsText
+  })
+}
+
+function setPowerUserConsoleVisible(visible) {
+  elements.powerUserConsole.hidden = !visible
+  if (!visible) {
+    elements.powerUserConsole.removeAttribute('open')
+  }
+}
+
+async function runConsoleCommand() {
+  const projectPath = elements.commandProjectPath.value.trim()
+  if (!projectPath) {
+    elements.consoleOutput.textContent = 'Choose a project above before running a console command.'
+    return
+  }
+
+  const binary = elements.consoleBinary.value
+  const argsText = elements.consoleArgs.value.trim()
+
+  elements.consoleRunButton.disabled = true
+  elements.consoleOutput.textContent = `$ ${binary} ${argsText}\n\nRunning...`
+
+  try {
+    const result = await api.runConsoleCommand({ binary, argsText, projectPath })
+    elements.consoleOutput.textContent = renderConsoleResult(binary, argsText, result)
+    rememberConsoleCommand(binary, argsText)
+  } catch (error) {
+    elements.consoleOutput.textContent = `$ ${binary} ${argsText}\n\nFailed to run command: ${error?.message ?? String(error)}`
+  } finally {
+    elements.consoleRunButton.disabled = false
+  }
+}
+
+function renderConsoleResult(binary, argsText, result) {
+  const statusLine = result.failed ? `Failed (exit ${result.exitCode})` : `Succeeded (exit ${result.exitCode})`
+  const sections = [`$ ${binary} ${argsText}`, '', statusLine]
+
+  if (result.stdout) {
+    sections.push('', result.stdout.trimEnd())
+  }
+
+  if (result.stderr) {
+    sections.push('', 'stderr:', result.stderr.trimEnd())
+  }
+
+  return sections.join('\n')
+}
+
+function rememberConsoleCommand(binary, argsText) {
+  state.consoleHistory.unshift({ binary, argsText, ranAt: Date.now() })
+  state.consoleHistory.length = Math.min(state.consoleHistory.length, MAX_CONSOLE_HISTORY)
+  renderConsoleHistory()
+}
+
+function renderConsoleHistory() {
+  if (state.consoleHistory.length === 0) {
+    elements.consoleHistoryOutput.textContent = 'No commands run yet this session.'
+    return
+  }
+
+  elements.consoleHistoryOutput.innerHTML = state.consoleHistory
+    .map(
+      (entry, index) =>
+        `<button type="button" class="button button-ghost button-inline console-history-item" data-console-history-index="${index}">` +
+        `${escapeHtml(entry.binary)} ${escapeHtml(entry.argsText)}` +
+        '</button>'
+    )
+    .join('')
 }
 
 function renderFileListing(listing, query) {

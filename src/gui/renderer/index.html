@@ -41,6 +41,10 @@
               Clone Project
             </button>
             <button id="top-quick-save" class="button button-ghost" type="button">Quick Save</button>
+            <label class="hero-quick-toggle" for="power-user-mode-toggle">
+              <input type="checkbox" id="power-user-mode-toggle" />
+              Power user mode
+            </label>
           </div>
           <p class="hero-quick-note">Start here for a new study project. Clone once, then continue below.</p>
         </div>
@@ -208,6 +212,53 @@
             </div>
             <div id="ignore-rules-output" class="panel panel-muted panel-compact">
               No ignore rules added yet.
+            </div>
+          </section>
+        </div>
+      </details>
+
+      <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
+        <summary id="power-user-console-title" class="setup-zone-summary">
+          ⚙ Power User Console — Run DataLad/Git Commands
+        </summary>
+        <div class="setup-zone-body">
+          <p class="lede-small">
+            Run real <code>datalad</code>, <code>git</code>, or <code>git-annex</code> commands directly against
+            the active project folder, for anything the buttons above don't cover. There is no shell here — no
+            <code>&amp;&amp;</code>, pipes, or <code>cd</code> — each run is a single command executed in the
+            project's root folder.
+          </p>
+
+          <label class="field">
+            <span>Active Project Folder</span>
+            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
+          </label>
+
+          <label class="field">
+            <span>Binary</span>
+            <select id="console-binary">
+              <option value="datalad">datalad</option>
+              <option value="git">git</option>
+              <option value="git-annex">git-annex</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Arguments</span>
+            <div class="field-row">
+              <input id="console-args" type="text" placeholder="status --annex all" />
+              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
+            </div>
+          </label>
+
+          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
+
+          <section class="status-box" aria-labelledby="console-history-title">
+            <div class="section-head branch-head">
+              <h3 id="console-history-title">Recent Commands</h3>
+            </div>
+            <div id="console-history-output" class="panel panel-muted panel-compact">
+              No commands run yet this session.
             </div>
           </section>
         </div>

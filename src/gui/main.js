@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
+import { buildConsoleCommand } from '../datalad/console-command.js'
+import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { buildGitStatusMap } from '../datalad/status.js'
 
@@ -11,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const adapter = createAdapter()
+const consoleRunner = new ProcessRunner()
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
@@ -138,6 +141,11 @@ ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
 
 ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
   return adapter.getProjectHealth(projectPath)
+})
+
+ipcMain.handle('console:runCommand', async (_event, payload = {}) => {
+  const commandSpec = buildConsoleCommand(payload)
+  return consoleRunner.run(commandSpec.command, commandSpec.args, commandSpec.options)
 })
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
