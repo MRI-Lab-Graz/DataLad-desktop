@@ -767,6 +767,12 @@ test('getProjectHealth reports ahead/behind and missing annex content', async ()
     stderr: '',
     failed: false
   })
+  runner.set('git', ['-C', root, 'remote', 'get-url', 'origin'], {
+    exitCode: 0,
+    stdout: 'git@example.org:lab/study.git\n',
+    stderr: '',
+    failed: false
+  })
   runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in', 'here'], {
     exitCode: 0,
     stdout: 'rawdata/scan1.nii.gz\nrawdata/scan2.nii.gz\n',
@@ -781,8 +787,51 @@ test('getProjectHealth reports ahead/behind and missing annex content', async ()
   assert.equal(health.upstream, 'origin/main')
   assert.equal(health.behind, 2)
   assert.equal(health.ahead, 1)
+  assert.equal(health.remoteUrl, 'git@example.org:lab/study.git')
   assert.equal(health.annexSupported, true)
   assert.equal(health.missingContentCount, 2)
+})
+
+test('getProjectHealth tolerates a remote URL lookup failure', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-health-noremoteurl-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], {
+    exitCode: 0,
+    stdout: 'origin/main\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'remote', 'get-url', 'origin'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: "fatal: No such remote 'origin'",
+    failed: true
+  })
+  runner.set('git', ['-C', root, 'rev-list', '--left-right', '--count', 'origin/main...HEAD'], {
+    exitCode: 0,
+    stdout: '0\t0\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in', 'here'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'git-annex is not initialized in this repository',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const health = await adapter.getProjectHealth(root)
+
+  assert.equal(health.hasUpstream, true)
+  assert.equal(health.upstream, 'origin/main')
+  assert.equal(health.remoteUrl, null)
 })
 
 test('getProjectHealth degrades gracefully without an upstream or git-annex', async () => {

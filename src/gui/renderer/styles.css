@@ -749,6 +749,30 @@ h2 {
   filter: none;
 }
 
+.button.is-busy {
+  opacity: 0.85;
+  cursor: progress;
+}
+
+.button.is-busy::after {
+  content: '';
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: button-spin 700ms linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .button-primary {
   background: var(--teal);
   color: #f4fbff;

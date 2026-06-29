@@ -552,10 +552,13 @@ export class DataLadAdapter {
     ])
 
     if (upstreamResult.failed) {
-      return { hasUpstream: false, upstream: null, ahead: null, behind: null }
+      return { hasUpstream: false, upstream: null, ahead: null, behind: null, remoteUrl: null }
     }
 
     const upstream = this.#firstLine(upstreamResult.stdout)
+    const remoteName = upstream?.split('/')[0] ?? null
+    const remoteUrl = remoteName ? await this.#readRemoteUrl(projectPath, remoteName) : null
+
     const countResult = await this.runner.run('git', [
       '-C',
       projectPath,
@@ -566,7 +569,7 @@ export class DataLadAdapter {
     ])
 
     if (countResult.failed) {
-      return { hasUpstream: true, upstream, ahead: null, behind: null }
+      return { hasUpstream: true, upstream, ahead: null, behind: null, remoteUrl }
     }
 
     const [behindRaw, aheadRaw] = (countResult.stdout ?? '').trim().split(/\s+/)
@@ -577,8 +580,18 @@ export class DataLadAdapter {
       hasUpstream: true,
       upstream,
       ahead: Number.isFinite(ahead) ? ahead : null,
-      behind: Number.isFinite(behind) ? behind : null
+      behind: Number.isFinite(behind) ? behind : null,
+      remoteUrl
     }
+  }
+
+  async #readRemoteUrl(projectPath, remoteName) {
+    const result = await this.runner.run('git', ['-C', projectPath, 'remote', 'get-url', remoteName])
+    if (result.failed) {
+      return null
+    }
+
+    return this.#firstLine(result.stdout)
   }
 
   async #readMissingContentStatus(projectPath) {

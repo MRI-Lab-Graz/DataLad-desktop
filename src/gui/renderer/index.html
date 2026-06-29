@@ -30,17 +30,32 @@
 
         <div class="hero-quick">
           <div class="hero-quick-actions">
-            <button id="check-env" class="button button-ghost" type="button">Check Setup</button>
+            <button
+              id="check-env"
+              class="button button-ghost"
+              type="button"
+              title="Check whether Python 3, DataLad, and git-annex are installed and working on this computer."
+            >
+              Check Setup
+            </button>
             <button
               id="clone-nav-trigger"
               class="button button-primary"
               type="button"
               aria-expanded="false"
               aria-controls="clone-drawer"
+              title="Download a copy of an existing DataLad project from a URL or shared path."
             >
               Clone Project
             </button>
-            <button id="top-quick-save" class="button button-ghost" type="button">Quick Save</button>
+            <button
+              id="top-quick-save"
+              class="button button-ghost"
+              type="button"
+              title="Save all current changes in the active project with an auto-generated message. Works fully offline."
+            >
+              Quick Save
+            </button>
             <label class="hero-quick-toggle" for="power-user-mode-toggle">
               <input type="checkbox" id="power-user-mode-toggle" />
               Power user mode
@@ -296,7 +311,7 @@
             <h2 id="project-actions-title">Save &amp; Sync</h2>
           </div>
 
-          <label class="field">
+          <label class="field" hidden>
             <span>Active Project Folder</span>
             <div class="field-row">
               <input id="command-project-path" type="text" placeholder="/path/to/project" />
@@ -354,11 +369,19 @@
           </label>
 
           <div class="action-strip">
-            <button id="save-project" class="button button-primary" type="button">Save</button>
+            <button
+              id="save-project"
+              class="button button-primary"
+              type="button"
+              title="Record the current state of your files with a message, like a commit. Works fully offline."
+            >
+              Save
+            </button>
             <button id="get-data" class="button button-primary" type="button">Get Data</button>
             <button id="update-project" class="button button-primary" type="button">Update</button>
             <button id="publish-project" class="button button-primary" type="button">Publish</button>
           </div>
+          <p id="remote-info" class="lede-small" hidden></p>
 
           <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
 
