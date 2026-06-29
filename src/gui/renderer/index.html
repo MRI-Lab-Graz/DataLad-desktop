@@ -112,7 +112,7 @@
         </section>
       </section>
 
-      <section class="card project-strip" aria-labelledby="current-project-title">
+      <section id="project-strip" class="card project-strip" aria-labelledby="current-project-title" hidden>
         <div>
           <p id="current-project-title" class="strip-label">Current Project</p>
           <p id="current-project-path" class="strip-path">No project selected</p>
@@ -126,7 +126,7 @@
         </div>
       </section>
 
-      <section class="card project-health reveal reveal-3" aria-labelledby="project-health-title">
+      <section id="project-health-card" class="card project-health reveal reveal-3" aria-labelledby="project-health-title" hidden>
         <div class="section-head">
           <h2 id="project-health-title">Project Health</h2>
         </div>
@@ -135,7 +135,7 @@
         </div>
       </section>
 
-      <details class="card setup-zone" aria-labelledby="setup-zone-title">
+      <details id="project-setup-zone" class="card setup-zone" aria-labelledby="setup-zone-title" hidden>
         <summary id="setup-zone-title" class="setup-zone-summary">⚙ Project Setup — Branches &amp; Ignore Rules</summary>
         <div class="setup-zone-body">
           <section class="branch-box" aria-labelledby="branch-management-title">
@@ -222,12 +222,10 @@
           ⚙ Power User Console — Run Any Command
         </summary>
         <div class="setup-zone-body">
-          <p class="lede-small">
+          <p id="console-help-text" class="lede-small">
             Run any command directly against the active project folder, for anything the buttons above don't
             cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
-            system. There is no shell here — no <code>&amp;&amp;</code>, pipes, or <code>cd</code> — each run is
-            a single command executed in the project's root folder. Anything you type runs exactly as you would
-            run it in a terminal, with no allowlist or safety net, so be as careful as you would be there.
+            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
           </p>
 
           <label class="field">
@@ -256,7 +254,7 @@
         </div>
       </details>
 
-      <main class="grid">
+      <main id="project-workspace-grid" class="grid" hidden>
         <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <div class="section-head">
             <h2 id="project-actions-title">Save &amp; Sync</h2>
@@ -356,7 +354,7 @@
         </section>
       </main>
 
-      <aside class="card reveal reveal-6" aria-labelledby="contract-title">
+      <aside id="technical-details-aside" class="card reveal reveal-6" aria-labelledby="contract-title" hidden>
         <div class="section-head">
           <h2 id="contract-title">Technical Details (Optional)</h2>
           <button id="refresh-contract" class="button button-ghost">Refresh</button>

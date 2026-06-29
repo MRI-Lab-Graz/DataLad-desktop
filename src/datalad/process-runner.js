@@ -13,7 +13,8 @@ export class ProcessRunner {
       const child = spawn(command, args, {
         cwd: options.cwd,
         env: { ...process.env, ...(options.env ?? {}) },
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: options.shell ?? false
       })
 
       child.stdout.on('data', (chunk) => {
