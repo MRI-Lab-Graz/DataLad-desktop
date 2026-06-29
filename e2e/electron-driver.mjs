@@ -66,6 +66,18 @@ export async function launchApp() {
   await page.waitForSelector('#check-env', { timeout: 10_000 })
 
   async function openProject(projectPath) {
+    // setCurrentProjectHeader fires off refreshProjectHealth without
+    // awaiting it, so the path/badge can update before the health-driven
+    // button gating has actually been (re)computed. The health card is the
+    // only visible signal that the async fetch (and therefore
+    // applyRemoteGatedButtons) has completed for *this* project rather than
+    // a previous one — so clear it to a sentinel first, then wait for it to
+    // be replaced, instead of guessing a fixed delay or risking a match
+    // against stale content left over from the last project opened.
+    await page.evaluate(() => {
+      document.getElementById('project-health-output').innerHTML = 'e2e-pending'
+    })
+
     await page.evaluate((p) => {
       const input = document.getElementById('project-path')
       input.value = p
@@ -77,10 +89,10 @@ export async function launchApp() {
       projectPath,
       { timeout: 10_000 }
     )
-    // detectProjectType kicks off several async refreshes (health, files,
-    // branches) after the path/badge updates; settle briefly so gating reads
-    // the final state rather than a mid-refresh one.
-    await page.waitForTimeout(300)
+    await page.waitForFunction(
+      () => document.getElementById('project-health-output').innerHTML.includes('project-health-grid'),
+      { timeout: 10_000 }
+    )
   }
 
   async function buttonState(id) {

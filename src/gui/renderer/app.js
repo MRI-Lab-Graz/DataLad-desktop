@@ -1,4 +1,6 @@
 import { computeDatasetGating, computeRemoteGating } from './button-gating.js'
+import { computeSaveGating } from './save-gating.js'
+import { computeSaveStatusChip, computeSyncStatusChip, computeMissingContentChip } from './project-health-chips.js'
 
 const api = window.dataladDesktop
 
@@ -195,27 +197,32 @@ elements.topQuickSaveButton.addEventListener('click', async () => {
     return
   }
 
-  const latestStatus = await refreshWorkingTreeStatus(projectPath)
-  if (!latestStatus) {
-    return
-  }
+  setButtonBusy(elements.topQuickSaveButton, true)
+  try {
+    const latestStatus = await refreshWorkingTreeStatus(projectPath)
+    if (!latestStatus) {
+      return
+    }
 
-  if (latestStatus.conflictCount > 0) {
-    elements.commandOutput.textContent = 'Quick Save is blocked while conflicts are present.'
-    setLastActionState('Resolve conflicts before saving.', 'error')
-    return
-  }
+    if (latestStatus.conflictCount > 0) {
+      elements.commandOutput.textContent = 'Quick Save is blocked while conflicts are present.'
+      setLastActionState('Resolve conflicts before saving.', 'error')
+      return
+    }
 
-  const message = elements.message.value.trim() || buildQuickSaveMessage()
-  if (!elements.message.value.trim()) {
-    elements.message.value = message
-  }
+    const message = elements.message.value.trim() || buildQuickSaveMessage()
+    if (!elements.message.value.trim()) {
+      elements.message.value = message
+    }
 
-  await runWorkflowCommand('save', {
-    projectPath,
-    message,
-    paths: gatherSavePaths()
-  }, elements.topQuickSaveButton)
+    await runWorkflowCommand('save', {
+      projectPath,
+      message,
+      paths: gatherSavePaths()
+    }, elements.topQuickSaveButton)
+  } finally {
+    setButtonBusy(elements.topQuickSaveButton, false)
+  }
 })
 
 elements.changedFilesSelectAllButton.addEventListener('click', () => {
@@ -360,32 +367,38 @@ elements.saveProjectButton.addEventListener('click', async () => {
     return
   }
 
-  const latestStatus = await refreshWorkingTreeStatus(projectPath)
-  if (!latestStatus) {
-    return
-  }
+  setButtonBusy(elements.saveProjectButton, true)
+  try {
+    const latestStatus = await refreshWorkingTreeStatus(projectPath)
+    if (!latestStatus) {
+      return
+    }
 
-  if (latestStatus.conflictCount > 0) {
-    elements.commandOutput.textContent =
-      'Save is blocked while conflicts are present. Resolve conflicts, then try again.'
-    setLastActionState('Resolve conflicts before saving.', 'error')
+    if (latestStatus.conflictCount > 0) {
+      elements.commandOutput.textContent =
+        'Save is blocked while conflicts are present. Resolve conflicts, then try again.'
+      setLastActionState('Resolve conflicts before saving.', 'error')
+      updateSaveButtonState()
+      return
+    }
+
+    const selectedPaths = gatherSavePaths()
+    if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
+      elements.commandOutput.textContent =
+        'Select at least one changed file or provide manual paths before saving.'
+      setLastActionState('Select files to save first.', 'error')
+      return
+    }
+
+    await runWorkflowCommand('save', {
+      projectPath,
+      message,
+      paths: selectedPaths
+    }, elements.saveProjectButton)
+  } finally {
+    setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
-    return
   }
-
-  const selectedPaths = gatherSavePaths()
-  if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
-    elements.commandOutput.textContent =
-      'Select at least one changed file or provide manual paths before saving.'
-    setLastActionState('Select files to save first.', 'error')
-    return
-  }
-
-  await runWorkflowCommand('save', {
-    projectPath,
-    message,
-    paths: selectedPaths
-  }, elements.saveProjectButton)
 })
 
 elements.getDataButton.addEventListener('click', async () => {
@@ -1305,41 +1318,18 @@ function gatherSavePaths() {
 }
 
 function updateSaveButtonState() {
-  const hasMessage = Boolean(elements.message.value.trim())
   const snapshot = state.workingTreeSnapshot
-  const hasSelection = gatherSavePaths().length > 0
-  const hasConflicts = Boolean(snapshot?.conflictCount)
-  const hasChanges = Boolean(snapshot && !snapshot.clean)
 
-  const canSave = hasMessage && (!hasChanges || hasSelection) && !hasConflicts
-  elements.saveProjectButton.disabled = !canSave
+  const gating = computeSaveGating({
+    hasMessage: Boolean(elements.message.value.trim()),
+    hasSelection: gatherSavePaths().length > 0,
+    hasConflicts: Boolean(snapshot?.conflictCount),
+    hasChanges: Boolean(snapshot && !snapshot.clean)
+  })
 
-  if (!hasMessage) {
-    elements.saveGuidance.textContent = 'Enter a save message to enable Save.'
-    elements.saveGuidance.classList.remove('hint-inline-warning')
-    return
-  }
-
-  if (hasConflicts) {
-    elements.saveGuidance.textContent = 'Conflicts detected. Resolve conflicts before saving.'
-    elements.saveGuidance.classList.add('hint-inline-warning')
-    return
-  }
-
-  if (hasChanges && !hasSelection) {
-    elements.saveGuidance.textContent = 'Select changed files or add manual paths before saving.'
-    elements.saveGuidance.classList.add('hint-inline-warning')
-    return
-  }
-
-  if (hasChanges) {
-    elements.saveGuidance.textContent = 'Ready to save selected changes.'
-    elements.saveGuidance.classList.remove('hint-inline-warning')
-    return
-  }
-
-  elements.saveGuidance.textContent = 'No local changes detected. Save remains available if needed.'
-  elements.saveGuidance.classList.remove('hint-inline-warning')
+  elements.saveProjectButton.disabled = gating.disabled
+  elements.saveGuidance.textContent = gating.guidance.text
+  elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 }
 
 async function ensureBranchActionSafety(projectPath, actionDescription) {
@@ -1560,6 +1550,14 @@ function setCurrentProjectHeader(projectPath, classification) {
   void refreshLastCommitMeta(projectPath)
   setOnboardingExpanded(!projectPath)
   setProjectDependentSectionsVisible(Boolean(projectPath))
+
+  // Clear the previous project's health snapshot (and re-render) *before*
+  // kicking off the new fetch. Without this, other in-flight refreshes for
+  // the new project (e.g. refreshWorkingTreeStatus) call renderProjectHealth()
+  // as a side effect and would otherwise repaint the *previous* project's
+  // remote/sync chips and button gating until the real fetch resolves.
+  state.projectHealthSnapshot = null
+  renderProjectHealth()
   void refreshProjectHealth(projectPath)
   applyDatasetGatedButtons(classification)
 }
@@ -1645,40 +1643,21 @@ function renderProjectHealth(overrideMessage = null) {
     return
   }
 
-  const tree = state.workingTreeSnapshot
-  const unsavedChip = tree
-    ? tree.clean
-      ? '<span class="status-chip status-chip-good">Saved</span>'
-      : `<span class="status-chip status-chip-urgent">Unsaved changes ${tree.totalChanged}</span>`
-    : '<span class="status-chip">Save status unknown</span>'
-
-  let syncChip = '<span class="status-chip">No remote tracked</span>'
-  if (health.hasUpstream) {
-    if (health.ahead === null || health.behind === null) {
-      syncChip = `<span class="status-chip">Tracking ${escapeHtml(health.upstream)}</span>`
-    } else if (health.ahead === 0 && health.behind === 0) {
-      syncChip = `<span class="status-chip status-chip-good">In sync with ${escapeHtml(health.upstream)}</span>`
-    } else {
-      const parts = []
-      if (health.ahead > 0) {
-        parts.push(`${health.ahead} to publish`)
-      }
-      if (health.behind > 0) {
-        parts.push(`${health.behind} to update`)
-      }
-      syncChip = `<span class="status-chip status-chip-warning">${escapeHtml(parts.join(', '))}</span>`
-    }
-  }
-
-  let missingChip = ''
-  if (health.annexSupported && health.missingContentCount > 0) {
-    missingChip = `<span class="status-chip status-chip-warning">Data not downloaded: ${health.missingContentCount}</span>`
-  } else if (health.annexSupported) {
-    missingChip = '<span class="status-chip status-chip-good">All data present</span>'
-  }
+  const unsavedChip = chipHtml(computeSaveStatusChip(state.workingTreeSnapshot))
+  const syncChip = chipHtml(computeSyncStatusChip(health))
+  const missingChip = chipHtml(computeMissingContentChip(health))
 
   elements.projectHealthOutput.innerHTML =
     `<div class="project-health-grid">${unsavedChip}${syncChip}${missingChip}</div>`
+}
+
+function chipHtml(chip) {
+  if (!chip) {
+    return ''
+  }
+
+  const toneClass = chip.tone === 'neutral' ? '' : ` status-chip-${chip.tone}`
+  return `<span class="status-chip${toneClass}">${escapeHtml(chip.label)}</span>`
 }
 
 function classificationForPath(projectPath) {
