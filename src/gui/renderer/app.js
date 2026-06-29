@@ -1,3 +1,5 @@
+import { computeDatasetGating, computeRemoteGating } from './button-gating.js'
+
 const api = window.dataladDesktop
 
 const state = {
@@ -108,6 +110,7 @@ const elements = {
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
   contractOutput: document.getElementById('contract-output'),
+  remoteInfo: document.getElementById('remote-info'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   powerUserConsole: document.getElementById('power-user-console'),
   consoleHelpText: document.getElementById('console-help-text'),
@@ -212,7 +215,7 @@ elements.topQuickSaveButton.addEventListener('click', async () => {
     projectPath,
     message,
     paths: gatherSavePaths()
-  })
+  }, elements.topQuickSaveButton)
 })
 
 elements.changedFilesSelectAllButton.addEventListener('click', () => {
@@ -260,11 +263,14 @@ elements.paths.addEventListener('input', () => {
 })
 
 elements.checkEnvButton.addEventListener('click', async () => {
+  setButtonBusy(elements.checkEnvButton, true)
   try {
     const diagnostics = await api.checkEnvironment()
     elements.environmentOutput.innerHTML = renderEnvironment(diagnostics)
   } catch (error) {
     elements.environmentOutput.textContent = String(error.message)
+  } finally {
+    setButtonBusy(elements.checkEnvButton, false)
   }
 })
 
@@ -276,7 +282,12 @@ elements.detectProjectButton.addEventListener('click', async () => {
     return
   }
 
-  await detectProjectType(projectPath)
+  setButtonBusy(elements.detectProjectButton, true)
+  try {
+    await detectProjectType(projectPath)
+  } finally {
+    setButtonBusy(elements.detectProjectButton, false)
+  }
 })
 
 elements.cloneProjectButton.addEventListener('click', async () => {
@@ -292,7 +303,7 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   // Cloning happens in the onboarding area, which stays visible even when no
   // project is open yet — render the result here too, not just into the
   // Save & Sync panel, which is hidden until a project is actually open.
-  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath })
+  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.cloneProjectButton)
   if (cloneResult) {
     elements.cloneOutput.innerHTML = renderCommandResult(cloneResult)
   }
@@ -318,7 +329,7 @@ elements.createProjectButton.addEventListener('click', async () => {
     return
   }
 
-  const createResult = await runWorkflowCommand('createProject', { targetPath })
+  const createResult = await runWorkflowCommand('createProject', { targetPath }, elements.createProjectButton)
   if (createResult) {
     elements.createProjectOutput.innerHTML = renderCommandResult(createResult)
   }
@@ -374,7 +385,7 @@ elements.saveProjectButton.addEventListener('click', async () => {
     projectPath,
     message,
     paths: selectedPaths
-  })
+  }, elements.saveProjectButton)
 })
 
 elements.getDataButton.addEventListener('click', async () => {
@@ -386,7 +397,7 @@ elements.getDataButton.addEventListener('click', async () => {
   await runWorkflowCommand('get', {
     projectPath,
     paths: parsePaths(elements.paths.value)
-  })
+  }, elements.getDataButton)
 
   await refreshFileBrowser(projectPath)
 })
@@ -397,7 +408,7 @@ elements.updateProjectButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('update', { projectPath })
+  await runWorkflowCommand('update', { projectPath }, elements.updateProjectButton)
 })
 
 elements.publishProjectButton.addEventListener('click', async () => {
@@ -406,7 +417,7 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('push', { projectPath })
+  await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
 })
 
 elements.refreshDatasetsButton.addEventListener('click', async () => {
@@ -446,7 +457,7 @@ elements.switchBranchButton.addEventListener('click', async () => {
     return
   }
 
-  const result = await runWorkflowCommand('switchBranch', { projectPath, branchName })
+  const result = await runWorkflowCommand('switchBranch', { projectPath, branchName }, elements.switchBranchButton)
   if (!result?.ok) {
     return
   }
@@ -473,7 +484,7 @@ elements.createBranchButton.addEventListener('click', async () => {
     return
   }
 
-  const result = await runWorkflowCommand('createBranch', { projectPath, branchName })
+  const result = await runWorkflowCommand('createBranch', { projectPath, branchName }, elements.createBranchButton)
   if (!result?.ok) {
     return
   }
@@ -569,13 +580,14 @@ function readProjectPath() {
   return path
 }
 
-async function runWorkflowCommand(commandName, request) {
+async function runWorkflowCommand(commandName, request, button = null) {
   if (state.pendingCommands.has(commandName)) {
     setLastActionState(`${actionLabel(commandName)} is already running.`, 'warning')
     return null
   }
 
   state.pendingCommands.add(commandName)
+  setButtonBusy(button, true)
 
   try {
     const result = await api.runCommand(commandName, request)
@@ -621,6 +633,7 @@ async function runWorkflowCommand(commandName, request) {
     return null
   } finally {
     state.pendingCommands.delete(commandName)
+    setButtonBusy(button, false)
     updateSaveButtonState()
   }
 }
@@ -1548,6 +1561,14 @@ function setCurrentProjectHeader(projectPath, classification) {
   setOnboardingExpanded(!projectPath)
   setProjectDependentSectionsVisible(Boolean(projectPath))
   void refreshProjectHealth(projectPath)
+  applyDatasetGatedButtons(classification)
+}
+
+function applyDatasetGatedButtons(classification) {
+  const gating = computeDatasetGating(classification)
+
+  elements.getDataButton.disabled = gating.disabled
+  elements.getDataButton.title = gating.title
 }
 
 function setOnboardingExpanded(expanded) {
@@ -1599,6 +1620,17 @@ async function refreshProjectHealth(projectPath) {
   }
 }
 
+function applyRemoteGatedButtons(health) {
+  const gating = computeRemoteGating(health)
+
+  elements.updateProjectButton.disabled = gating.update.disabled
+  elements.updateProjectButton.title = gating.update.title
+  elements.publishProjectButton.disabled = gating.publish.disabled
+  elements.publishProjectButton.title = gating.publish.title
+  elements.remoteInfo.hidden = gating.remoteInfo.hidden
+  elements.remoteInfo.textContent = gating.remoteInfo.text
+}
+
 function renderProjectHealth(overrideMessage = null) {
   if (overrideMessage) {
     elements.projectHealthOutput.textContent = overrideMessage
@@ -1606,6 +1638,8 @@ function renderProjectHealth(overrideMessage = null) {
   }
 
   const health = state.projectHealthSnapshot
+  applyRemoteGatedButtons(health)
+
   if (!health) {
     elements.projectHealthOutput.textContent = 'Select a project to see its save, sync, and data status.'
     return
@@ -1704,6 +1738,29 @@ function setProjectBadge(classification) {
 
   elements.currentProjectBadge.classList.add('badge-unknown')
   elements.currentProjectBadge.textContent = 'Unknown'
+}
+
+function setButtonBusy(button, busy) {
+  if (!button) {
+    return
+  }
+
+  if (busy) {
+    if (!button.dataset.idleLabel) {
+      button.dataset.idleLabel = button.textContent
+    }
+    button.disabled = true
+    button.classList.add('is-busy')
+    button.textContent = 'Working…'
+    return
+  }
+
+  button.classList.remove('is-busy')
+  button.disabled = false
+  if (button.dataset.idleLabel) {
+    button.textContent = button.dataset.idleLabel
+    delete button.dataset.idleLabel
+  }
 }
 
 function setLastActionState(text, tone) {
