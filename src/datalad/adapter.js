@@ -12,6 +12,7 @@ import {
 
 const CURATED_COMMANDS = new Set([
   'cloneInstall',
+  'createProject',
   'get',
   'save',
   'update',
@@ -730,6 +731,13 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['clone', '--', request.source, request.targetPath],
+          options: {}
+        }
+      }
+      case 'createProject': {
+        return {
+          command: 'datalad',
+          args: ['create', '--', request.targetPath],
           options: {}
         }
       }

@@ -106,10 +106,12 @@ body {
 .open-project-panels {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .open-project-panels .panel {
   margin-top: 0;
+  min-width: 0;
 }
 
 .recent-projects {
@@ -850,6 +852,9 @@ select:focus {
   color: #dbeef9;
   max-height: 280px;
   overflow: auto;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .panel-inline-code {

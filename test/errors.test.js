@@ -2,6 +2,22 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mapCommandError } from '../src/datalad/errors.js'
 
+test('mapCommandError maps non-empty target output for createProject from stderr', () => {
+  const result = mapCommandError('createProject', { stderr: 'target directory ... is not empty' })
+  assert.equal(result.code, 'TARGET_NOT_EMPTY')
+})
+
+test('mapCommandError maps non-empty target output for createProject from stdout', () => {
+  // datalad reports this as a create(error) result line on stdout, not stderr.
+  const result = mapCommandError('createProject', {
+    stdout: 'create(error): /tmp/proj (dataset) [will not create a dataset in a non-empty directory, ' +
+      'use `--force` option to ignore]',
+    stderr: ''
+  })
+  assert.equal(result.code, 'TARGET_NOT_EMPTY')
+  assert.match(result.technicalDetails, /non-empty directory/)
+})
+
 test('mapCommandError maps branch-already-exists output for createBranch', () => {
   const result = mapCommandError('createBranch', { stderr: "fatal: a branch named 'feature' already exists" })
   assert.equal(result.code, 'BRANCH_EXISTS')
