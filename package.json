@@ -1,6 +1,6 @@
 {
   "name": "datalad-desktop",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "type": "module",
   "main": "src/gui/main.js",
@@ -45,6 +45,12 @@
         }
       ],
       "icon": "src/gui/assets/icons/datalad_desktop.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
     },
     "linux": {
       "target": [

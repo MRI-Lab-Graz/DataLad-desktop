@@ -49,10 +49,14 @@ Most researchers should just download the ready-to-run app:
 That's it — no Git, Python, or DataLad command-line setup needed to get
 started with browsing and saving changes in an existing project.
 
-> **Note:** to use DataLad-specific actions (Get Data, Update, Publish) on a
-> project, DataLad and git-annex need to be installed on your system. See
-> [datalad.org](https://www.datalad.org/) for installation instructions for
-> your platform.
+> **Windows:** the installer also checks for Python 3, DataLad, and git-annex and installs any that
+> are missing (this needs an internet connection during setup). If a download is blocked by your
+> network, install the missing piece manually from [datalad.org](https://www.datalad.org/) — the
+> app's diagnostics screen will tell you exactly what's still missing.
+>
+> **macOS/Linux:** to use DataLad-specific actions (Get Data, Update, Publish) on a project, DataLad
+> and git-annex need to be installed on your system. See [datalad.org](https://www.datalad.org/) for
+> installation instructions for your platform.
 
 ### Advanced: install from source
 
