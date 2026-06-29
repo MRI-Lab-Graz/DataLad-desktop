@@ -219,14 +219,15 @@
 
       <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
         <summary id="power-user-console-title" class="setup-zone-summary">
-          ⚙ Power User Console — Run DataLad/Git Commands
+          ⚙ Power User Console — Run Any Command
         </summary>
         <div class="setup-zone-body">
           <p class="lede-small">
-            Run real <code>datalad</code>, <code>git</code>, or <code>git-annex</code> commands directly against
-            the active project folder, for anything the buttons above don't cover. There is no shell here — no
-            <code>&amp;&amp;</code>, pipes, or <code>cd</code> — each run is a single command executed in the
-            project's root folder.
+            Run any command directly against the active project folder, for anything the buttons above don't
+            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
+            system. There is no shell here — no <code>&amp;&amp;</code>, pipes, or <code>cd</code> — each run is
+            a single command executed in the project's root folder. Anything you type runs exactly as you would
+            run it in a terminal, with no allowlist or safety net, so be as careful as you would be there.
           </p>
 
           <label class="field">
@@ -235,18 +236,9 @@
           </label>
 
           <label class="field">
-            <span>Binary</span>
-            <select id="console-binary">
-              <option value="datalad">datalad</option>
-              <option value="git">git</option>
-              <option value="git-annex">git-annex</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Arguments</span>
+            <span>Command</span>
             <div class="field-row">
-              <input id="console-args" type="text" placeholder="status --annex all" />
+              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
               <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
             </div>
           </label>

@@ -13,10 +13,11 @@ A researcher opens DataLad Desktop and selects one of their projects. They revie
 5. Keep Git-only projects uncluttered by DataLad-specific UI.
 6. Keep language researcher-friendly; avoid annex/sibling internals unless required for recovery.
 7. Treat project status as live, not something the user must request: the working-tree view should reflect disk state automatically while a project is open, not only after an explicit refresh click.
-8. Keep power-user features opt-in and out of the default view: a "Power user mode" toggle reveals an
-   allowlisted `datalad`/`git`/`git-annex` command console (scoped to the active project, no shell) for
-   commands the curated action set doesn't cover. It stays hidden until explicitly enabled and never appears
-   in the primary novice workflow.
+8. Keep power-user features opt-in and out of the default view: a "Power user mode" toggle reveals a
+   command console (scoped to the active project's folder, no shell, one command per run) for anything the
+   curated action set doesn't cover. It runs whatever is typed with no allowlist or GUI safety net — it is
+   a real terminal-equivalent, not a guarded action — and stays hidden until explicitly enabled, never
+   appearing in the primary novice workflow.
 
 ## Project classification in UI
 
