@@ -14,10 +14,12 @@ A researcher opens DataLad Desktop and selects one of their projects. They revie
 6. Keep language researcher-friendly; avoid annex/sibling internals unless required for recovery.
 7. Treat project status as live, not something the user must request: the working-tree view should reflect disk state automatically while a project is open, not only after an explicit refresh click.
 8. Keep power-user features opt-in and out of the default view: a "Power user mode" toggle reveals a
-   command console (scoped to the active project's folder, no shell, one command per run) for anything the
-   curated action set doesn't cover. It runs whatever is typed with no allowlist or GUI safety net — it is
-   a real terminal-equivalent, not a guarded action — and stays hidden until explicitly enabled, never
-   appearing in the primary novice workflow.
+   command console (scoped to the active project's folder) for anything the curated action set doesn't
+   cover. It runs whatever is typed with no allowlist or GUI safety net — it is a real terminal-equivalent,
+   not a guarded action — and stays hidden until explicitly enabled, never appearing in the primary novice
+   workflow. On macOS/Linux it runs as a single process with no shell; on Windows it runs through the
+   system shell so `.cmd`/`.bat` tools (`npm`, `npx`, `yarn`, ...) work like they would in a normal terminal
+   — the console's help text in the UI reflects whichever behavior applies on the user's OS.
 
 ## Project classification in UI
 

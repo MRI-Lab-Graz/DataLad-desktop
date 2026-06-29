@@ -85,8 +85,11 @@ The next roadmap is therefore split into two tracks:
 - Treating filesystem browsing as the primary product model.
 
 These non-goals are about the curated novice-facing action set (Get/Save/Update/Publish), not about
-power-user access in general. An opt-in command console (single command per run, no shell, cwd locked to
-the project root) is in scope as the power-user escape hatch for anything the GUI doesn't cover — it does
-not grow the curated button set or change the default novice workflow. It intentionally has no command
-allowlist: it runs whatever the power user types, exactly as a real terminal would, with no GUI-level
-safety net beyond "one process per run, no shell metacharacters."
+power-user access in general. An opt-in command console (cwd locked to the project root) is in scope as
+the power-user escape hatch for anything the GUI doesn't cover — it does not grow the curated button set
+or change the default novice workflow. It intentionally has no command allowlist: it runs whatever the
+power user types, exactly as a real terminal would. The execution model is platform-conditional rather
+than identical everywhere: on macOS/Linux it runs as a single process with no shell (shell metacharacters
+are literal text); on Windows it runs through `cmd.exe` like a normal Windows terminal, since Windows
+cannot otherwise launch `.cmd`/`.bat`-shimmed tools (`npm`, `npx`, `yarn`, ...) — meaning shell operators
+(`&`, `|`, `%VAR%`) are live on Windows but not on macOS/Linux for this one feature.

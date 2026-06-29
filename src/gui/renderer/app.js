@@ -50,6 +50,11 @@ const elements = {
   currentProjectBadge: document.getElementById('current-project-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
+  projectStrip: document.getElementById('project-strip'),
+  projectHealthCard: document.getElementById('project-health-card'),
+  projectSetupZone: document.getElementById('project-setup-zone'),
+  projectWorkspaceGrid: document.getElementById('project-workspace-grid'),
+  technicalDetailsAside: document.getElementById('technical-details-aside'),
   projectHealthOutput: document.getElementById('project-health-output'),
   lastActionState: document.getElementById('last-action-state'),
   lastCommitMeta: document.getElementById('last-commit-meta'),
@@ -100,6 +105,7 @@ const elements = {
   contractOutput: document.getElementById('contract-output'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   powerUserConsole: document.getElementById('power-user-console'),
+  consoleHelpText: document.getElementById('console-help-text'),
   consoleProjectPath: document.getElementById('console-project-path'),
   consoleCommand: document.getElementById('console-command'),
   consoleRunButton: document.getElementById('console-run'),
@@ -109,19 +115,13 @@ const elements = {
 
 loadRecentProjects()
 await seedWorkspacePath()
-if (state.recentProjects.length === 0 && elements.projectPath.value.trim()) {
-  rememberRecentProject(elements.projectPath.value.trim())
-}
 await renderContract()
-setCurrentProjectHeader(elements.commandProjectPath.value.trim(), 'unknown')
-await refreshDatasetList(elements.commandProjectPath.value.trim())
-await refreshFileBrowser(elements.commandProjectPath.value.trim())
-await refreshBranchList(elements.commandProjectPath.value.trim())
-await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim(), {
-  preserveSelection: false,
-  includeCommandOutputOnFailure: false
-})
-await refreshRecentCommits(elements.commandProjectPath.value.trim(), { includeCommandOutputOnFailure: false })
+
+// Never auto-load a project on start. Only "Latest Projects" and "Open
+// Project" should be visible until the user explicitly opens, clones, or
+// picks a recent one — every other card stays hidden until then.
+elements.commandProjectPath.value = ''
+setCurrentProjectHeader('', 'unknown')
 updateSaveButtonState()
 initPowerUserConsole()
 
@@ -1066,8 +1066,11 @@ function wireFolderPicker(button, input, options) {
 async function seedWorkspacePath() {
   try {
     const workspaceRoot = await api.getWorkspaceRoot()
+    // Suggests a starting point for the "Open Project" field only. The
+    // active project (commandProjectPath) is seeded from the most recently
+    // used project instead, since cwd has no relation to a real project
+    // for anyone running the packaged app.
     elements.projectPath.value = workspaceRoot
-    elements.commandProjectPath.value = workspaceRoot
   } catch {
     // Ignore if workspace path is unavailable.
   }
@@ -1495,12 +1498,28 @@ function setCurrentProjectHeader(projectPath, classification) {
   renderRecentProjects()
   void refreshLastCommitMeta(projectPath)
   setOnboardingExpanded(!projectPath)
+  setProjectDependentSectionsVisible(Boolean(projectPath))
   void refreshProjectHealth(projectPath)
 }
 
 function setOnboardingExpanded(expanded) {
   elements.onboardingGroup.classList.toggle('onboarding-collapsed', !expanded)
   elements.switchProjectButton.hidden = expanded
+}
+
+// Until a project is actually opened, only "Latest Projects" / "Open Project"
+// (the onboarding group) should be visible — every other card reads as
+// confusing noise for a project nobody has chosen yet.
+function setProjectDependentSectionsVisible(visible) {
+  elements.projectStrip.hidden = !visible
+  elements.projectHealthCard.hidden = !visible
+  elements.projectSetupZone.hidden = !visible
+  if (!visible) {
+    elements.projectSetupZone.removeAttribute('open')
+  }
+  elements.projectWorkspaceGrid.hidden = !visible
+  elements.technicalDetailsAside.hidden = !visible
+  updatePowerUserConsoleVisibility()
 }
 
 async function refreshProjectHealth(projectPath) {
@@ -1959,12 +1978,23 @@ function initPowerUserConsole() {
   }
 
   elements.powerUserModeToggle.checked = powerUserModeEnabled
-  setPowerUserConsoleVisible(powerUserModeEnabled)
+  updatePowerUserConsoleVisibility()
   elements.consoleProjectPath.value = elements.commandProjectPath.value
+  elements.consoleHelpText.innerHTML =
+    api.platform === 'win32'
+      ? 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
+        'cover. This runs through the same shell as a normal Windows terminal, so <code>&amp;</code>, ' +
+        '<code>|</code>, <code>%VAR%</code>, and <code>.cmd</code>/<code>.bat</code> tools (<code>npm</code>, ' +
+        '<code>npx</code>, <code>yarn</code>, ...) all work as expected. There is no allowlist or safety net, ' +
+        'so be as careful as you would be in a real terminal.'
+      : 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
+        'cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your ' +
+        'system. Each run is a single process with no shell (no <code>&amp;&amp;</code>, pipes, or ' +
+        '<code>cd</code>), so shell operators are treated as literal text rather than executed.'
 
   elements.powerUserModeToggle.addEventListener('change', () => {
     const enabled = elements.powerUserModeToggle.checked
-    setPowerUserConsoleVisible(enabled)
+    updatePowerUserConsoleVisibility()
     try {
       localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')
     } catch {
@@ -1993,7 +2023,8 @@ function initPowerUserConsole() {
   })
 }
 
-function setPowerUserConsoleVisible(visible) {
+function updatePowerUserConsoleVisibility() {
+  const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
   elements.powerUserConsole.hidden = !visible
   if (!visible) {
     elements.powerUserConsole.removeAttribute('open')

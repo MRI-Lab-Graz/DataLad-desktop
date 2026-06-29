@@ -33,49 +33,83 @@ test('tokenizeCommand treats shell metacharacters as literal text', () => {
 
 test('buildConsoleCommand rejects a missing projectPath', () => {
   assert.throws(
-    () => buildConsoleCommand({ commandText: 'git status' }),
+    () => buildConsoleCommand({ commandText: 'git status', platform: 'darwin' }),
     /projectPath is required/
   )
 })
 
 test('buildConsoleCommand rejects a blank projectPath', () => {
   assert.throws(
-    () => buildConsoleCommand({ commandText: 'git log', projectPath: '   ' }),
+    () => buildConsoleCommand({ commandText: 'git log', projectPath: '   ', platform: 'darwin' }),
     /projectPath is required/
   )
 })
 
 test('buildConsoleCommand rejects empty command text', () => {
   assert.throws(
-    () => buildConsoleCommand({ commandText: '   ', projectPath: '/tmp/proj' }),
+    () => buildConsoleCommand({ commandText: '   ', projectPath: '/tmp/proj', platform: 'darwin' }),
     /Enter a command to run/
   )
 })
 
-test('buildConsoleCommand splits the first token off as the binary, any binary allowed', () => {
-  const commandSpec = buildConsoleCommand({ commandText: 'python script.py --flag', projectPath: '/tmp/proj' })
+test('on macOS/Linux: splits the first token off as the binary, any binary allowed, no shell', () => {
+  const commandSpec = buildConsoleCommand({
+    commandText: 'python script.py --flag',
+    projectPath: '/tmp/proj',
+    platform: 'darwin'
+  })
 
   assert.deepEqual(commandSpec, {
     command: 'python',
     args: ['script.py', '--flag'],
-    options: { cwd: '/tmp/proj' }
+    options: { cwd: '/tmp/proj', shell: false }
   })
 })
 
-test('buildConsoleCommand returns argv and cwd for a valid request', () => {
+test('on macOS/Linux: returns argv and cwd for a valid request', () => {
   const commandSpec = buildConsoleCommand({
     commandText: 'git log -1 --oneline',
-    projectPath: '/tmp/proj'
+    projectPath: '/tmp/proj',
+    platform: 'linux'
   })
 
   assert.deepEqual(commandSpec, {
     command: 'git',
     args: ['log', '-1', '--oneline'],
-    options: { cwd: '/tmp/proj' }
+    options: { cwd: '/tmp/proj', shell: false }
   })
 })
 
-test('buildConsoleCommand allows a binary with no arguments', () => {
-  const commandSpec = buildConsoleCommand({ commandText: 'datalad', projectPath: '/tmp/proj' })
+test('on macOS/Linux: allows a binary with no arguments', () => {
+  const commandSpec = buildConsoleCommand({ commandText: 'datalad', projectPath: '/tmp/proj', platform: 'darwin' })
   assert.deepEqual(commandSpec.args, [])
+})
+
+test('on Windows: hands the raw command line to the shell instead of tokenizing', () => {
+  const commandSpec = buildConsoleCommand({
+    commandText: 'npm run build && echo done',
+    projectPath: 'C:\\proj',
+    platform: 'win32'
+  })
+
+  assert.deepEqual(commandSpec, {
+    command: 'npm run build && echo done',
+    args: [],
+    options: { cwd: 'C:\\proj', shell: true }
+  })
+})
+
+test('on Windows: trims the command line before handing it to the shell', () => {
+  const commandSpec = buildConsoleCommand({
+    commandText: '   git log -1   ',
+    projectPath: 'C:\\proj',
+    platform: 'win32'
+  })
+
+  assert.equal(commandSpec.command, 'git log -1')
+})
+
+test('defaults to the real process.platform when none is passed', () => {
+  const commandSpec = buildConsoleCommand({ commandText: 'git status', projectPath: '/tmp/proj' })
+  assert.equal(commandSpec.options.shell, process.platform === 'win32')
 })

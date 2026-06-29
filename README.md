@@ -76,6 +76,21 @@ npm install
 npm start
 ```
 
+These commands work the same in PowerShell, cmd, or a Unix shell — there's nothing macOS/Linux-specific
+about running from source.
+
+**Windows notes:**
+
+- Install Python from [python.org](https://www.python.org/) and make sure the **py launcher** option is
+  checked. The app looks for `py -3`, then `python`, then `python3`, so the standard Windows Python install
+  is detected automatically.
+- Install DataLad and git-annex using the Windows installers linked from
+  [datalad.org](https://www.datalad.org/) — after installing, open a new terminal so the updated `PATH`
+  is picked up before running `npm start`.
+- Every push to this repo runs `npm ci`, `npm test`, and a packaging smoke build on `windows-latest` in CI
+  (see `.github/workflows/smoke-cross-platform.yml`), so the source install path is continuously checked on
+  Windows, not just macOS.
+
 **Run the test suite:**
 
 ```bash
