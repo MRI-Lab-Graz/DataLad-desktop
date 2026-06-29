@@ -8,10 +8,11 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
-pub const ADAPTER_INTERFACE_VERSION: &str = "0.4.0";
+pub const ADAPTER_INTERFACE_VERSION: &str = "0.5.0";
 
-const CURATED_COMMANDS: [&str; 7] = [
+const CURATED_COMMANDS: [&str; 8] = [
     "cloneInstall",
+    "createProject",
     "get",
     "save",
     "update",
@@ -907,6 +908,15 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                 ],
                 options: RunOptions::default(),
             }),
+            "createProject" => Ok(CommandSpec {
+                command: "datalad".to_string(),
+                args: vec![
+                    "create".to_string(),
+                    "--".to_string(),
+                    request_required_string(request, "targetPath")?,
+                ],
+                options: RunOptions::default(),
+            }),
             "get" => {
                 let project_path = request_required_string(request, "projectPath")?;
                 let mut args = vec![
@@ -1179,6 +1189,7 @@ fn build_command_result(
 fn command_schema(command_name: &str) -> Option<(&'static [&'static str], &'static [&'static str])> {
     match command_name {
         "cloneInstall" => Some((&["source", "targetPath"], &[])),
+        "createProject" => Some((&["targetPath"], &[])),
         "get" => Some((&["projectPath"], &["paths"])),
         "save" => Some((&["projectPath", "message"], &["paths"])),
         "update" => Some((&["projectPath"], &[])),
@@ -1276,7 +1287,33 @@ fn request_optional_paths(request: &Value) -> Result<Vec<String>, String> {
 
 fn map_command_error(command_name: &str, run_result: &CommandResult) -> UserError {
     let stderr = run_result.stderr.to_lowercase();
+    let stdout = run_result.stdout.to_lowercase();
     let details = run_result.stderr.trim().to_string();
+
+    // datalad reports this particular failure as a create(error) result line
+    // on stdout, not stderr, so this one check needs to look at both streams.
+    if command_name == "createProject"
+        && (stdout.contains("not empty")
+            || stdout.contains("non-empty")
+            || stdout.contains("already exists")
+            || stdout.contains("refuse to create")
+            || stderr.contains("not empty")
+            || stderr.contains("non-empty")
+            || stderr.contains("already exists")
+            || stderr.contains("refuse to create"))
+    {
+        let fallback_details = if details.is_empty() {
+            run_result.stdout.trim().to_string()
+        } else {
+            details.clone()
+        };
+        return UserError {
+            code: "TARGET_NOT_EMPTY".to_string(),
+            title: "Folder already has content".to_string(),
+            message: "DataLad will not create a new project inside a folder that already has files in it. Choose an empty or brand-new folder.".to_string(),
+            technical_details: fallback_details,
+        };
+    }
 
     if command_name == "createBranch" && stderr.contains("already exists") {
         return UserError {
@@ -1894,6 +1931,62 @@ mod tests {
                 "SIBLING_NOT_AUTO_ENABLED"
             ]
         );
+    }
+
+    #[test]
+    fn run_command_builds_a_datalad_create_call_for_create_project() {
+        let runner = FakeRunner::default().with_response(
+            "datalad",
+            &["create", "--", "/tmp/new-proj"],
+            CommandResult {
+                command: "datalad".to_string(),
+                args: vec![
+                    "create".to_string(),
+                    "--".to_string(),
+                    "/tmp/new-proj".to_string(),
+                ],
+                exit_code: 0,
+                stdout: "create(ok): /tmp/new-proj (dataset)".to_string(),
+                stderr: String::new(),
+                failed: false,
+            },
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .run_command("createProject", &json!({ "targetPath": "/tmp/new-proj" }))
+            .expect("run_command should succeed");
+
+        assert!(!result.failed);
+    }
+
+    #[test]
+    fn run_command_maps_create_project_failure_to_target_not_empty() {
+        let runner = FakeRunner::default().with_response(
+            "datalad",
+            &["create", "--", "/tmp/existing"],
+            CommandResult {
+                command: "datalad".to_string(),
+                args: vec![
+                    "create".to_string(),
+                    "--".to_string(),
+                    "/tmp/existing".to_string(),
+                ],
+                exit_code: 1,
+                stdout: "create(error): /tmp/existing (dataset) [will not create a dataset in a non-empty directory, use `--force` option to ignore]".to_string(),
+                stderr: String::new(),
+                failed: true,
+            },
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let result = adapter
+            .run_command("createProject", &json!({ "targetPath": "/tmp/existing" }))
+            .expect("run_command should return a result even on failure");
+
+        assert!(result.failed);
+        let user_error = result.user_error.expect("failed result should carry a user error");
+        assert_eq!(user_error.code, "TARGET_NOT_EMPTY");
     }
 
     #[test]

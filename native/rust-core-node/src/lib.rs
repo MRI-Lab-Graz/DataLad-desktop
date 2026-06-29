@@ -113,7 +113,7 @@ mod tests {
 
         assert_eq!(
             contract.get("version").and_then(Value::as_str),
-            Some("0.4.0")
+            Some("0.5.0")
         );
 
         let commands = contract
