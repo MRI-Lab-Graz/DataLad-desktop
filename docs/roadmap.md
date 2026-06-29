@@ -85,6 +85,8 @@ The next roadmap is therefore split into two tracks:
 - Treating filesystem browsing as the primary product model.
 
 These non-goals are about the curated novice-facing action set (Get/Save/Update/Publish), not about
-power-user access in general. An opt-in, allowlisted-binary command console (`datalad`/`git`/`git-annex`,
-no shell) is in scope as the power-user escape hatch for commands the GUI doesn't cover — it does not grow
-the curated button set or change the default novice workflow.
+power-user access in general. An opt-in command console (single command per run, no shell, cwd locked to
+the project root) is in scope as the power-user escape hatch for anything the GUI doesn't cover — it does
+not grow the curated button set or change the default novice workflow. It intentionally has no command
+allowlist: it runs whatever the power user types, exactly as a real terminal would, with no GUI-level
+safety net beyond "one process per run, no shell metacharacters."

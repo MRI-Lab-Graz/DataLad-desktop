@@ -101,8 +101,7 @@ const elements = {
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   powerUserConsole: document.getElementById('power-user-console'),
   consoleProjectPath: document.getElementById('console-project-path'),
-  consoleBinary: document.getElementById('console-binary'),
-  consoleArgs: document.getElementById('console-args'),
+  consoleCommand: document.getElementById('console-command'),
   consoleRunButton: document.getElementById('console-run'),
   consoleOutput: document.getElementById('console-output'),
   consoleHistoryOutput: document.getElementById('console-history-output')
@@ -1990,8 +1989,7 @@ function initPowerUserConsole() {
       return
     }
 
-    elements.consoleBinary.value = entry.binary
-    elements.consoleArgs.value = entry.argsText
+    elements.consoleCommand.value = entry.commandText
   })
 }
 
@@ -2009,26 +2007,29 @@ async function runConsoleCommand() {
     return
   }
 
-  const binary = elements.consoleBinary.value
-  const argsText = elements.consoleArgs.value.trim()
+  const commandText = elements.consoleCommand.value.trim()
+  if (!commandText) {
+    elements.consoleOutput.textContent = 'Enter a command to run.'
+    return
+  }
 
   elements.consoleRunButton.disabled = true
-  elements.consoleOutput.textContent = `$ ${binary} ${argsText}\n\nRunning...`
+  elements.consoleOutput.textContent = `$ ${commandText}\n\nRunning...`
 
   try {
-    const result = await api.runConsoleCommand({ binary, argsText, projectPath })
-    elements.consoleOutput.textContent = renderConsoleResult(binary, argsText, result)
-    rememberConsoleCommand(binary, argsText)
+    const result = await api.runConsoleCommand({ commandText, projectPath })
+    elements.consoleOutput.textContent = renderConsoleResult(commandText, result)
+    rememberConsoleCommand(commandText)
   } catch (error) {
-    elements.consoleOutput.textContent = `$ ${binary} ${argsText}\n\nFailed to run command: ${error?.message ?? String(error)}`
+    elements.consoleOutput.textContent = `$ ${commandText}\n\nFailed to run command: ${error?.message ?? String(error)}`
   } finally {
     elements.consoleRunButton.disabled = false
   }
 }
 
-function renderConsoleResult(binary, argsText, result) {
+function renderConsoleResult(commandText, result) {
   const statusLine = result.failed ? `Failed (exit ${result.exitCode})` : `Succeeded (exit ${result.exitCode})`
-  const sections = [`$ ${binary} ${argsText}`, '', statusLine]
+  const sections = [`$ ${commandText}`, '', statusLine]
 
   if (result.stdout) {
     sections.push('', result.stdout.trimEnd())
@@ -2041,8 +2042,8 @@ function renderConsoleResult(binary, argsText, result) {
   return sections.join('\n')
 }
 
-function rememberConsoleCommand(binary, argsText) {
-  state.consoleHistory.unshift({ binary, argsText, ranAt: Date.now() })
+function rememberConsoleCommand(commandText) {
+  state.consoleHistory.unshift({ commandText, ranAt: Date.now() })
   state.consoleHistory.length = Math.min(state.consoleHistory.length, MAX_CONSOLE_HISTORY)
   renderConsoleHistory()
 }
@@ -2057,7 +2058,7 @@ function renderConsoleHistory() {
     .map(
       (entry, index) =>
         `<button type="button" class="button button-ghost button-inline console-history-item" data-console-history-index="${index}">` +
-        `${escapeHtml(entry.binary)} ${escapeHtml(entry.argsText)}` +
+        `${escapeHtml(entry.commandText)}` +
         '</button>'
     )
     .join('')

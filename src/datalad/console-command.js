@@ -1,5 +1,3 @@
-export const ALLOWED_CONSOLE_BINARIES = new Set(['datalad', 'git', 'git-annex'])
-
 /**
  * Quote-aware whitespace tokenizer. There is no shell involved anywhere in the
  * console command path, so shell metacharacters (&&, |, $(), backticks) are
@@ -55,18 +53,19 @@ export function tokenizeCommand(input) {
   return tokens
 }
 
-export function buildConsoleCommand({ binary, argsText, projectPath } = {}) {
-  if (!ALLOWED_CONSOLE_BINARIES.has(binary)) {
-    throw new Error(`Unsupported console binary: ${binary}`)
-  }
-
+export function buildConsoleCommand({ commandText, projectPath } = {}) {
   if (typeof projectPath !== 'string' || !projectPath.trim()) {
     throw new Error('projectPath is required to run a console command')
   }
 
+  const [binary, ...args] = tokenizeCommand(commandText ?? '')
+  if (!binary) {
+    throw new Error('Enter a command to run')
+  }
+
   return {
     command: binary,
-    args: tokenizeCommand(argsText ?? ''),
+    args,
     options: { cwd: projectPath }
   }
 }
