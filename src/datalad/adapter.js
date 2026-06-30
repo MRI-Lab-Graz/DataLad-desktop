@@ -120,7 +120,7 @@ export class DataLadAdapter {
     assertCommandRequest(commandName, request)
 
     const commandSpec = this.#buildCommand(commandName, request)
-    const result = await this.runner.run(commandSpec.command, commandSpec.args, commandSpec.options)
+    let result = await this.runner.run(commandSpec.command, commandSpec.args, commandSpec.options)
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {
@@ -722,17 +722,21 @@ export class DataLadAdapter {
       warnings.push({
         code: 'SIBLING_NOT_AUTO_ENABLED',
         severity: 'info',
+        siblingName,
         message: `Sibling ${siblingName} was discovered but not auto-enabled. Enable it if you need data from that source.`,
         actionHint: `datalad siblings -d "<dataset-path>" enable -s ${siblingName}`
       })
     }
 
     if (warnings.length === 0 && commandName === 'cloneInstall') {
-      warnings.push({
-        code: 'CLONE_STDERR_OUTPUT',
-        severity: 'info',
-        message: 'Clone completed with additional command output in stderr. Review details if needed.'
-      })
+      const meaningfulLines = stderr.split(/\r?\n/).filter((l) => l.trim() && !/^\[INFO\]/i.test(l.trim()))
+      if (meaningfulLines.length > 0) {
+        warnings.push({
+          code: 'CLONE_STDERR_OUTPUT',
+          severity: 'info',
+          message: 'Clone completed with additional command output in stderr. Review details if needed.'
+        })
+      }
     }
 
     return warnings

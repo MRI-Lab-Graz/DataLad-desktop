@@ -87,6 +87,19 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (
+    commandName === 'cloneInstall' &&
+    hasPattern(`${stdout}\n${stderr}`, /not found|no such repository|repository.*not found|failed to clone/)
+  ) {
+    return {
+      code: 'REPO_NOT_FOUND',
+      title: 'Repository not found',
+      message:
+        'DataLad could not find a repository at the provided URL. Check that the URL is correct and the repository is publicly accessible.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
+
   if (hasPattern(stderr, /command not found|enoent|not recognized/)) {
     return {
       code: 'TOOLING_MISSING',
@@ -114,6 +127,27 @@ export function mapCommandError(commandName, runResult) {
       message:
         'DataLad Desktop could not authenticate with the remote destination. Check your credentials and try again.',
       technicalDetails: details
+    }
+  }
+
+  // datalad get prints all error detail to stdout, not stderr
+  if (commandName === 'get' && hasPattern(stdout, /forbidden|access denied|unauthorized/)) {
+    return {
+      code: 'GET_FORBIDDEN',
+      title: 'Download access denied',
+      message:
+        'The data source rejected the download. The dataset may require authentication or a data sibling may need to be enabled first (e.g. run "datalad siblings enable -s <name>" in the Console).',
+      technicalDetails: stdout.trim()
+    }
+  }
+
+  if (commandName === 'get' && hasPattern(stdout, /no publicurl|cannot download content|not available|cannot get|not present/)) {
+    return {
+      code: 'CONTENT_UNAVAILABLE',
+      title: 'Content could not be downloaded',
+      message:
+        'No configured remote could provide the requested file content. A data sibling may need to be enabled first — use the Console to run "datalad siblings" to list available siblings.',
+      technicalDetails: stdout.trim()
     }
   }
 
