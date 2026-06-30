@@ -42,10 +42,17 @@ const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁'
 const elements = {
   recentProjectsOutput: document.getElementById('recent-projects-output'),
   clearRecentProjectsButton: document.getElementById('clear-recent-projects'),
-  cloneNavTriggerButton: document.getElementById('clone-nav-trigger'),
-  topQuickSaveButton: document.getElementById('top-quick-save'),
-  cloneDrawer: document.getElementById('clone-drawer'),
-  cloneDrawerCloseButton: document.getElementById('clone-drawer-close'),
+  getRemoteModeUrlRadio: document.getElementById('get-remote-mode-url'),
+  getRemoteModeNetworkRadio: document.getElementById('get-remote-mode-network'),
+  getRemoteUrlPanel: document.getElementById('get-remote-url-panel'),
+  getRemoteNetworkPanel: document.getElementById('get-remote-network-panel'),
+  getRemoteSourceUrl: document.getElementById('get-remote-source-url'),
+  getRemoteSourceNetwork: document.getElementById('get-remote-source-network'),
+  pickGetRemoteNetworkPathButton: document.getElementById('pick-get-remote-network-path'),
+  getRemoteTarget: document.getElementById('get-remote-target'),
+  pickGetRemoteTargetButton: document.getElementById('pick-get-remote-target'),
+  getFromRemoteButton: document.getElementById('get-from-remote'),
+  getRemoteOutput: document.getElementById('get-remote-output'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -62,10 +69,6 @@ const elements = {
   projectHealthOutput: document.getElementById('project-health-output'),
   lastActionState: document.getElementById('last-action-state'),
   lastCommitMeta: document.getElementById('last-commit-meta'),
-  source: document.getElementById('source'),
-  targetPath: document.getElementById('target-path'),
-  pickTargetPathButton: document.getElementById('pick-target-path'),
-  cloneOutput: document.getElementById('clone-output'),
   createProjectPath: document.getElementById('create-project-path'),
   pickCreateProjectPathButton: document.getElementById('pick-create-project-path'),
   createProjectButton: document.getElementById('create-project'),
@@ -93,7 +96,6 @@ const elements = {
   ignoreRulesAddOsJunkButton: document.getElementById('ignore-rules-add-os-junk'),
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
-  cloneProjectButton: document.getElementById('clone-project'),
   saveProjectButton: document.getElementById('save-project'),
   getDataButton: document.getElementById('get-data'),
   updateProjectButton: document.getElementById('update-project'),
@@ -146,20 +148,16 @@ wireFolderPicker(elements.pickCommandProjectPathButton, elements.commandProjectP
   setAsCurrentProject: true
 })
 
-wireFolderPicker(elements.pickTargetPathButton, elements.targetPath, {
-  title: 'Select clone target folder'
+wireFolderPicker(elements.pickGetRemoteNetworkPathButton, elements.getRemoteSourceNetwork, {
+  title: 'Select network or local source folder'
+})
+
+wireFolderPicker(elements.pickGetRemoteTargetButton, elements.getRemoteTarget, {
+  title: 'Select target folder for the downloaded project'
 })
 
 wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
   title: 'Select or create a new project folder'
-})
-
-elements.cloneNavTriggerButton.addEventListener('click', () => {
-  setCloneDrawerExpanded(elements.cloneDrawer.hasAttribute('hidden'))
-})
-
-elements.cloneDrawerCloseButton.addEventListener('click', () => {
-  setCloneDrawerExpanded(false)
 })
 
 elements.recentProjectsOutput.addEventListener('click', async (event) => {
@@ -189,40 +187,6 @@ elements.clearRecentProjectsButton.addEventListener('click', () => {
   persistRecentProjects()
   renderRecentProjects()
   setLastActionState('Recent project list cleared.', 'idle')
-})
-
-elements.topQuickSaveButton.addEventListener('click', async () => {
-  const projectPath = readProjectPath()
-  if (!projectPath) {
-    return
-  }
-
-  setButtonBusy(elements.topQuickSaveButton, true)
-  try {
-    const latestStatus = await refreshWorkingTreeStatus(projectPath)
-    if (!latestStatus) {
-      return
-    }
-
-    if (latestStatus.conflictCount > 0) {
-      elements.commandOutput.textContent = 'Quick Save is blocked while conflicts are present.'
-      setLastActionState('Resolve conflicts before saving.', 'error')
-      return
-    }
-
-    const message = elements.message.value.trim() || buildQuickSaveMessage()
-    if (!elements.message.value.trim()) {
-      elements.message.value = message
-    }
-
-    await runWorkflowCommand('save', {
-      projectPath,
-      message,
-      paths: gatherSavePaths()
-    }, elements.topQuickSaveButton)
-  } finally {
-    setButtonBusy(elements.topQuickSaveButton, false)
-  }
 })
 
 elements.changedFilesSelectAllButton.addEventListener('click', () => {
@@ -297,22 +261,33 @@ elements.detectProjectButton.addEventListener('click', async () => {
   }
 })
 
-elements.cloneProjectButton.addEventListener('click', async () => {
-  const source = elements.source.value.trim()
-  const targetPath = elements.targetPath.value.trim()
+function updateGetRemoteMode() {
+  const isUrl = elements.getRemoteModeUrlRadio.checked
+  elements.getRemoteUrlPanel.hidden = !isUrl
+  elements.getRemoteNetworkPanel.hidden = isUrl
+}
+
+elements.getRemoteModeUrlRadio.addEventListener('change', updateGetRemoteMode)
+elements.getRemoteModeNetworkRadio.addEventListener('change', updateGetRemoteMode)
+
+elements.getFromRemoteButton.addEventListener('click', async () => {
+  const isUrl = elements.getRemoteModeUrlRadio.checked
+  const source = isUrl
+    ? elements.getRemoteSourceUrl.value.trim()
+    : elements.getRemoteSourceNetwork.value.trim()
+  const targetPath = elements.getRemoteTarget.value.trim()
 
   if (!source || !targetPath) {
-    elements.cloneOutput.textContent = 'Provide both source URL and target folder for clone.'
-    setLastActionState('Add source URL and target folder.', 'error')
+    elements.getRemoteOutput.textContent = 'Provide both a source and a target folder.'
+    setLastActionState('Add source and target folder.', 'error')
     return
   }
 
-  // Cloning happens in the onboarding area, which stays visible even when no
-  // project is open yet — render the result here too, not just into the
-  // Save & Sync panel, which is hidden until a project is actually open.
-  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.cloneProjectButton)
+  // This runs in the onboarding area before any project is open — render the
+  // result here too, not just into the Save & Sync panel (hidden until open).
+  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.getFromRemoteButton)
   if (cloneResult) {
-    elements.cloneOutput.innerHTML = renderCommandResult(cloneResult)
+    elements.getRemoteOutput.innerHTML = renderCommandResult(cloneResult)
   }
   if (!cloneResult?.ok) {
     return
@@ -321,7 +296,6 @@ elements.cloneProjectButton.addEventListener('click', async () => {
   elements.commandProjectPath.value = targetPath
   elements.projectPath.value = targetPath
   setCurrentProjectHeader(targetPath, 'unknown')
-  setCloneDrawerExpanded(false)
   await detectProjectType(targetPath)
   await refreshDatasetList(targetPath)
   await refreshFileBrowser(targetPath)
@@ -1772,16 +1746,6 @@ function setBranchStatus(text, tone) {
   elements.branchStatus.textContent = text
 }
 
-function setCloneDrawerExpanded(expanded) {
-  if (expanded) {
-    elements.cloneDrawer.removeAttribute('hidden')
-    elements.cloneNavTriggerButton.setAttribute('aria-expanded', 'true')
-    return
-  }
-
-  elements.cloneDrawer.setAttribute('hidden', '')
-  elements.cloneNavTriggerButton.setAttribute('aria-expanded', 'false')
-}
 
 async function refreshLastCommitMeta(projectPath) {
   const nextToken = state.commitMetaRequestToken + 1

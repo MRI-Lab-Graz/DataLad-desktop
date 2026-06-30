@@ -20,6 +20,10 @@
             <p id="last-commit-meta" class="hero-meta hero-meta-idle">
               Last commit status appears here after selecting a project.
             </p>
+            <label class="power-toggle-wrap" for="power-user-mode-toggle">
+              <input type="checkbox" id="power-user-mode-toggle" role="switch" />
+              Power user mode
+            </label>
             <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
           </div>
         </div>
@@ -27,68 +31,6 @@
         <p class="lede">
           Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
-
-        <div class="hero-quick">
-          <div class="hero-quick-actions">
-            <button
-              id="check-env"
-              class="button button-ghost"
-              type="button"
-              title="Check whether Python 3, DataLad, and git-annex are installed and working on this computer."
-            >
-              Check Setup
-            </button>
-            <button
-              id="clone-nav-trigger"
-              class="button button-primary"
-              type="button"
-              aria-expanded="false"
-              aria-controls="clone-drawer"
-              title="Download a copy of an existing DataLad project from a URL or shared path."
-            >
-              Clone Project
-            </button>
-            <button
-              id="top-quick-save"
-              class="button button-ghost"
-              type="button"
-              title="Save all current changes in the active project with an auto-generated message. Works fully offline."
-            >
-              Quick Save
-            </button>
-            <label class="hero-quick-toggle" for="power-user-mode-toggle">
-              <input type="checkbox" id="power-user-mode-toggle" />
-              Power user mode
-            </label>
-          </div>
-          <p class="hero-quick-note">Start here for a new study project. Clone once, then continue below.</p>
-        </div>
-
-        <section id="clone-drawer" class="clone-drawer" aria-labelledby="clone-title" hidden>
-          <div class="clone-drawer-head">
-            <h2 id="clone-title">Clone DataLad Project</h2>
-            <button id="clone-drawer-close" class="button button-ghost button-inline" type="button">Hide</button>
-          </div>
-
-          <label class="field">
-            <span>Source URL</span>
-            <input id="source" type="text" placeholder="https://example.org/dataset.git" />
-          </label>
-
-          <label class="field">
-            <span>Target Folder</span>
-            <div class="field-row">
-              <input id="target-path" type="text" placeholder="/path/to/clone/target" />
-              <button id="pick-target-path" class="button button-ghost button-inline" type="button">Browse</button>
-            </div>
-          </label>
-
-          <div class="row-actions">
-            <button id="clone-project" class="button button-primary" type="button">Clone Project</button>
-          </div>
-
-          <div id="clone-output" class="panel panel-muted">Provide a source URL and target folder, then click Clone Project.</div>
-        </section>
       </header>
 
       <section id="onboarding-group" class="onboarding-group">
@@ -118,12 +60,80 @@
 
               <div class="row-actions">
                 <button id="detect-project" class="button button-primary" type="button">Check Project Folder</button>
+                <button
+                  id="check-env"
+                  class="button button-ghost"
+                  type="button"
+                  title="Check whether Python 3, DataLad, and git-annex are installed and working on this computer."
+                >
+                  Check Setup
+                </button>
               </div>
             </div>
 
             <div class="open-project-panels">
               <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
-              <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Use Check Setup above.</div>
+              <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Click Check Setup.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card reveal reveal-3 open-project-strip" id="get-from-remote-card" aria-labelledby="get-from-remote-title">
+          <div class="section-head">
+            <h2 id="get-from-remote-title">Get from Remote</h2>
+          </div>
+
+          <p class="lede-small">Download a copy of an existing project from a remote URL or a network folder. Do this once per project.</p>
+
+          <div class="get-remote-mode-row" role="group" aria-label="Source type">
+            <label class="get-remote-mode-option">
+              <input type="radio" name="get-remote-mode" id="get-remote-mode-url" value="url" checked />
+              Remote URL
+            </label>
+            <label class="get-remote-mode-option">
+              <input type="radio" name="get-remote-mode" id="get-remote-mode-network" value="network" />
+              Network Folder
+            </label>
+          </div>
+
+          <div class="open-project-grid">
+            <div class="open-project-controls">
+              <div id="get-remote-url-panel">
+                <label class="field">
+                  <span>Remote URL</span>
+                  <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
+                </label>
+                <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
+              </div>
+
+              <div id="get-remote-network-panel" hidden>
+                <label class="field">
+                  <span>Network Folder Path</span>
+                  <div class="field-row">
+                    <input id="get-remote-source-network" type="text" placeholder="\\server\share\dataset  or  smb://server/share" />
+                    <button id="pick-get-remote-network-path" class="button button-ghost button-inline" type="button">Browse</button>
+                  </div>
+                </label>
+                <p class="hint-inline">UNC paths (\\server\share), smb:// URLs, or any locally-mounted network folder.</p>
+              </div>
+
+              <label class="field">
+                <span>Save Into Folder</span>
+                <div class="field-row">
+                  <input id="get-remote-target" type="text" placeholder="/path/to/save/project" />
+                  <button id="pick-get-remote-target" class="button button-ghost button-inline" type="button">Browse</button>
+                </div>
+              </label>
+
+              <div class="row-actions">
+                <button id="get-from-remote" class="button button-primary" type="button">Get from Remote</button>
+              </div>
+            </div>
+
+            <div class="open-project-panels">
+              <div id="get-remote-output" class="panel panel-muted">
+                Provide a source and a target folder, then click Get from Remote.
+              </div>
             </div>
           </div>
         </section>

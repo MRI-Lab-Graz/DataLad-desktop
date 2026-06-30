@@ -20,7 +20,7 @@ jobs:
           - windows-latest
           - macos-latest
         node:
-          - '20'
+          - '22'
 
     steps:
       - name: Checkout
