@@ -387,13 +387,51 @@ h2 {
   font-size: 0.9rem;
 }
 
-.hero-quick-toggle {
+.power-toggle-wrap {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
+  gap: 7px;
+  font-size: 0.78rem;
   color: var(--ink-soft);
   cursor: pointer;
+  user-select: none;
+  justify-content: flex-end;
+}
+
+.power-toggle-wrap input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.power-toggle-wrap input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: left 0.18s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.power-toggle-wrap input[type='checkbox']:checked {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+
+.power-toggle-wrap input[type='checkbox']:checked::after {
+  left: 17px;
 }
 
 .clone-drawer {
@@ -410,6 +448,27 @@ h2 {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.get-remote-mode-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.get-remote-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.get-remote-mode-option input[type='radio'] {
+  accent-color: var(--teal);
 }
 
 .lede-small {
