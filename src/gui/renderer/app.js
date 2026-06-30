@@ -1358,6 +1358,11 @@ function renderCommandResult(result, summary = null) {
 
   let html = `<p><strong>${escapeHtml(statusLine)}</strong></p>`
 
+  if (result.command && result.args) {
+    const cmdLine = [result.command, ...result.args].join(' ')
+    html += `<p class="cmd-preview"><code>${escapeHtml(cmdLine)}</code></p>`
+  }
+
   if (summary) {
     html += `<p>${escapeHtml(summary)}</p>`
   }
@@ -2177,7 +2182,8 @@ function buildFileTree(rootPath, entries) {
       entry.relativePath,
       {
         absolutePath: entry.absolutePath,
-        gitStatus: entry.gitStatus ?? null
+        gitStatus: entry.gitStatus ?? null,
+        annexPresent: entry.annexPresent ?? null
       }
     ])
   )
@@ -2196,11 +2202,13 @@ function buildFileTree(rootPath, entries) {
         const pathMetadata = isLeaf
           ? {
               absolutePath: entry.absolutePath,
-              gitStatus: entry.gitStatus ?? null
+              gitStatus: entry.gitStatus ?? null,
+              annexPresent: entry.annexPresent ?? null
             }
           : metadataByRelative.get(currentRelativePath) ?? {
               absolutePath: null,
-              gitStatus: null
+              gitStatus: null,
+              annexPresent: null
             }
 
         currentNode.children.set(segment, {
@@ -2208,6 +2216,7 @@ function buildFileTree(rootPath, entries) {
           type: isLeaf ? entry.type : 'directory',
           absolutePath: pathMetadata.absolutePath,
           gitStatus: pathMetadata.gitStatus,
+          annexPresent: pathMetadata.annexPresent,
           children: new Map()
         })
       }
@@ -2221,11 +2230,18 @@ function buildFileTree(rootPath, entries) {
         nextNode.gitStatus = entry.gitStatus ?? null
       }
 
+      if (isLeaf && nextNode.annexPresent === null) {
+        nextNode.annexPresent = entry.annexPresent ?? null
+      }
+
       if (!isLeaf) {
         nextNode.type = 'directory'
-        const directoryStatus = metadataByRelative.get(currentRelativePath)?.gitStatus ?? null
-        if (directoryStatus) {
-          nextNode.gitStatus = directoryStatus
+        const dirMeta = metadataByRelative.get(currentRelativePath)
+        if (dirMeta?.gitStatus) {
+          nextNode.gitStatus = dirMeta.gitStatus
+        }
+        if (dirMeta?.annexPresent !== undefined && nextNode.annexPresent === null) {
+          nextNode.annexPresent = dirMeta.annexPresent ?? null
         }
       }
       currentNode = nextNode
@@ -2250,9 +2266,10 @@ function renderFileTreeNodes(children, expandAll, depth) {
         : ''
       const iconClass = node.type === 'directory' ? 'file-icon file-icon-folder' : 'file-icon file-icon-file'
       const statusBadge = renderGitStatusBadge(node.gitStatus)
+      const annexBadge = renderAnnexBadge(node.annexPresent)
       const label =
         `<span class="finder-name-cell"><span class="${iconClass}" aria-hidden="true"></span>` +
-        `<span class="file-name">${escapeHtml(node.name)}</span>${statusBadge}</span>`
+        `<span class="file-name">${escapeHtml(node.name)}</span>${statusBadge}${annexBadge}</span>`
 
       if (node.type === 'directory') {
         const openAttribute = expandAll || depth === 0 ? ' open' : ''
@@ -2298,6 +2315,16 @@ function renderGitStatusBadge(gitStatus) {
 
   const label = labels[gitStatus] ?? 'Changed'
   return `<span class="file-status file-status-${escapeHtml(gitStatus)}">${escapeHtml(label)}</span>`
+}
+
+function renderAnnexBadge(annexPresent) {
+  if (annexPresent === true) {
+    return '<span class="file-status file-status-local">Local</span>'
+  }
+  if (annexPresent === 'partial') {
+    return '<span class="file-status file-status-partial">Partial</span>'
+  }
+  return ''
 }
 
 function escapeHtml(text) {

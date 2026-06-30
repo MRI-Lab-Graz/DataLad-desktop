@@ -25,10 +25,6 @@ function createAdapter() {
     return rustAdapterState.adapter
   }
 
-  if (rustAdapterState.reason) {
-    // Keep startup resilient while Rust bridge is being rolled out incrementally.
-    console.info(`[adapter] Using JavaScript adapter: ${rustAdapterState.reason}`)
-  }
 
   return new DataLadAdapter()
 }
@@ -224,8 +220,11 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
 
   const entries = []
   let truncated = false
+  // repoRoot (absolute) → relative path within that repo for each file entry
+  const fileRepoRoot = new Map()
+  const repoRoots = new Set([normalizedRoot])
 
-  async function walk(currentPath, depth) {
+  async function walk(currentPath, depth, currentRepoRoot) {
     if (entries.length >= maxEntries) {
       truncated = true
       return
@@ -257,16 +256,76 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
       })
 
       if (child.isDirectory() && depth < maxDepth) {
-        await walk(absolutePath, depth + 1)
+        let childRepoRoot = currentRepoRoot
+        try {
+          await access(join(absolutePath, '.git'))
+          childRepoRoot = absolutePath
+          repoRoots.add(absolutePath)
+        } catch {}
+        await walk(absolutePath, depth + 1, childRepoRoot)
+      } else if (!child.isDirectory()) {
+        fileRepoRoot.set(relativePath, currentRepoRoot)
       }
     }
   }
 
-  await walk(normalizedRoot, 0)
+  await walk(normalizedRoot, 0, normalizedRoot)
 
-  const gitStatusByPath = await readGitStatusMap(normalizedRoot)
+  // Run git annex find for all discovered repos in parallel, plus git status
+  const [gitStatusByPath, ...annexResultPairs] = await Promise.all([
+    readGitStatusMap(normalizedRoot),
+    ...[...repoRoots].map(async (repoRoot) => {
+      const [presResult, absResult] = await Promise.all([
+        runCommand('git', ['-C', repoRoot, 'annex', 'find', '--in=here']),
+        runCommand('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here'])
+      ])
+      if (presResult.failed && absResult.failed) return [repoRoot, null]
+      return [
+        repoRoot,
+        {
+          present: new Set((presResult.stdout ?? '').split(/\r?\n/).filter(Boolean)),
+          absent: new Set((absResult.stdout ?? '').split(/\r?\n/).filter(Boolean))
+        }
+      ]
+    })
+  ])
+
+  const annexByRepo = new Map(annexResultPairs)
   const changedPaths = [...gitStatusByPath.keys()]
-  const entriesWithStatus = entries.map((entry) => {
+
+  // Annotate file entries with annexPresent, collect sets for directory rollup
+  const presentRelPaths = new Set()
+  const absentRelPaths = new Set()
+
+  const annotatedEntries = entries.map((entry) => {
+    if (entry.type !== 'file') return entry
+
+    const repoRoot = fileRepoRoot.get(entry.relativePath)
+    const annexInfo = repoRoot ? annexByRepo.get(repoRoot) : null
+    let annexPresent = null
+
+    if (annexInfo) {
+      const relToRepo = relative(repoRoot, entry.absolutePath).split(sep).join('/')
+      if (annexInfo.present.has(relToRepo)) {
+        annexPresent = true
+        presentRelPaths.add(entry.relativePath)
+      } else if (annexInfo.absent.has(relToRepo)) {
+        annexPresent = false
+        absentRelPaths.add(entry.relativePath)
+      }
+    } else {
+      // git annex not available: fall back to heuristic detection
+      annexPresent = detectAnnexPresentSync(entry.absolutePath)
+      if (annexPresent === true) presentRelPaths.add(entry.relativePath)
+      else if (annexPresent === false) absentRelPaths.add(entry.relativePath)
+    }
+
+    return { ...entry, annexPresent }
+  })
+
+  const entriesWithStatus = annotatedEntries.map((entry) => {
+    const prefix = `${entry.relativePath}/`
+
     if (entry.type === 'file') {
       return {
         ...entry,
@@ -275,13 +334,20 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
     }
 
     const hasChangedDescendant = changedPaths.some(
-      (candidatePath) =>
-        candidatePath === entry.relativePath || candidatePath.startsWith(`${entry.relativePath}/`)
+      (p) => p === entry.relativePath || p.startsWith(prefix)
     )
+
+    const hasPresentChild = [...presentRelPaths].some((p) => p.startsWith(prefix))
+    const hasAbsentChild = [...absentRelPaths].some((p) => p.startsWith(prefix))
+    let annexPresent = null
+    if (hasPresentChild && !hasAbsentChild) annexPresent = true
+    else if (hasPresentChild) annexPresent = 'partial'
+    else if (hasAbsentChild) annexPresent = false
 
     return {
       ...entry,
-      gitStatus: hasChangedDescendant ? 'changed' : null
+      gitStatus: hasChangedDescendant ? 'changed' : null,
+      annexPresent
     }
   })
 
@@ -309,6 +375,13 @@ async function readGitStatusMap(rootPath) {
   }
 
   return buildGitStatusMap(gitResult.stdout)
+}
+
+// Fallback when git-annex is unavailable for a repo.
+// DataLad always requires git-annex, so this is only hit for plain git repos —
+// those have no annex content to mark, so returning null is correct.
+function detectAnnexPresentSync(_absolutePath) {
+  return null
 }
 
 async function runCommand(command, args) {

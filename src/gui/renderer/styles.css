@@ -265,6 +265,12 @@ body {
   position: absolute;
   top: 14px;
   right: 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.hero-meta-text {
   display: grid;
   justify-items: end;
   gap: 0.38rem;
@@ -944,6 +950,21 @@ select:focus {
   margin-top: 8px;
 }
 
+.cmd-preview {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.78rem;
+}
+
+.cmd-preview code {
+  font-family: var(--mono);
+  background: rgba(11, 108, 168, 0.08);
+  border: 1px solid rgba(11, 108, 168, 0.18);
+  border-radius: 6px;
+  padding: 0.18rem 0.5rem;
+  color: #1a4a6e;
+  word-break: break-all;
+}
+
 .file-list {
   margin: 0;
   padding: 0.3rem;
@@ -1091,6 +1112,24 @@ select:focus {
   background: rgba(220, 239, 235, 0.96);
   border-color: rgba(37, 123, 105, 0.36);
   color: #145f50;
+}
+
+.file-status-local {
+  background: rgba(214, 239, 228, 0.95);
+  border-color: rgba(42, 130, 95, 0.36);
+  color: #1e6a4e;
+}
+
+.file-status-partial {
+  background: rgba(253, 243, 215, 0.95);
+  border-color: rgba(180, 140, 40, 0.36);
+  color: #7a5c10;
+}
+
+.file-status-pointer {
+  background: rgba(230, 239, 245, 0.95);
+  border-color: rgba(114, 142, 161, 0.35);
+  color: #476274;
 }
 
 .finder-action-cell {
@@ -1241,8 +1280,11 @@ select:focus {
 
   .hero-meta-stack {
     position: static;
-    justify-items: start;
     margin-top: 0.22rem;
+  }
+
+  .hero-meta-text {
+    justify-items: start;
   }
 
   .hero-meta {
