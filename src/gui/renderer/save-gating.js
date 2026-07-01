@@ -3,15 +3,17 @@
 // same pattern applied to the workflow buttons.
 
 /**
+ * Save stays clickable whenever there is something it could act on — a
+ * message is a nice-to-have, not a lock. Missing-message is surfaced as a
+ * guidance hint (and, if the user actually clicks without one, a blocking
+ * message at click time) rather than by disabling the button, since a
+ * disabled button with no explanation reads as broken.
+ *
  * @param {{ hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean }} input
  * @returns {{ disabled: boolean, guidance: { text: string, warning: boolean } }}
  */
 export function computeSaveGating({ hasMessage, hasSelection, hasConflicts, hasChanges }) {
-  const disabled = !hasMessage || (hasChanges && !hasSelection) || hasConflicts
-
-  if (!hasMessage) {
-    return { disabled, guidance: { text: 'Enter a save message to enable Save.', warning: false } }
-  }
+  const disabled = hasConflicts || (hasChanges && !hasSelection)
 
   if (hasConflicts) {
     return {
@@ -24,6 +26,13 @@ export function computeSaveGating({ hasMessage, hasSelection, hasConflicts, hasC
     return {
       disabled,
       guidance: { text: 'Select changed files or add manual paths before saving.', warning: true }
+    }
+  }
+
+  if (!hasMessage) {
+    return {
+      disabled,
+      guidance: { text: 'Add a save message, or Save will ask you for one.', warning: true }
     }
   }
 
