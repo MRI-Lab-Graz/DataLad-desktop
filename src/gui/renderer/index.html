@@ -268,12 +268,13 @@
             </div>
           </label>
 
-          <label class="field">
+          <label id="dataset-select-field" class="field" hidden>
             <span>Project Data Folder</span>
             <div class="field-row">
               <select id="dataset-select"></select>
               <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
             </div>
+            <p class="hint-inline">This project has nested datasets — pick which one Save applies to.</p>
           </label>
 
           <section class="status-box" aria-labelledby="changed-files-title">
@@ -315,7 +316,13 @@
             Save
           </button>
 
-          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+          <section class="status-box" aria-labelledby="command-output-title">
+            <div class="section-head branch-head">
+              <h3 id="command-output-title">Last Action Result</h3>
+            </div>
+            <p class="lede-small">Shows what happened after Save, Get Data, Update, or Publish runs.</p>
+            <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+          </section>
 
           <section class="status-box" aria-labelledby="recent-commits-title">
             <div class="section-head branch-head">

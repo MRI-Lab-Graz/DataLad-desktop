@@ -79,6 +79,7 @@ const elements = {
   pickCreateProjectPathButton: document.getElementById('pick-create-project-path'),
   createProjectButton: document.getElementById('create-project'),
   createProjectOutput: document.getElementById('create-project-output'),
+  datasetSelectField: document.getElementById('dataset-select-field'),
   datasetSelect: document.getElementById('dataset-select'),
   refreshDatasetsButton: document.getElementById('refresh-datasets'),
   branchSelect: document.getElementById('branch-select'),
@@ -680,13 +681,13 @@ async function refreshDatasetList(projectPath) {
       elements.datasetSelect.appendChild(option)
     }
 
-    // With no nested datasets there is nothing to switch between — leave the
-    // picker disabled instead of offering a single dead-end choice. Refresh
-    // stays enabled so newly added nested datasets can still be discovered.
-    elements.datasetSelect.disabled = !hasNestedDatasets
-    elements.datasetSelect.title = hasNestedDatasets
-      ? 'Switch between the root dataset and its nested datasets.'
-      : 'This project has no nested datasets to switch between.'
+    // With no nested datasets there is nothing to switch between and the
+    // picker just reads as confusing noise for the common single-dataset
+    // case — hide the whole field rather than show a disabled dropdown.
+    // Re-detecting the project (e.g. via Switch Project) picks up nested
+    // datasets added later.
+    elements.datasetSelectField.hidden = !hasNestedDatasets
+    elements.datasetSelect.title = 'Switch between the root dataset and its nested datasets.'
 
     const activePath = elements.commandProjectPath.value.trim()
     const hasActivePath = datasets.some((dataset) => dataset.path === activePath)
