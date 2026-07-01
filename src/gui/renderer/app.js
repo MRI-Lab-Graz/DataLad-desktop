@@ -597,7 +597,10 @@ async function runWorkflowCommand(commandName, request, button = null) {
   }
 
   state.pendingCommands.add(commandName)
-  setButtonBusy(button, true)
+  const pathCount = Array.isArray(request.paths) ? request.paths.length : 0
+  const busyLabel =
+    commandName === 'save' && pathCount > BUSY_LABEL_FILE_COUNT_THRESHOLD ? `Saving ${pathCount} files…` : undefined
+  setButtonBusy(button, true, busyLabel)
 
   try {
     const result = await api.runCommand(commandName, request)
@@ -1006,6 +1009,8 @@ async function refreshWorkingTreeStatus(
   }
 
   const requestToken = nextRequestToken('workingTree')
+  elements.workingTreeSummary.innerHTML = loadingPanelHtml('Scanning working tree… large projects can take a while.')
+  elements.changedFilesOutput.innerHTML = loadingPanelHtml('Scanning for changed files…')
 
   try {
     const snapshot = await api.getWorkingTreeStatus(projectPath)
@@ -1271,6 +1276,8 @@ function renderChangedFileItem(entry) {
   )
 }
 
+const CHANGED_FILES_RENDER_LIMIT = 300
+
 function renderChangedFilesSelection() {
   const files = state.workingTreeSnapshot?.files ?? []
   if (files.length === 0) {
@@ -1280,9 +1287,20 @@ function renderChangedFilesSelection() {
     return
   }
 
-  const list = files.map((entry) => renderChangedFileItem(entry)).join('')
+  // Rendering thousands of checkboxes (a freshly converted BIDS/PRISM
+  // dataset can easily have 5000+ changed files) is real DOM/layout cost
+  // for no practical benefit — nobody reviews that many rows one by one.
+  // Select All/None still act on the full snapshot regardless of what's
+  // rendered here, so capping the list is safe.
+  const visibleFiles = files.slice(0, CHANGED_FILES_RENDER_LIMIT)
+  const list = visibleFiles.map((entry) => renderChangedFileItem(entry)).join('')
+  const truncationNote =
+    files.length > CHANGED_FILES_RENDER_LIMIT
+      ? `<p class="hint-inline">Showing the first ${CHANGED_FILES_RENDER_LIMIT} of ${files.length} changed files. ` +
+        '"All" still selects every changed file for Save, not just the ones shown here.</p>'
+      : ''
 
-  elements.changedFilesOutput.innerHTML = `<ul class="changed-files-list">${list}</ul>`
+  elements.changedFilesOutput.innerHTML = truncationNote + `<ul class="changed-files-list">${list}</ul>`
   elements.changedFilesSelectAllButton.disabled = false
   elements.changedFilesSelectNoneButton.disabled = false
 }
@@ -1666,6 +1684,10 @@ async function refreshProjectHealth(projectPath) {
     return state.pendingHealthFetch.promise
   }
 
+  elements.projectHealthOutput.innerHTML = loadingPanelHtml(
+    'Checking project health… this can take a moment for large projects.'
+  )
+
   const requestToken = nextRequestToken('projectHealth')
 
   const promise = (async () => {
@@ -1798,7 +1820,9 @@ function setProjectBadge(classification) {
   elements.currentProjectBadge.textContent = 'Unknown'
 }
 
-function setButtonBusy(button, busy) {
+const BUSY_LABEL_FILE_COUNT_THRESHOLD = 20
+
+function setButtonBusy(button, busy, busyLabel = 'Working…') {
   if (!button) {
     return
   }
@@ -1809,7 +1833,7 @@ function setButtonBusy(button, busy) {
     }
     button.disabled = true
     button.classList.add('is-busy')
-    button.textContent = 'Working…'
+    button.textContent = busyLabel
     return
   }
 
@@ -2521,6 +2545,12 @@ function buildCroppedCmdLine(command, args) {
 function formatDurationSeconds(durationMs) {
   const seconds = durationMs / 1000
   return `Command finished in ${seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1)}s.`
+}
+
+function loadingPanelHtml(message) {
+  return `<p>${escapeHtml(message)}</p><div class="loading-bar" role="progressbar" aria-label="${escapeHtml(
+    message
+  )}"></div>`
 }
 
 function escapeHtml(text) {

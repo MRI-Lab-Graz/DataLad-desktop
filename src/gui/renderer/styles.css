@@ -1108,6 +1108,33 @@ select:disabled {
   background: rgba(230, 241, 249, 0.66);
 }
 
+.loading-bar {
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(11, 108, 168, 0.15);
+  margin-top: 8px;
+}
+
+.loading-bar::before {
+  content: '';
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--teal);
+  border-radius: 999px;
+  animation: loading-bar-sweep 1.1s ease-in-out infinite;
+}
+
+@keyframes loading-bar-sweep {
+  0% {
+    margin-left: -40%;
+  }
+  100% {
+    margin-left: 100%;
+  }
+}
+
 .panel-code {
   margin: 0;
   font-family: var(--mono);
