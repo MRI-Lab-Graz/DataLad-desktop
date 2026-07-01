@@ -19,6 +19,7 @@ const state = {
   },
   recentProjects: [],
   recentProjectEmojiByPath: {},
+  recentProjectTitleByPath: {},
   workingTreeSnapshot: null,
   selectedChangedPaths: new Set(),
   hasExplicitChangedSelection: false,
@@ -36,6 +37,7 @@ const MAX_RECENT_PROJECTS = 8
 const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
 const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
+const RECENT_PROJECT_TITLES_STORAGE_KEY = 'dataladDesktop.recentProjectTitles'
 const POWER_USER_MODE_STORAGE_KEY = 'dataladDesktop.powerUserMode'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
@@ -58,6 +60,9 @@ const elements = {
   commandProjectPath: document.getElementById('command-project-path'),
   pickCommandProjectPathButton: document.getElementById('pick-command-project-path'),
   currentProjectPath: document.getElementById('current-project-path'),
+  currentProjectIcon: document.getElementById('current-project-icon'),
+  currentProjectTitleInput: document.getElementById('current-project-title-input'),
+  currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
@@ -237,8 +242,10 @@ elements.checkEnvButton.addEventListener('click', async () => {
   setButtonBusy(elements.checkEnvButton, true)
   try {
     const diagnostics = await api.checkEnvironment()
+    elements.environmentOutput.hidden = false
     elements.environmentOutput.innerHTML = renderEnvironment(diagnostics)
   } catch (error) {
+    elements.environmentOutput.hidden = false
     elements.environmentOutput.textContent = String(error.message)
   } finally {
     setButtonBusy(elements.checkEnvButton, false)
@@ -248,6 +255,7 @@ elements.checkEnvButton.addEventListener('click', async () => {
 elements.detectProjectButton.addEventListener('click', async () => {
   const projectPath = elements.projectPath.value.trim()
   if (!projectPath) {
+    elements.classificationOutput.hidden = false
     elements.classificationOutput.textContent = 'Please choose a project folder first.'
     setLastActionState('Choose a project folder first.', 'error')
     return
@@ -278,6 +286,7 @@ elements.getFromRemoteButton.addEventListener('click', async () => {
   const targetPath = elements.getRemoteTarget.value.trim()
 
   if (!source || !targetPath) {
+    elements.getRemoteOutput.hidden = false
     elements.getRemoteOutput.textContent = 'Provide both a source and a target folder.'
     setLastActionState('Add source and target folder.', 'error')
     return
@@ -287,6 +296,7 @@ elements.getFromRemoteButton.addEventListener('click', async () => {
   // result here too, not just into the Save & Sync panel (hidden until open).
   const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.getFromRemoteButton)
   if (cloneResult) {
+    elements.getRemoteOutput.hidden = false
     elements.getRemoteOutput.innerHTML = renderCommandResult(cloneResult)
   }
   if (!cloneResult?.ok) {
@@ -305,6 +315,7 @@ elements.createProjectButton.addEventListener('click', async () => {
   const targetPath = elements.createProjectPath.value.trim()
 
   if (!targetPath) {
+    elements.createProjectOutput.hidden = false
     elements.createProjectOutput.textContent = 'Choose a folder for the new project first.'
     setLastActionState('Add a target folder first.', 'error')
     return
@@ -312,6 +323,7 @@ elements.createProjectButton.addEventListener('click', async () => {
 
   const createResult = await runWorkflowCommand('createProject', { targetPath }, elements.createProjectButton)
   if (createResult) {
+    elements.createProjectOutput.hidden = false
     elements.createProjectOutput.innerHTML = renderCommandResult(createResult)
   }
   if (!createResult?.ok) {
@@ -540,6 +552,7 @@ elements.refreshContractButton.addEventListener('click', async () => {
 async function detectProjectType(projectPath) {
   try {
     const result = await api.detectProject(projectPath)
+    elements.classificationOutput.hidden = false
     elements.classificationOutput.innerHTML = renderProjectCheckOutput(result)
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
@@ -552,6 +565,7 @@ async function detectProjectType(projectPath) {
     await refreshRecentCommits(elements.commandProjectPath.value.trim() || projectPath)
     updateSaveButtonState()
   } catch (error) {
+    elements.classificationOutput.hidden = false
     elements.classificationOutput.textContent = String(error.message)
     setLastActionState('Could not check this project folder.', 'error')
   }
@@ -642,14 +656,29 @@ async function refreshDatasetList(projectPath) {
     state.datasetsRootPath = projectPath
     renderIgnoreRulesScope()
 
+    const hasNestedDatasets = datasets.some((dataset) => dataset.relativePath !== '.')
+
     elements.datasetSelect.innerHTML = ''
 
     for (const dataset of datasets) {
       const option = document.createElement('option')
       option.value = dataset.path
-      option.textContent = dataset.relativePath === '.' ? '(main project folder)' : dataset.relativePath
+      option.textContent =
+        dataset.relativePath === '.'
+          ? hasNestedDatasets
+            ? 'Root Folder'
+            : '(main project folder)'
+          : dataset.relativePath
       elements.datasetSelect.appendChild(option)
     }
+
+    // With no nested datasets there is nothing to switch between — leave the
+    // picker disabled instead of offering a single dead-end choice. Refresh
+    // stays enabled so newly added nested datasets can still be discovered.
+    elements.datasetSelect.disabled = !hasNestedDatasets
+    elements.datasetSelect.title = hasNestedDatasets
+      ? 'Switch between the root dataset and its nested datasets.'
+      : 'This project has no nested datasets to switch between.'
 
     const activePath = elements.commandProjectPath.value.trim()
     const hasActivePath = datasets.some((dataset) => dataset.path === activePath)
@@ -1524,6 +1553,12 @@ function renderProjectCheckOutput(result) {
 
 function setCurrentProjectHeader(projectPath, classification) {
   elements.currentProjectPath.textContent = projectPath || 'No project selected'
+  elements.currentProjectIcon.textContent = projectEmojiForPath(projectPath)
+  elements.currentProjectTitleInput.value = projectTitleForPath(projectPath)
+  elements.currentProjectTitleInput.placeholder = projectPath
+    ? `${projectNameFromPath(projectPath)} (add a title)`
+    : 'Add a project title'
+  renderNestedDatasetInfo()
   setProjectBadge(classification)
   renderRecentProjects()
   void refreshLastCommitMeta(projectPath)
@@ -1868,13 +1903,17 @@ function loadRecentProjects() {
   try {
     const raw = localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY)
     const rawEmojis = localStorage.getItem(RECENT_PROJECT_EMOJIS_STORAGE_KEY)
+    const rawTitles = localStorage.getItem(RECENT_PROJECT_TITLES_STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : []
     const parsedEmojis = rawEmojis ? JSON.parse(rawEmojis) : {}
+    const parsedTitles = rawTitles ? JSON.parse(rawTitles) : {}
     state.recentProjects = sanitizeRecentProjects(parsed)
     state.recentProjectEmojiByPath = sanitizeRecentProjectEmojiMap(parsedEmojis)
+    state.recentProjectTitleByPath = sanitizeRecentProjectTitleMap(parsedTitles)
   } catch {
     state.recentProjects = []
     state.recentProjectEmojiByPath = {}
+    state.recentProjectTitleByPath = {}
   }
 
   for (const projectPath of state.recentProjects) {
@@ -1889,6 +1928,7 @@ function persistRecentProjects() {
   try {
     localStorage.setItem(RECENT_PROJECTS_STORAGE_KEY, JSON.stringify(state.recentProjects))
     localStorage.setItem(RECENT_PROJECT_EMOJIS_STORAGE_KEY, JSON.stringify(state.recentProjectEmojiByPath))
+    localStorage.setItem(RECENT_PROJECT_TITLES_STORAGE_KEY, JSON.stringify(state.recentProjectTitleByPath))
   } catch {
     // Ignore storage errors (for example private mode restrictions).
   }
@@ -1939,6 +1979,25 @@ function sanitizeRecentProjectEmojiMap(candidate) {
   return safeMap
 }
 
+function sanitizeRecentProjectTitleMap(candidate) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return {}
+  }
+
+  const safeMap = {}
+  for (const [projectPath, title] of Object.entries(candidate)) {
+    const normalizedPath = projectPath.trim()
+    const trimmedTitle = typeof title === 'string' ? title.trim() : ''
+    if (!normalizedPath || !trimmedTitle) {
+      continue
+    }
+
+    safeMap[normalizedPath] = trimmedTitle.slice(0, 80)
+  }
+
+  return safeMap
+}
+
 function rememberRecentProject(projectPath) {
   const normalizedPath = projectPath?.trim()
   if (!normalizedPath) {
@@ -1958,34 +2017,30 @@ function rememberRecentProject(projectPath) {
 
 function renderRecentProjects() {
   const currentPath = elements.projectPath.value.trim()
-  const slots = []
 
-  for (const projectPath of state.recentProjects) {
-    const projectName = projectNameFromPath(projectPath)
+  if (state.recentProjects.length === 0) {
+    elements.recentProjectsOutput.innerHTML =
+      '<p class="hint-inline">No recent projects yet — opened projects will appear here.</p>'
+    elements.clearRecentProjectsButton.disabled = true
+    return
+  }
+
+  const slots = state.recentProjects.map((projectPath) => {
+    const displayName = projectTitleForPath(projectPath) || projectNameFromPath(projectPath)
     const iconEmoji = projectEmojiForPath(projectPath)
     const isActive = projectPath === currentPath
-    slots.push(
+    return (
       '<button type="button" class="recent-project-slot' +
-        `${isActive ? ' recent-project-slot-active' : ''}" ` +
-        `data-recent-project-path="${escapeHtml(projectPath)}" title="${escapeHtml(projectPath)}">` +
-        `<span class="recent-project-icon" aria-hidden="true">${escapeHtml(iconEmoji)}</span>` +
-        `<span class="recent-project-name">${escapeHtml(projectName)}</span>` +
-        '</button>'
+      `${isActive ? ' recent-project-slot-active' : ''}" ` +
+      `data-recent-project-path="${escapeHtml(projectPath)}" title="${escapeHtml(projectPath)}">` +
+      `<span class="recent-project-icon" aria-hidden="true">${escapeHtml(iconEmoji)}</span>` +
+      `<span class="recent-project-name">${escapeHtml(displayName)}</span>` +
+      '</button>'
     )
-  }
-
-  const emptySlotCount = Math.max(0, MAX_RECENT_PROJECTS - slots.length)
-  for (let index = 0; index < emptySlotCount; index += 1) {
-    slots.push(
-      '<div class="recent-project-slot recent-project-slot-empty" aria-hidden="true">' +
-        '<span class="recent-project-icon recent-project-icon-empty">+</span>' +
-        '<span class="recent-project-name">Empty</span>' +
-        '</div>'
-    )
-  }
+  })
 
   elements.recentProjectsOutput.innerHTML = `<div class="recent-projects-line">${slots.join('')}</div>`
-  elements.clearRecentProjectsButton.disabled = state.recentProjects.length === 0
+  elements.clearRecentProjectsButton.disabled = false
 }
 
 function projectNameFromPath(projectPath) {
@@ -2021,6 +2076,50 @@ function ensureProjectEmoji(projectPath) {
   state.recentProjectEmojiByPath[normalizedPath] = selectedEmoji
   return selectedEmoji
 }
+
+function projectTitleForPath(projectPath) {
+  const normalizedPath = projectPath?.trim()
+  if (!normalizedPath) {
+    return ''
+  }
+
+  return state.recentProjectTitleByPath[normalizedPath] ?? ''
+}
+
+function setProjectTitleForPath(projectPath, title) {
+  const normalizedPath = projectPath?.trim()
+  if (!normalizedPath) {
+    return
+  }
+
+  const trimmedTitle = title.trim()
+  if (trimmedTitle) {
+    state.recentProjectTitleByPath[normalizedPath] = trimmedTitle
+  } else {
+    delete state.recentProjectTitleByPath[normalizedPath]
+  }
+
+  persistRecentProjects()
+}
+
+function renderNestedDatasetInfo() {
+  const nestedCount = (state.datasets ?? []).filter((dataset) => dataset.relativePath !== '.').length
+
+  if (!state.rootProjectPath || nestedCount === 0) {
+    elements.currentProjectNestedInfo.hidden = true
+    elements.currentProjectNestedInfo.textContent = ''
+    return
+  }
+
+  elements.currentProjectNestedInfo.hidden = false
+  elements.currentProjectNestedInfo.textContent =
+    nestedCount === 1 ? 'Contains 1 nested dataset' : `Contains ${nestedCount} nested datasets`
+}
+
+elements.currentProjectTitleInput.addEventListener('input', () => {
+  setProjectTitleForPath(state.rootProjectPath, elements.currentProjectTitleInput.value)
+  renderRecentProjects()
+})
 
 function initPowerUserConsole() {
   let powerUserModeEnabled = false

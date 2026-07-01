@@ -36,18 +36,13 @@
       </header>
 
       <section id="onboarding-group" class="onboarding-group">
-        <section class="card recent-projects reveal reveal-2" aria-labelledby="recent-projects-title">
-          <div class="section-head recent-projects-head">
-            <h2 id="recent-projects-title">Latest Projects</h2>
-            <button id="clear-recent-projects" class="button button-ghost button-inline" type="button">Clear</button>
-          </div>
-          <p class="lede-small">Jump between recent projects quickly.</p>
-          <div id="recent-projects-output" class="recent-projects-row"></div>
-        </section>
-
-        <section class="card reveal reveal-3 open-project-strip" aria-labelledby="open-project-title">
+        <section class="card reveal reveal-2 open-project-strip" aria-labelledby="open-project-title">
+          <span class="card-icon-badge" aria-hidden="true">📂</span>
           <div class="section-head">
             <h2 id="open-project-title">Open Project</h2>
+            <button id="clear-recent-projects" class="button button-ghost button-inline" type="button">
+              Clear Recent
+            </button>
           </div>
 
           <div class="open-project-grid">
@@ -73,14 +68,20 @@
               </div>
             </div>
 
-            <div class="open-project-panels">
-              <div id="classification-output" class="panel panel-muted">Choose a folder, then click Check Project Folder.</div>
-              <div id="environment-output" class="panel panel-muted">Setup check has not run yet. Click Check Setup.</div>
+            <div class="open-project-recent" aria-labelledby="recent-projects-title">
+              <span id="recent-projects-title" class="open-project-recent-label">Latest Projects</span>
+              <div id="recent-projects-output" class="recent-projects-row"></div>
             </div>
+          </div>
+
+          <div class="open-project-panels">
+            <div id="classification-output" class="panel panel-muted" hidden></div>
+            <div id="environment-output" class="panel panel-muted" hidden></div>
           </div>
         </section>
 
         <section class="card reveal reveal-3 open-project-strip" id="get-from-remote-card" aria-labelledby="get-from-remote-title">
+          <span class="card-icon-badge" aria-hidden="true">🌐</span>
           <div class="section-head">
             <h2 id="get-from-remote-title">Get from Remote</h2>
           </div>
@@ -98,87 +99,87 @@
             </label>
           </div>
 
-          <div class="open-project-grid">
-            <div class="open-project-controls">
-              <div id="get-remote-url-panel">
-                <label class="field">
-                  <span>Remote URL</span>
-                  <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
-                </label>
-                <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
-              </div>
-
-              <div id="get-remote-network-panel" hidden>
-                <label class="field">
-                  <span>Network Folder Path</span>
-                  <div class="field-row">
-                    <input id="get-remote-source-network" type="text" placeholder="\\server\share\dataset  or  smb://server/share" />
-                    <button id="pick-get-remote-network-path" class="button button-ghost button-inline" type="button">Browse</button>
-                  </div>
-                </label>
-                <p class="hint-inline">UNC paths (\\server\share), smb:// URLs, or any locally-mounted network folder.</p>
-              </div>
-
+          <div class="open-project-controls">
+            <div id="get-remote-url-panel">
               <label class="field">
-                <span>Save Into Folder</span>
+                <span>Remote URL</span>
+                <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
+              </label>
+              <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
+            </div>
+
+            <div id="get-remote-network-panel" hidden>
+              <label class="field">
+                <span>Network Folder Path</span>
                 <div class="field-row">
-                  <input id="get-remote-target" type="text" placeholder="/path/to/save/project" />
-                  <button id="pick-get-remote-target" class="button button-ghost button-inline" type="button">Browse</button>
+                  <input id="get-remote-source-network" type="text" placeholder="\\server\share\dataset  or  smb://server/share" />
+                  <button id="pick-get-remote-network-path" class="button button-ghost button-inline" type="button">Browse</button>
                 </div>
               </label>
-
-              <div class="row-actions">
-                <button id="get-from-remote" class="button button-primary" type="button">Get from Remote</button>
-              </div>
+              <p class="hint-inline">UNC paths (\\server\share), smb:// URLs, or any locally-mounted network folder.</p>
             </div>
 
-            <div class="open-project-panels">
-              <div id="get-remote-output" class="panel panel-muted">
-                Provide a source and a target folder, then click Get from Remote.
+            <label class="field">
+              <span>Save Into Folder</span>
+              <div class="field-row">
+                <input id="get-remote-target" type="text" placeholder="/path/to/save/project" />
+                <button id="pick-get-remote-target" class="button button-ghost button-inline" type="button">Browse</button>
               </div>
+            </label>
+
+            <div class="row-actions">
+              <button id="get-from-remote" class="button button-primary" type="button">Get from Remote</button>
             </div>
           </div>
+
+          <div id="get-remote-output" class="panel panel-muted" hidden></div>
         </section>
 
         <section class="card reveal reveal-3 open-project-strip" aria-labelledby="create-project-title">
+          <span class="card-icon-badge" aria-hidden="true">✨</span>
           <div class="section-head">
             <h2 id="create-project-title">Create Project</h2>
           </div>
 
           <p class="lede-small">Start a brand-new DataLad project. The folder must be empty or not exist yet.</p>
 
-          <div class="open-project-grid">
-            <div class="open-project-controls">
-              <label class="field">
-                <span>New Project Folder</span>
-                <div class="field-row">
-                  <input id="create-project-path" type="text" placeholder="/path/to/new-project" />
-                  <button id="pick-create-project-path" class="button button-ghost button-inline" type="button">
-                    Browse
-                  </button>
-                </div>
-              </label>
-
-              <p class="hint-inline">Pick an empty folder, or type a new folder name to create it.</p>
-
-              <div class="row-actions">
-                <button id="create-project" class="button button-primary" type="button">Create Project</button>
+          <div class="open-project-controls">
+            <label class="field">
+              <span>New Project Folder</span>
+              <div class="field-row">
+                <input id="create-project-path" type="text" placeholder="/path/to/new-project" />
+                <button id="pick-create-project-path" class="button button-ghost button-inline" type="button">
+                  Browse
+                </button>
               </div>
-            </div>
+            </label>
 
-            <div class="open-project-panels">
-              <div id="create-project-output" class="panel panel-muted">
-                Choose an empty or new folder, then click Create Project.
-              </div>
+            <p class="hint-inline">Pick an empty folder, or type a new folder name to create it.</p>
+
+            <div class="row-actions">
+              <button id="create-project" class="button button-primary" type="button">Create Project</button>
             </div>
           </div>
+
+          <div id="create-project-output" class="panel panel-muted" hidden></div>
         </section>
       </section>
 
       <section id="project-strip" class="card project-strip" aria-labelledby="current-project-title" hidden>
-        <div>
-          <p id="current-project-title" class="strip-label">Current Project</p>
-          <p id="current-project-path" class="strip-path">No project selected</p>
+        <div class="project-strip-identity">
+          <span id="current-project-icon" class="project-strip-icon" aria-hidden="true">📁</span>
+          <div>
+            <p id="current-project-title" class="strip-label">Current Project</p>
+            <input
+              id="current-project-title-input"
+              class="project-strip-title-input"
+              type="text"
+              placeholder="Add a project title"
+              maxlength="80"
+            />
+            <p id="current-project-path" class="strip-path">No project selected</p>
+            <p id="current-project-nested-info" class="strip-nested-info" hidden></p>
+          </div>
         </div>
         <div class="strip-state-group">
           <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
@@ -190,6 +191,7 @@
       </section>
 
       <section id="project-health-card" class="card project-health reveal reveal-3" aria-labelledby="project-health-title" hidden>
+        <span class="card-icon-badge" aria-hidden="true">🩺</span>
         <div class="section-head">
           <h2 id="project-health-title">Project Health</h2>
         </div>
@@ -198,8 +200,170 @@
         </div>
       </section>
 
+      <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
+        <summary id="power-user-console-title" class="setup-zone-summary">
+          <span class="card-icon-badge" aria-hidden="true">🖥️</span>
+          Power User Console — Run Any Command
+        </summary>
+        <div class="setup-zone-body">
+          <p id="console-help-text" class="lede-small">
+            Run any command directly against the active project folder, for anything the buttons above don't
+            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
+            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
+          </p>
+
+          <label class="field">
+            <span>Active Project Folder</span>
+            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
+          </label>
+
+          <label class="field">
+            <span>Command</span>
+            <div class="field-row">
+              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
+              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
+            </div>
+          </label>
+
+          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
+
+          <section class="status-box" aria-labelledby="console-history-title">
+            <div class="section-head branch-head">
+              <h3 id="console-history-title">Recent Commands</h3>
+            </div>
+            <div id="console-history-output" class="panel panel-muted panel-compact">
+              No commands run yet this session.
+            </div>
+          </section>
+        </div>
+      </details>
+
+      <main id="project-workspace-grid" class="grid" hidden>
+        <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
+          <span class="card-icon-badge" aria-hidden="true">💾</span>
+          <div class="section-head">
+            <h2 id="project-actions-title">Save &amp; Sync</h2>
+          </div>
+
+          <label class="field" hidden>
+            <span>Active Project Folder</span>
+            <div class="field-row">
+              <input id="command-project-path" type="text" placeholder="/path/to/project" />
+              <button id="pick-command-project-path" class="button button-ghost button-inline" type="button">
+                Browse
+              </button>
+            </div>
+          </label>
+
+          <label class="field">
+            <span>Project Data Folder</span>
+            <div class="field-row">
+              <select id="dataset-select"></select>
+              <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
+            </div>
+          </label>
+
+          <section class="status-box" aria-labelledby="working-tree-title">
+            <div class="section-head branch-head">
+              <h3 id="working-tree-title">Working Tree</h3>
+            </div>
+            <div id="working-tree-summary" class="panel panel-muted panel-compact">
+              Choose a project to see local changes.
+            </div>
+          </section>
+
+          <section class="status-box" aria-labelledby="changed-files-title">
+            <div class="section-head branch-head">
+              <h3 id="changed-files-title">Files To Save</h3>
+              <div class="section-actions">
+                <button id="changed-files-select-all" class="button button-ghost button-inline" type="button">
+                  All
+                </button>
+                <button id="changed-files-select-none" class="button button-ghost button-inline" type="button">
+                  None
+                </button>
+              </div>
+            </div>
+            <p class="lede-small">Select files here first. Manual paths are optional below.</p>
+            <div id="changed-files-output" class="panel panel-muted panel-compact">
+              No changed files yet.
+            </div>
+          </section>
+
+          <label class="field">
+            <span>Save Message</span>
+            <input id="message" type="text" placeholder="Describe this checkpoint" />
+          </label>
+
+          <p id="save-guidance" class="hint-inline">Add a save message, or Save will ask you for one.</p>
+
+          <label class="field">
+            <span>Manual File Paths (optional, comma separated)</span>
+            <input id="paths" type="text" placeholder="results.csv, notes.md" />
+          </label>
+
+          <div class="action-strip">
+            <button
+              id="save-project"
+              class="button button-primary"
+              type="button"
+              title="Record the current state of your files with a message, like a commit. Works fully offline."
+            >
+              Save
+            </button>
+            <button id="get-data" class="button button-primary" type="button">Get Data</button>
+            <span class="sibling-action-group">
+              <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
+              <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
+              <button
+                id="sibling-actions-info"
+                class="info-hint"
+                type="button"
+                aria-label="What are remote/sibling actions?"
+                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work."
+              >
+                ⓘ
+              </button>
+            </span>
+          </div>
+          <p id="remote-info" class="lede-small" hidden></p>
+
+          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+
+          <section class="status-box" aria-labelledby="recent-commits-title">
+            <div class="section-head branch-head">
+              <h3 id="recent-commits-title">Recent Commits</h3>
+            </div>
+            <div id="recent-commits-output" class="panel panel-muted panel-compact">
+              Recent saves appear here.
+            </div>
+          </section>
+        </section>
+
+        <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
+          <span class="card-icon-badge" aria-hidden="true">🗂️</span>
+          <div class="section-head">
+            <h2 id="files-title">Files</h2>
+            <div class="section-actions">
+              <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
+              <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
+            </div>
+          </div>
+
+          <p class="lede-small">Browse visible files in the selected project folder.</p>
+          <label class="field">
+            <span>Search In Files</span>
+            <input id="files-search" type="text" placeholder="Type to filter files and folders" />
+          </label>
+          <div id="files-output" class="panel panel-muted">Select or detect a project to load files.</div>
+        </section>
+      </main>
+
       <details id="project-setup-zone" class="card setup-zone" aria-labelledby="setup-zone-title" hidden>
-        <summary id="setup-zone-title" class="setup-zone-summary">⚙ Project Setup — Branches &amp; Ignore Rules</summary>
+        <summary id="setup-zone-title" class="setup-zone-summary">
+          <span class="card-icon-badge" aria-hidden="true">⚙️</span>
+          Project Setup — Branches &amp; Ignore Rules
+        </summary>
         <div class="setup-zone-body">
           <section class="branch-box" aria-labelledby="branch-management-title">
             <div class="section-head branch-head">
@@ -280,152 +444,8 @@
         </div>
       </details>
 
-      <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
-        <summary id="power-user-console-title" class="setup-zone-summary">
-          ⚙ Power User Console — Run Any Command
-        </summary>
-        <div class="setup-zone-body">
-          <p id="console-help-text" class="lede-small">
-            Run any command directly against the active project folder, for anything the buttons above don't
-            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
-            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
-          </p>
-
-          <label class="field">
-            <span>Active Project Folder</span>
-            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
-          </label>
-
-          <label class="field">
-            <span>Command</span>
-            <div class="field-row">
-              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
-              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
-            </div>
-          </label>
-
-          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
-
-          <section class="status-box" aria-labelledby="console-history-title">
-            <div class="section-head branch-head">
-              <h3 id="console-history-title">Recent Commands</h3>
-            </div>
-            <div id="console-history-output" class="panel panel-muted panel-compact">
-              No commands run yet this session.
-            </div>
-          </section>
-        </div>
-      </details>
-
-      <main id="project-workspace-grid" class="grid" hidden>
-        <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
-          <div class="section-head">
-            <h2 id="project-actions-title">Save &amp; Sync</h2>
-          </div>
-
-          <label class="field" hidden>
-            <span>Active Project Folder</span>
-            <div class="field-row">
-              <input id="command-project-path" type="text" placeholder="/path/to/project" />
-              <button id="pick-command-project-path" class="button button-ghost button-inline" type="button">
-                Browse
-              </button>
-            </div>
-          </label>
-
-          <label class="field">
-            <span>Project Data Folder</span>
-            <div class="field-row">
-              <select id="dataset-select"></select>
-              <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
-            </div>
-          </label>
-
-          <section class="status-box" aria-labelledby="working-tree-title">
-            <div class="section-head branch-head">
-              <h3 id="working-tree-title">Working Tree</h3>
-            </div>
-            <div id="working-tree-summary" class="panel panel-muted panel-compact">
-              Choose a project to see local changes.
-            </div>
-          </section>
-
-          <section class="status-box" aria-labelledby="changed-files-title">
-            <div class="section-head branch-head">
-              <h3 id="changed-files-title">Files To Save</h3>
-              <div class="section-actions">
-                <button id="changed-files-select-all" class="button button-ghost button-inline" type="button">
-                  All
-                </button>
-                <button id="changed-files-select-none" class="button button-ghost button-inline" type="button">
-                  None
-                </button>
-              </div>
-            </div>
-            <p class="lede-small">Select files here first. Manual paths are optional below.</p>
-            <div id="changed-files-output" class="panel panel-muted panel-compact">
-              No changed files yet.
-            </div>
-          </section>
-
-          <label class="field">
-            <span>Save Message</span>
-            <input id="message" type="text" placeholder="Describe this checkpoint" />
-          </label>
-
-          <p id="save-guidance" class="hint-inline">Add a short save message to continue.</p>
-
-          <label class="field">
-            <span>Manual File Paths (optional, comma separated)</span>
-            <input id="paths" type="text" placeholder="results.csv, notes.md" />
-          </label>
-
-          <div class="action-strip">
-            <button
-              id="save-project"
-              class="button button-primary"
-              type="button"
-              title="Record the current state of your files with a message, like a commit. Works fully offline."
-            >
-              Save
-            </button>
-            <button id="get-data" class="button button-primary" type="button">Get Data</button>
-            <button id="update-project" class="button button-primary" type="button">Update</button>
-            <button id="publish-project" class="button button-primary" type="button">Publish</button>
-          </div>
-          <p id="remote-info" class="lede-small" hidden></p>
-
-          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
-
-          <section class="status-box" aria-labelledby="recent-commits-title">
-            <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent Commits</h3>
-            </div>
-            <div id="recent-commits-output" class="panel panel-muted panel-compact">
-              Recent saves appear here.
-            </div>
-          </section>
-        </section>
-
-        <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
-          <div class="section-head">
-            <h2 id="files-title">Files</h2>
-            <div class="section-actions">
-              <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
-              <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
-            </div>
-          </div>
-
-          <p class="lede-small">Browse visible files in the selected project folder.</p>
-          <label class="field">
-            <span>Search In Files</span>
-            <input id="files-search" type="text" placeholder="Type to filter files and folders" />
-          </label>
-          <div id="files-output" class="panel panel-muted">Select or detect a project to load files.</div>
-        </section>
-      </main>
-
       <aside id="technical-details-aside" class="card reveal reveal-6" aria-labelledby="contract-title" hidden>
+        <span class="card-icon-badge" aria-hidden="true">🔧</span>
         <div class="section-head">
           <h2 id="contract-title">Technical Details (Optional)</h2>
           <button id="refresh-contract" class="button button-ghost">Refresh</button>

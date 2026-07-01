@@ -2,11 +2,18 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { computeSaveGating } from '../src/gui/renderer/save-gating.js'
 
-test('disabled and prompts for a message when none is entered', () => {
+test('stays enabled without a message, but warns one will be requested', () => {
   const gating = computeSaveGating({ hasMessage: false, hasSelection: false, hasConflicts: false, hasChanges: false })
-  assert.equal(gating.disabled, true)
-  assert.equal(gating.guidance.text, 'Enter a save message to enable Save.')
-  assert.equal(gating.guidance.warning, false)
+  assert.equal(gating.disabled, false)
+  assert.equal(gating.guidance.text, 'Add a save message, or Save will ask you for one.')
+  assert.equal(gating.guidance.warning, true)
+})
+
+test('missing message no longer blocks saving selected changes', () => {
+  const gating = computeSaveGating({ hasMessage: false, hasSelection: true, hasConflicts: false, hasChanges: true })
+  assert.equal(gating.disabled, false)
+  assert.match(gating.guidance.text, /ask you for one/)
+  assert.equal(gating.guidance.warning, true)
 })
 
 test('disabled when conflicts are present, even with a message and selection', () => {
