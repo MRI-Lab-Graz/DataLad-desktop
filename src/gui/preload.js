@@ -32,5 +32,11 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
       rootPath,
       ...(options ?? {})
     }),
-  revealPath: (targetPath) => ipcRenderer.invoke('fs:revealPath', targetPath)
+  revealPath: (targetPath) => ipcRenderer.invoke('fs:revealPath', targetPath),
+  setWatchedProject: (projectPath) => ipcRenderer.invoke('watch:setActiveProject', projectPath),
+  onFilesChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('watch:changed', listener)
+    return () => ipcRenderer.removeListener('watch:changed', listener)
+  }
 })

@@ -8,12 +8,14 @@ import { buildConsoleCommand } from '../datalad/console-command.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { buildGitStatusMap } from '../datalad/status.js'
+import { createProjectWatcher } from './fs-watch.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
+let activeProjectWatcher = null
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
@@ -137,6 +139,31 @@ ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
 
 ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
   return adapter.getProjectHealth(projectPath)
+})
+
+ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
+  if (activeProjectWatcher) {
+    activeProjectWatcher.stop()
+    activeProjectWatcher = null
+  }
+
+  if (!projectPath) {
+    return { ok: true }
+  }
+
+  const watcher = createProjectWatcher({
+    onChange: (watchedPath) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('watch:changed', { projectPath: watchedPath, changedAt: Date.now() })
+      }
+    }
+  })
+
+  const result = watcher.start(projectPath)
+  if (result.ok) {
+    activeProjectWatcher = watcher
+  }
+  return result
 })
 
 ipcMain.handle('console:runCommand', async (_event, payload = {}) => {
@@ -434,5 +461,12 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+app.on('before-quit', () => {
+  if (activeProjectWatcher) {
+    activeProjectWatcher.stop()
+    activeProjectWatcher = null
   }
 })
