@@ -26,6 +26,7 @@ const state = {
   recentCommits: [],
   pendingCommands: new Set(),
   projectHealthSnapshot: null,
+  pendingHealthFetch: null,
   datasets: [],
   datasetsRootPath: null,
   selectedIgnoreScopePaths: new Set(),
@@ -559,11 +560,18 @@ async function detectProjectType(projectPath) {
     setCurrentProjectHeader(projectPath, result.classification)
     rememberRecentProject(projectPath)
     setLastActionState(`Project check finished: ${friendlyProjectTypeLabel(result.classification)}.`, 'success')
-    await refreshDatasetList(projectPath)
+    // refreshDatasetList already refreshes working tree/recent commits for
+    // the resolved active path on success — repeating them here would spawn
+    // the same real git subprocesses a second time for no reason and was
+    // making project opens feel sluggish. Only fall back to refreshing them
+    // directly if dataset listing itself failed and skipped that work.
+    const datasetsRefreshed = await refreshDatasetList(projectPath)
     await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
-    await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim() || projectPath)
-    await refreshRecentCommits(elements.commandProjectPath.value.trim() || projectPath)
-    updateSaveButtonState()
+    if (!datasetsRefreshed) {
+      await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim() || projectPath)
+      await refreshRecentCommits(elements.commandProjectPath.value.trim() || projectPath)
+      updateSaveButtonState()
+    }
   } catch (error) {
     elements.classificationOutput.hidden = false
     elements.classificationOutput.textContent = String(error.message)
@@ -692,13 +700,14 @@ async function refreshDatasetList(projectPath) {
       await refreshWorkingTreeStatus(nextPath)
       await refreshRecentCommits(nextPath)
       updateSaveButtonState()
-      return
+      return true
     }
 
     await refreshBranchList(projectPath)
     await refreshWorkingTreeStatus(projectPath)
     await refreshRecentCommits(projectPath)
     updateSaveButtonState()
+    return true
   } catch (error) {
     if (!isLatestRequestToken('datasets', requestToken)) {
       return null
@@ -1606,30 +1615,50 @@ function setProjectDependentSectionsVisible(visible) {
 async function refreshProjectHealth(projectPath) {
   if (!projectPath) {
     state.projectHealthSnapshot = null
+    state.pendingHealthFetch = null
     renderProjectHealth()
     return null
+  }
+
+  // Opening a project calls setCurrentProjectHeader (and therefore this)
+  // more than once in quick succession for the same resolved path —
+  // detectProjectType's initial call, then refreshDatasetList's follow-up
+  // once the active dataset path is confirmed. Each call spawns several
+  // real git subprocesses, so reuse an in-flight fetch for the same path
+  // instead of paying for that twice and making project opens feel slow.
+  if (state.pendingHealthFetch?.path === projectPath) {
+    return state.pendingHealthFetch.promise
   }
 
   const requestToken = nextRequestToken('projectHealth')
 
-  try {
-    const health = await api.getProjectHealth(projectPath)
-    if (!isLatestRequestToken('projectHealth', requestToken)) {
+  const promise = (async () => {
+    try {
+      const health = await api.getProjectHealth(projectPath)
+      if (!isLatestRequestToken('projectHealth', requestToken)) {
+        return health
+      }
+
+      state.projectHealthSnapshot = health
+      renderProjectHealth()
       return health
-    }
+    } catch (error) {
+      if (!isLatestRequestToken('projectHealth', requestToken)) {
+        return null
+      }
 
-    state.projectHealthSnapshot = health
-    renderProjectHealth()
-    return health
-  } catch (error) {
-    if (!isLatestRequestToken('projectHealth', requestToken)) {
+      state.projectHealthSnapshot = null
+      renderProjectHealth(`Could not read project health: ${String(error.message)}`)
       return null
+    } finally {
+      if (state.pendingHealthFetch?.path === projectPath) {
+        state.pendingHealthFetch = null
+      }
     }
+  })()
 
-    state.projectHealthSnapshot = null
-    renderProjectHealth(`Could not read project health: ${String(error.message)}`)
-    return null
-  }
+  state.pendingHealthFetch = { path: projectPath, promise }
+  return promise
 }
 
 function applyRemoteGatedButtons(health) {
