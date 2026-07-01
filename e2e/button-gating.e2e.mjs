@@ -91,7 +91,10 @@ test('Check Setup shows a busy state while running, then recovers', async () => 
   assert.equal(busy.text, 'Working…')
   assert.match(busy.classes, /is-busy/)
 
-  await app.page.waitForFunction(() => !document.getElementById('check-env').disabled, { timeout: 10_000 })
+  // Check Setup probes several tools (python3, datalad, git-annex) via real
+  // subprocesses — cold spawn latency on a loaded CI VM can push this past
+  // 10s even though it's near-instant locally, see electron-driver.mjs.
+  await app.page.waitForFunction(() => !document.getElementById('check-env').disabled, { timeout: 20_000 })
   const done = await app.buttonState('check-env')
   assert.equal(done.text, 'Check Setup')
   assert.doesNotMatch(done.classes, /is-busy/)
