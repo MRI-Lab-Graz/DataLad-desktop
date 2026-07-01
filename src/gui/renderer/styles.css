@@ -1140,6 +1140,17 @@ select:disabled {
   word-break: break-all;
 }
 
+.cmd-duration {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.cmd-duration-slow {
+  color: var(--orange);
+  font-weight: 600;
+}
+
 .file-list {
   margin: 0;
   padding: 0.3rem;
