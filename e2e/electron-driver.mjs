@@ -94,14 +94,21 @@ export async function launchApp() {
       input.dispatchEvent(new Event('input', { bubbles: true }))
     }, projectPath)
     await page.evaluate(() => document.getElementById('detect-project').click())
+    // detectProject spawns real git/datalad subprocesses through the main
+    // process. The first spawn of a given probe on a loaded CI VM (cold
+    // process creation, antivirus scanning on Windows runners, etc.) can
+    // take much longer than on a warm local machine — a 10s budget was
+    // observed timing out in CI on the very first 'dataset' classification
+    // probe while the very next (superdataset) probe finished in well under
+    // a second, so this is CI spawn latency, not an app hang.
     await page.waitForFunction(
       (p) => document.getElementById('current-project-path').textContent === p,
       projectPath,
-      { timeout: 10_000 }
+      { timeout: 30_000 }
     )
     await page.waitForFunction(
       () => document.getElementById('project-health-output').innerHTML.includes('project-health-grid'),
-      { timeout: 10_000 }
+      { timeout: 30_000 }
     )
   }
 
