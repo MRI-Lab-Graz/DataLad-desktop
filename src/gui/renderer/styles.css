@@ -306,6 +306,16 @@ body {
   padding: 18px;
 }
 
+.save-hero {
+  border: 1px solid rgba(11, 108, 168, 0.32);
+  box-shadow: 0 14px 34px rgba(11, 108, 168, 0.16);
+  background: linear-gradient(180deg, rgba(224, 240, 250, 0.75), rgba(248, 252, 255, 0.97));
+}
+
+.save-hero .section-head h2 {
+  font-size: 1.4rem;
+}
+
 .card-icon-badge {
   position: absolute;
   top: -12px;
@@ -917,6 +927,60 @@ h2 {
 .button-primary {
   background: var(--teal);
   color: #f4fbff;
+}
+
+.button-save-hero {
+  appearance: none;
+  border: none;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 1.2rem;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  width: 100%;
+  padding: 1.05rem 1.4rem;
+  margin: 4px 0 14px 0;
+  color: #f4fbff;
+  background: linear-gradient(180deg, #0d7fc0, var(--teal));
+  box-shadow: 0 10px 26px rgba(11, 108, 168, 0.34);
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.button-save-hero::before {
+  content: '💾 ';
+}
+
+.button-save-hero:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 12px 30px rgba(11, 108, 168, 0.4);
+}
+
+.button-save-hero:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
+.button-save-hero.is-busy {
+  opacity: 0.85;
+  cursor: progress;
+}
+
+.button-save-hero.is-busy::after {
+  content: '';
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: button-spin 700ms linear infinite;
 }
 
 .button-ghost {
