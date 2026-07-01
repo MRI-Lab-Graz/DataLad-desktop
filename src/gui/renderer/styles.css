@@ -1131,6 +1131,7 @@ select:disabled {
 }
 
 .cmd-preview code {
+  display: block;
   font-family: var(--mono);
   background: rgba(11, 108, 168, 0.08);
   border: 1px solid rgba(11, 108, 168, 0.18);
@@ -1138,6 +1139,8 @@ select:disabled {
   padding: 0.18rem 0.5rem;
   color: #1a4a6e;
   word-break: break-all;
+  max-height: 140px;
+  overflow: auto;
 }
 
 .cmd-duration {
