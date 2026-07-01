@@ -913,7 +913,7 @@ test('runCommand adds a generic advisory when clone stderr has output that match
   runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
-    stderr: '[INFO] some other informational clone output\n',
+    stderr: 'some other unrecognized clone output\n',
     failed: false
   })
 
@@ -925,6 +925,24 @@ test('runCommand adds a generic advisory when clone stderr has output that match
 
   assert.equal(result.warnings.length, 1)
   assert.equal(result.warnings[0].code, 'CLONE_STDERR_OUTPUT')
+})
+
+test('runCommand suppresses the generic clone advisory when stderr is only routine [INFO] logging', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+    exitCode: 0,
+    stdout: 'install(ok): /tmp/ds (dataset)\n',
+    stderr: '[INFO] some other informational clone output\n',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('cloneInstall', {
+    source: 'https://example.org/ds.git',
+    targetPath: '/tmp/ds'
+  })
+
+  assert.equal(result.warnings.length, 0)
 })
 
 test('runCommand builds a datalad create call for createProject', async () => {
