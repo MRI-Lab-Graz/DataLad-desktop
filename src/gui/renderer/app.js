@@ -1402,6 +1402,12 @@ function renderCommandResult(result, summary = null) {
     html += `<p class="cmd-preview"><code>${escapeHtml(cmdLine)}</code></p>`
   }
 
+  if (typeof result.durationMs === 'number') {
+    html += `<p class="cmd-duration${result.durationMs >= 5000 ? ' cmd-duration-slow' : ''}">${escapeHtml(
+      formatDurationSeconds(result.durationMs)
+    )}</p>`
+  }
+
   if (summary) {
     html += `<p>${escapeHtml(summary)}</p>`
   }
@@ -2454,6 +2460,11 @@ function renderAnnexBadge(annexPresent) {
     return '<span class="file-status file-status-partial">Partial</span>'
   }
   return ''
+}
+
+function formatDurationSeconds(durationMs) {
+  const seconds = durationMs / 1000
+  return `Command finished in ${seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1)}s.`
 }
 
 function escapeHtml(text) {

@@ -5,6 +5,8 @@ import { spawn } from 'node:child_process'
  */
 export class ProcessRunner {
   async run(command, args = [], options = {}) {
+    const startedAt = Date.now()
+
     return new Promise((resolve) => {
       let stdout = ''
       let stderr = ''
@@ -37,7 +39,8 @@ export class ProcessRunner {
           stdout,
           stderr: stderr || String(error.message),
           failed: true,
-          error
+          error,
+          durationMs: Date.now() - startedAt
         })
       })
 
@@ -52,7 +55,8 @@ export class ProcessRunner {
           exitCode: exitCode ?? 1,
           stdout,
           stderr,
-          failed: (exitCode ?? 1) !== 0
+          failed: (exitCode ?? 1) !== 0,
+          durationMs: Date.now() - startedAt
         })
       })
     })
