@@ -30,7 +30,8 @@ const state = {
   datasets: [],
   datasetsRootPath: null,
   selectedIgnoreScopePaths: new Set(),
-  consoleHistory: []
+  consoleHistory: [],
+  watchRefreshPending: false
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -551,6 +552,20 @@ elements.refreshContractButton.addEventListener('click', async () => {
   await renderContract()
 })
 
+api.onFilesChanged(({ projectPath }) => {
+  if (!projectPath || projectPath !== state.rootProjectPath) {
+    return
+  }
+
+  if (state.pendingCommands.size > 0) {
+    state.watchRefreshPending = true
+    return
+  }
+
+  void refreshWorkingTreeStatus(state.rootProjectPath)
+  void refreshFileBrowser(state.rootProjectPath)
+})
+
 async function detectProjectType(projectPath) {
   try {
     const result = await api.detectProject(projectPath)
@@ -560,6 +575,7 @@ async function detectProjectType(projectPath) {
     state.rootProjectClassification = result.classification
     setCurrentProjectHeader(projectPath, result.classification)
     rememberRecentProject(projectPath)
+    void api.setWatchedProject(projectPath)
     setLastActionState(`Project check finished: ${friendlyProjectTypeLabel(result.classification)}.`, 'success')
     // refreshDatasetList already refreshes working tree/recent commits for
     // the resolved active path on success — repeating them here would spawn
@@ -648,6 +664,12 @@ async function runWorkflowCommand(commandName, request, button = null) {
     state.pendingCommands.delete(commandName)
     setButtonBusy(button, false)
     updateSaveButtonState()
+
+    if (state.pendingCommands.size === 0 && state.watchRefreshPending) {
+      state.watchRefreshPending = false
+      void refreshWorkingTreeStatus(state.rootProjectPath)
+      void refreshFileBrowser(state.rootProjectPath)
+    }
   }
 }
 
