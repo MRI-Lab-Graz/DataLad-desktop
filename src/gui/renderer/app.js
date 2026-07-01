@@ -1398,8 +1398,7 @@ function renderCommandResult(result, summary = null) {
   let html = `<p><strong>${escapeHtml(statusLine)}</strong></p>`
 
   if (result.command && result.args) {
-    const cmdLine = [result.command, ...result.args].join(' ')
-    html += `<p class="cmd-preview"><code>${escapeHtml(cmdLine)}</code></p>`
+    html += `<p class="cmd-preview"><code>${escapeHtml(buildCroppedCmdLine(result.command, result.args))}</code></p>`
   }
 
   if (typeof result.durationMs === 'number') {
@@ -1432,10 +1431,40 @@ function renderCommandResult(result, summary = null) {
   html +=
     '<details>' +
     '<summary>Raw command result</summary>' +
-    `<pre class="panel panel-code panel-inline-code">${escapeHtml(JSON.stringify(result, null, 2))}</pre>` +
+    `<pre class="panel panel-code panel-inline-code">${escapeHtml(JSON.stringify(buildRawResultPreview(result), null, 2))}</pre>` +
     '</details>'
 
   return html
+}
+
+const RAW_RESULT_ARRAY_LIMIT = 50
+const RAW_RESULT_TEXT_LIMIT = 4000
+
+// Same problem as buildCroppedCmdLine, one level down: a save across
+// thousands of files duplicates that huge arg list into `result.args`, and
+// stdout/stderr from a big datalad run can run to hundreds of KB — even
+// collapsed behind <details>, stringifying and inserting all of that into
+// the DOM is real work the renderer has to do on every command. Cap the
+// array/text fields actually shown, without touching the result object
+// used elsewhere for gating/rendering.
+function buildRawResultPreview(result) {
+  const preview = { ...result }
+
+  if (Array.isArray(preview.args) && preview.args.length > RAW_RESULT_ARRAY_LIMIT) {
+    preview.args = [
+      ...preview.args.slice(0, RAW_RESULT_ARRAY_LIMIT),
+      `… (+${preview.args.length - RAW_RESULT_ARRAY_LIMIT} more)`
+    ]
+  }
+
+  for (const field of ['stdout', 'stderr']) {
+    if (typeof preview[field] === 'string' && preview[field].length > RAW_RESULT_TEXT_LIMIT) {
+      preview[field] =
+        `${preview[field].slice(0, RAW_RESULT_TEXT_LIMIT)}\n… (truncated, ${preview[field].length} chars total)`
+    }
+  }
+
+  return preview
 }
 
 function buildWorkflowStatusLine(result) {
@@ -2460,6 +2489,33 @@ function renderAnnexBadge(annexPresent) {
     return '<span class="file-status file-status-partial">Partial</span>'
   }
   return ''
+}
+
+const CMD_PREVIEW_PATH_ARG_LIMIT = 8
+const CMD_PREVIEW_CHAR_LIMIT = 600
+
+// Large operations (saving thousands of files from a huge dataset, etc.)
+// pass huge argument lists — showing them all turns this panel into an
+// unreadable wall of text. Preview the command/flags plus a handful of
+// path args and summarize the rest; the full argument list is still
+// available below in "Raw command result" for anyone who needs it.
+function buildCroppedCmdLine(command, args) {
+  const fullLine = [command, ...args].join(' ')
+  if (fullLine.length <= CMD_PREVIEW_CHAR_LIMIT) {
+    return fullLine
+  }
+
+  const separatorIndex = args.indexOf('--')
+  const flagArgs = separatorIndex === -1 ? [] : args.slice(0, separatorIndex + 1)
+  const pathArgs = separatorIndex === -1 ? [] : args.slice(separatorIndex + 1)
+
+  if (pathArgs.length > CMD_PREVIEW_PATH_ARG_LIMIT) {
+    const shown = pathArgs.slice(0, CMD_PREVIEW_PATH_ARG_LIMIT)
+    const remaining = pathArgs.length - shown.length
+    return `${[command, ...flagArgs, ...shown].join(' ')} … (+${remaining} more file${remaining === 1 ? '' : 's'})`
+  }
+
+  return `${fullLine.slice(0, CMD_PREVIEW_CHAR_LIMIT)}…`
 }
 
 function formatDurationSeconds(durationMs) {
