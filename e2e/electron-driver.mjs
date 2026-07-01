@@ -11,9 +11,19 @@ import electronPath from 'electron'
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 export async function launchApp() {
+  // Setting this to '' (rather than deleting it) does NOT reliably clear it
+  // on Windows: empty-string env vars get dropped when child_process builds
+  // the Windows environment block, so the parent's truthy value (if any)
+  // leaks through and Electron launches in "run as Node" mode instead of
+  // as a real app — surfacing as "module 'electron' does not provide an
+  // export named 'BrowserWindow'". Deleting the key avoids the platform
+  // quirk entirely.
+  const childEnv = { ...process.env }
+  delete childEnv.ELECTRON_RUN_AS_NODE
+
   const child = spawn(electronPath, [APP_DIR, '--remote-debugging-port=0'], {
     cwd: APP_DIR,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+    env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
