@@ -248,11 +248,15 @@
       </details>
 
       <main id="project-workspace-grid" class="grid" hidden>
-        <section class="card reveal reveal-4 full-span" aria-labelledby="project-actions-title">
+        <section class="card save-hero reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <span class="card-icon-badge" aria-hidden="true">💾</span>
           <div class="section-head">
-            <h2 id="project-actions-title">Save &amp; Sync</h2>
+            <h2 id="project-actions-title">Save Your Work</h2>
           </div>
+          <p class="lede-small">
+            Record a checkpoint of your files with a short message — like a commit. This is the action you'll
+            use most, and it works fully offline.
+          </p>
 
           <label class="field" hidden>
             <span>Active Project Folder</span>
@@ -302,16 +306,39 @@
             <input id="paths" type="text" placeholder="results.csv, notes.md" />
           </label>
 
+          <button
+            id="save-project"
+            class="button button-save-hero"
+            type="button"
+            title="Record the current state of your files with a message, like a commit. Works fully offline."
+          >
+            Save
+          </button>
+
+          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+
+          <section class="status-box" aria-labelledby="recent-commits-title">
+            <div class="section-head branch-head">
+              <h3 id="recent-commits-title">Recent Commits</h3>
+            </div>
+            <div id="recent-commits-output" class="panel panel-muted panel-compact">
+              Recent saves appear here.
+            </div>
+          </section>
+        </section>
+
+        <section class="card reveal reveal-4 full-span" aria-labelledby="sync-data-title">
+          <span class="card-icon-badge" aria-hidden="true">🔄</span>
+          <div class="section-head">
+            <h2 id="sync-data-title">Get Data &amp; Remote Sync</h2>
+          </div>
+          <p class="lede-small">
+            Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
+            this project.
+          </p>
+
           <div class="action-strip">
-            <button
-              id="save-project"
-              class="button button-primary"
-              type="button"
-              title="Record the current state of your files with a message, like a commit. Works fully offline."
-            >
-              Save
-            </button>
-            <button id="get-data" class="button button-primary" type="button">Get Data</button>
+            <button id="get-data" class="button button-ghost" type="button">Get Data</button>
             <span class="sibling-action-group">
               <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
               <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
@@ -327,17 +354,6 @@
             </span>
           </div>
           <p id="remote-info" class="lede-small" hidden></p>
-
-          <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
-
-          <section class="status-box" aria-labelledby="recent-commits-title">
-            <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent Commits</h3>
-            </div>
-            <div id="recent-commits-output" class="panel panel-muted panel-compact">
-              Recent saves appear here.
-            </div>
-          </section>
         </section>
 
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
