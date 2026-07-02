@@ -908,7 +908,7 @@ test('runCommand routes update through datalad update --merge', async () => {
   assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'update', '--merge'])
 })
 
-test('runCommand adds a generic advisory when clone stderr has output that matches no known pattern', async () => {
+test('runCommand does not add a generic advisory when clone stderr only has [INFO] lines', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
@@ -943,6 +943,28 @@ test('runCommand suppresses the generic clone advisory when stderr is only routi
   })
 
   assert.equal(result.warnings.length, 0)
+<<<<<<< HEAD
+=======
+})
+
+test('runCommand adds a generic advisory when clone stderr has non-INFO output that matches no known pattern', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+    exitCode: 0,
+    stdout: 'install(ok): /tmp/ds (dataset)\n',
+    stderr: 'some unexpected warning output\n',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('cloneInstall', {
+    source: 'https://example.org/ds.git',
+    targetPath: '/tmp/ds'
+  })
+
+  assert.equal(result.warnings.length, 1)
+  assert.equal(result.warnings[0].code, 'CLONE_STDERR_OUTPUT')
+>>>>>>> d8f1c2f (refactor: update runCommand tests for clone stderr handling)
 })
 
 test('runCommand builds a datalad create call for createProject', async () => {
