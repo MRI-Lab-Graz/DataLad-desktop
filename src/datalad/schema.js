@@ -32,13 +32,18 @@ export const COMMAND_SCHEMAS = Object.freeze({
   switchBranch: {
     required: ['projectPath', 'branchName'],
     optional: []
+  },
+  createBranchAt: {
+    required: ['projectPath', 'branchName', 'startPoint'],
+    optional: []
   }
 })
 
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
 const LEADING_DASH_FIELDS = Object.freeze({
   createBranch: ['branchName'],
-  switchBranch: ['branchName']
+  switchBranch: ['branchName'],
+  createBranchAt: ['branchName', 'startPoint']
 })
 
 /**

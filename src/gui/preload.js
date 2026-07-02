@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
       projectPath,
       options
     }),
+  getCommitDetails: (projectPath, commitHash) =>
+    ipcRenderer.invoke('adapter:getCommitDetails', { projectPath, commitHash }),
   getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),

@@ -33,11 +33,20 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
-  if (commandName === 'createBranch' && hasPattern(stderr, /already exists/)) {
+  if ((commandName === 'createBranch' || commandName === 'createBranchAt') && hasPattern(stderr, /already exists/)) {
     return {
       code: 'BRANCH_EXISTS',
       title: 'Branch already exists',
       message: 'A branch with this name already exists. Pick a different name or switch to the existing branch.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'createBranchAt' && hasPattern(stderr, /unknown revision|not a valid object name|bad object/)) {
+    return {
+      code: 'INVALID_START_POINT',
+      title: 'Save point not found',
+      message: 'The selected save point could not be found in this project\'s history.',
       technicalDetails: details
     }
   }
@@ -52,7 +61,7 @@ export function mapCommandError(commandName, runResult) {
   }
 
   if (
-    (commandName === 'createBranch' || commandName === 'switchBranch') &&
+    (commandName === 'createBranch' || commandName === 'createBranchAt' || commandName === 'switchBranch') &&
     hasPattern(stderr, /local changes|would be overwritten|please commit your changes/)
   ) {
     return {
@@ -65,7 +74,7 @@ export function mapCommandError(commandName, runResult) {
   }
 
   if (
-    (commandName === 'update' || commandName === 'switchBranch' || commandName === 'createBranch') &&
+    (commandName === 'update' || commandName === 'switchBranch' || commandName === 'createBranch' || commandName === 'createBranchAt') &&
     hasPattern(stderr, /conflict|merge conflict|unmerged files|you need to resolve your current index first/)
   ) {
     return {
