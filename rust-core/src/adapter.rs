@@ -902,6 +902,7 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "-r".to_string(),
                     "--".to_string(),
                     request_required_string(request, "source")?,
                     request_required_string(request, "targetPath")?,
@@ -1681,11 +1682,12 @@ mod tests {
 
         let runner = FakeRunner::default().with_response(
             "datalad",
-            &["clone", "--", "https://example.org/ds.git", "/tmp/ds"],
+            &["clone", "-r", "--", "https://example.org/ds.git", "/tmp/ds"],
             CommandResult {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "-r".to_string(),
                     "--".to_string(),
                     "https://example.org/ds.git".to_string(),
                     "/tmp/ds".to_string(),
@@ -1896,11 +1898,12 @@ mod tests {
 
         let runner = FakeRunner::default().with_response(
             "datalad",
-            &["clone", "--", "https://example.org/ds.git", "/tmp/ds"],
+            &["clone", "-r", "--", "https://example.org/ds.git", "/tmp/ds"],
             CommandResult {
                 command: "datalad".to_string(),
                 args: vec![
                     "clone".to_string(),
+                    "-r".to_string(),
                     "--".to_string(),
                     "https://example.org/ds.git".to_string(),
                     "/tmp/ds".to_string(),

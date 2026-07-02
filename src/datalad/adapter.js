@@ -747,7 +747,7 @@ export class DataLadAdapter {
       case 'cloneInstall': {
         return {
           command: 'datalad',
-          args: ['clone', '--', request.source, request.targetPath],
+          args: ['clone', '-r', '--', request.source, request.targetPath],
           options: {}
         }
       }

@@ -400,7 +400,7 @@ test('runCommand routes switchBranch through curated git invocation', async () =
 
 test('runCommand returns non-fatal clone advisories from stderr output', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr:
@@ -910,7 +910,7 @@ test('runCommand routes update through datalad update --merge', async () => {
 
 test('runCommand adds a generic advisory when clone stderr has output that matches no known pattern', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr: 'some other unrecognized clone output\n',
@@ -929,7 +929,7 @@ test('runCommand adds a generic advisory when clone stderr has output that match
 
 test('runCommand suppresses the generic clone advisory when stderr is only routine [INFO] logging', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr: '[INFO] some other informational clone output\n',
