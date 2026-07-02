@@ -1,6 +1,7 @@
 export const ADAPTER_INTERFACE_VERSION = '0.5.0'
 
-export const COMMAND_SCHEMAS = Object.freeze({
+// Commands in the stable Rust bridge contract — the Rust adapter must implement exactly these.
+const BRIDGE_COMMAND_SCHEMAS = Object.freeze({
   cloneInstall: {
     required: ['source', 'targetPath'],
     optional: []
@@ -32,12 +33,18 @@ export const COMMAND_SCHEMAS = Object.freeze({
   switchBranch: {
     required: ['projectPath', 'branchName'],
     optional: []
-  },
+  }
+})
+
+// JS-only extended commands — not part of the Rust bridge contract.
+const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   createBranchAt: {
     required: ['projectPath', 'branchName', 'startPoint'],
     optional: []
   }
 })
+
+export const COMMAND_SCHEMAS = Object.freeze({ ...BRIDGE_COMMAND_SCHEMAS, ...EXTENDED_COMMAND_SCHEMAS })
 
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
 const LEADING_DASH_FIELDS = Object.freeze({
@@ -108,6 +115,6 @@ export function getAdapterInterfaceContract() {
   return {
     version: ADAPTER_INTERFACE_VERSION,
     classificationValues: ['git', 'dataset', 'superdataset'],
-    commands: COMMAND_SCHEMAS
+    commands: BRIDGE_COMMAND_SCHEMAS
   }
 }
