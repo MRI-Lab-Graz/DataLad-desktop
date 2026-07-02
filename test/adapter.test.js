@@ -943,8 +943,6 @@ test('runCommand suppresses the generic clone advisory when stderr is only routi
   })
 
   assert.equal(result.warnings.length, 0)
-<<<<<<< HEAD
-=======
 })
 
 test('runCommand adds a generic advisory when clone stderr has non-INFO output that matches no known pattern', async () => {
@@ -964,7 +962,6 @@ test('runCommand adds a generic advisory when clone stderr has non-INFO output t
 
   assert.equal(result.warnings.length, 1)
   assert.equal(result.warnings[0].code, 'CLONE_STDERR_OUTPUT')
->>>>>>> d8f1c2f (refactor: update runCommand tests for clone stderr handling)
 })
 
 test('runCommand builds a datalad create call for createProject', async () => {
