@@ -1003,3 +1003,93 @@ test('createDataLadAdapter builds a usable adapter instance', () => {
   assert.ok(adapter instanceof DataLadAdapter)
   assert.equal(adapter.getInterfaceContract().version, '0.5.0')
 })
+
+test('runCommand routes createBranchAt to git checkout -b with a start point', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0, stdout: 'true\n', stderr: '', failed: false
+  })
+  runner.set('git', ['-C', '/tmp/project', 'checkout', '-b', 'restore/2024-01-15', 'abc1234'], {
+    exitCode: 0,
+    stdout: "Switched to a new branch 'restore/2024-01-15'\n",
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createBranchAt', {
+    projectPath: '/tmp/project',
+    branchName: 'restore/2024-01-15',
+    startPoint: 'abc1234'
+  })
+
+  assert.equal(result.ok, true)
+  const branchCall = runner.calls.find((c) => c.args.includes('checkout'))
+  assert.deepEqual(branchCall.args, ['-C', '/tmp/project', 'checkout', '-b', 'restore/2024-01-15', 'abc1234'])
+})
+
+test('runCommand rejects createBranchAt with an invalid startPoint format', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0, stdout: 'true\n', stderr: '', failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  await assert.rejects(
+    () => adapter.runCommand('createBranchAt', {
+      projectPath: '/tmp/project',
+      branchName: 'restore/test',
+      startPoint: 'not-a-hash!'
+    }),
+    /invalid start point format/i
+  )
+})
+
+test('getCommitDetails returns parsed metadata and stat for a valid commit', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0, stdout: 'true\n', stderr: '', failed: false
+  })
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'log', '-1',
+    '--format=%ct%x00%H%x00%an%x00%s%x00%B',
+    'abc1234'
+  ], {
+    exitCode: 0,
+    stdout: '1700000000\0abcdef1234567890\0Alice\0Add results\0Full body here\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'diff-tree', '--no-commit-id', '-r', '--stat', '--root',
+    'abc1234'
+  ], {
+    exitCode: 0,
+    stdout: ' results.csv | 5 +++++\n 1 file changed, 5 insertions(+)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const details = await adapter.getCommitDetails('/tmp/project', 'abc1234')
+
+  assert.equal(details.subject, 'Add results')
+  assert.equal(details.author, 'Alice')
+  assert.equal(details.timestamp, 1_700_000_000)
+  assert.ok(details.stat.includes('results.csv'))
+})
+
+test('getCommitDetails rejects an invalid commit hash format', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0, stdout: 'true\n', stderr: '', failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  await assert.rejects(
+    () => adapter.getCommitDetails('/tmp/project', 'not!a!hash'),
+    /invalid commit hash format/i
+  )
+})

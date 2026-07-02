@@ -877,6 +877,86 @@ h2 {
   color: #4e6675;
 }
 
+/* Time Machine */
+
+.tm-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.tm-commit-item {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 171, 186, 0.42);
+  background: rgba(251, 253, 255, 0.92);
+  padding: 0.44rem 0.52rem;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.tm-commit-item:hover {
+  background: rgba(232, 243, 251, 0.98);
+  border-color: rgba(84, 127, 185, 0.45);
+}
+
+.tm-commit-item:focus-visible {
+  outline: 2px solid #3d7ec9;
+  outline-offset: 2px;
+}
+
+.tm-commit-item-selected {
+  background: rgba(210, 232, 248, 0.95);
+  border-color: rgba(61, 126, 201, 0.55);
+}
+
+.tm-detail-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tm-detail-date {
+  font-size: 0.8rem;
+  color: #4e6675;
+}
+
+.tm-detail-author {
+  font-size: 0.8rem;
+  color: #4e6675;
+  margin-left: auto;
+}
+
+.tm-detail-subject {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #1f3744;
+  margin: 0 0 6px;
+}
+
+.tm-detail-body {
+  font-size: 0.82rem;
+  color: #3a5060;
+  white-space: pre-wrap;
+  margin: 0 0 8px;
+}
+
+.tm-stat-block {
+  font-size: 0.76rem;
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 6px;
+}
+
+.tm-restore-actions {
+  margin-top: 12px;
+}
+
 .button {
   appearance: none;
   border: none;

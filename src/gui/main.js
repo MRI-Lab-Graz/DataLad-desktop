@@ -137,6 +137,10 @@ ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
   return adapter.listRecentCommits(projectPath, options)
 })
 
+ipcMain.handle('adapter:getCommitDetails', async (_event, payload = {}) => {
+  return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
+})
+
 ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
   return adapter.getProjectHealth(projectPath)
 })

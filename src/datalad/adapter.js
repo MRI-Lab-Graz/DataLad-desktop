@@ -18,8 +18,10 @@ const CURATED_COMMANDS = new Set([
   'update',
   'push',
   'createBranch',
-  'switchBranch'
+  'switchBranch',
+  'createBranchAt'
 ])
+const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
@@ -433,6 +435,52 @@ export class DataLadAdapter {
     }
   }
 
+  async getCommitDetails(projectPath, commitHash) {
+    await this.#ensureGitProject(projectPath)
+
+    if (!COMMIT_HASH_PATTERN.test(commitHash)) {
+      throw new Error(`Invalid commit hash format: ${commitHash}`)
+    }
+
+    const [metaResult, statResult] = await Promise.all([
+      this.runner.run('git', [
+        '-C', projectPath,
+        'log', '-1',
+        '--format=%ct%x00%H%x00%an%x00%s%x00%B',
+        commitHash
+      ]),
+      this.runner.run('git', [
+        '-C', projectPath,
+        'diff-tree', '--no-commit-id', '-r', '--stat', '--root',
+        commitHash
+      ])
+    ])
+
+    if (metaResult.failed) {
+      throw new Error(
+        `Could not get commit details: ${metaResult.stderr.trim() || 'unknown error'}`
+      )
+    }
+
+    const [timestampRaw, longHash, author, subject, ...bodyParts] =
+      (metaResult.stdout ?? '').split(' ')
+    const timestamp = Number.parseInt(timestampRaw, 10)
+
+    const statLines = (statResult.stdout ?? '')
+      .split(/\r?\n/)
+      .map((l) => l.trimEnd())
+      .filter(Boolean)
+
+    return {
+      commitHash: (longHash ?? commitHash).trim(),
+      timestamp: Number.isFinite(timestamp) ? timestamp : null,
+      author: (author ?? '').trim(),
+      subject: (subject ?? '').trim(),
+      message: bodyParts.join(' ').trim(),
+      stat: statLines.join('\n')
+    }
+  }
+
   async getProjectHealth(projectPath) {
     await this.#ensureGitProject(projectPath)
 
@@ -810,6 +858,19 @@ export class DataLadAdapter {
         return {
           command: 'git',
           args: ['-C', projectPath, 'checkout', branchName],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'createBranchAt': {
+        const projectPath = request.projectPath
+        const branchName = request.branchName
+        const startPoint = request.startPoint
+        if (!COMMIT_HASH_PATTERN.test(startPoint)) {
+          throw new Error(`Invalid start point format: ${startPoint}`)
+        }
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'checkout', '-b', branchName, startPoint],
           options: { cwd: projectPath }
         }
       }

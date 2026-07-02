@@ -467,6 +467,58 @@
         </div>
       </details>
 
+      <details id="time-machine-zone" class="card setup-zone" aria-labelledby="time-machine-title" hidden>
+        <summary id="time-machine-title" class="setup-zone-summary">
+          <span class="card-icon-badge" aria-hidden="true">⏳</span>
+          Time Machine — Browse &amp; Restore Past Saves
+        </summary>
+        <div class="setup-zone-body">
+          <p class="lede-small">
+            Browse the full history of this project and branch from any past save point — your current work is never changed.
+          </p>
+
+          <section class="status-box" aria-labelledby="tm-history-title">
+            <div class="section-head branch-head">
+              <h3 id="tm-history-title">Save History</h3>
+              <div class="section-actions">
+                <button id="tm-load-more" class="button button-ghost button-inline" type="button" disabled>
+                  Load more
+                </button>
+              </div>
+            </div>
+            <div id="tm-history-output" class="panel panel-muted panel-compact">
+              Open this panel with a project loaded to browse its history.
+            </div>
+          </section>
+
+          <section id="tm-detail" class="status-box" aria-labelledby="tm-detail-title" hidden>
+            <div class="section-head branch-head">
+              <h3 id="tm-detail-title">Selected Save Point</h3>
+              <button id="tm-close-detail" class="button button-ghost button-inline" type="button">Clear</button>
+            </div>
+
+            <div id="tm-detail-output" class="panel panel-muted panel-compact"></div>
+
+            <div class="tm-restore-actions">
+              <label class="field">
+                <span>New Branch Name</span>
+                <div class="field-row">
+                  <input id="tm-branch-name" type="text" placeholder="restore/from-date" />
+                  <button id="tm-branch-from-here" class="button button-primary button-inline" type="button">
+                    Branch from here
+                  </button>
+                </div>
+              </label>
+              <p class="hint-inline">
+                Creates a new branch starting at this save point. Your current work stays untouched.
+              </p>
+            </div>
+
+            <div id="tm-action-output" class="panel panel-muted panel-compact" hidden></div>
+          </section>
+        </div>
+      </details>
+
       <aside id="technical-details-aside" class="card reveal reveal-6" aria-labelledby="contract-title" hidden>
         <span class="card-icon-badge" aria-hidden="true">🔧</span>
         <div class="section-head">

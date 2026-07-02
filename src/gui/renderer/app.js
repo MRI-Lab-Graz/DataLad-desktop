@@ -15,7 +15,9 @@ const state = {
     branches: 0,
     workingTree: 0,
     recentCommits: 0,
-    projectHealth: 0
+    projectHealth: 0,
+    timeMachineHistory: 0,
+    timeMachineDetail: 0
   },
   recentProjects: [],
   recentProjectEmojiByPath: {},
@@ -31,7 +33,12 @@ const state = {
   datasetsRootPath: null,
   selectedIgnoreScopePaths: new Set(),
   consoleHistory: [],
-  watchRefreshPending: false
+  watchRefreshPending: false,
+  timeMachineCommits: [],
+  timeMachineLimit: 50,
+  timeMachineSelectedHash: null,
+  timeMachineDetails: null,
+  timeMachineProjectPath: null
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -130,7 +137,16 @@ const elements = {
   consoleCommand: document.getElementById('console-command'),
   consoleRunButton: document.getElementById('console-run'),
   consoleOutput: document.getElementById('console-output'),
-  consoleHistoryOutput: document.getElementById('console-history-output')
+  consoleHistoryOutput: document.getElementById('console-history-output'),
+  timeMachineZone: document.getElementById('time-machine-zone'),
+  timeMachineHistoryOutput: document.getElementById('tm-history-output'),
+  timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
+  timeMachineDetail: document.getElementById('tm-detail'),
+  timeMachineDetailOutput: document.getElementById('tm-detail-output'),
+  timeMachineCloseDetailButton: document.getElementById('tm-close-detail'),
+  timeMachineBranchName: document.getElementById('tm-branch-name'),
+  timeMachineBranchFromHereButton: document.getElementById('tm-branch-from-here'),
+  timeMachineActionOutput: document.getElementById('tm-action-output')
 }
 
 loadRecentProjects()
@@ -494,6 +510,110 @@ elements.createBranchButton.addEventListener('click', async () => {
   elements.newBranchNameInput.value = ''
   setBranchStatus(`Created and switched to ${branchName}.`, 'success')
   await refreshBranchList(projectPath)
+})
+
+elements.timeMachineZone.addEventListener('toggle', async () => {
+  if (!elements.timeMachineZone.open) {
+    return
+  }
+  const projectPath = readProjectPath()
+  if (!projectPath || state.timeMachineCommits.length > 0) {
+    return
+  }
+  await refreshTimeMachineHistory(projectPath)
+})
+
+elements.timeMachineLoadMoreButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+  state.timeMachineLimit = state.timeMachineLimit + 50
+  await refreshTimeMachineHistory(projectPath)
+})
+
+elements.timeMachineHistoryOutput.addEventListener('click', async (event) => {
+  const item = event.target.closest('.tm-commit-item')
+  if (!item) {
+    return
+  }
+  const hash = item.dataset.hash
+  if (!hash) {
+    return
+  }
+  await loadTimeMachineDetail(hash)
+})
+
+elements.timeMachineHistoryOutput.addEventListener('keydown', async (event) => {
+  if (event.key !== 'Enter' && event.key !== ' ') {
+    return
+  }
+  const item = event.target.closest('.tm-commit-item')
+  if (!item) {
+    return
+  }
+  event.preventDefault()
+  const hash = item.dataset.hash
+  if (!hash) {
+    return
+  }
+  await loadTimeMachineDetail(hash)
+})
+
+elements.timeMachineCloseDetailButton.addEventListener('click', () => {
+  state.timeMachineSelectedHash = null
+  state.timeMachineDetails = null
+  elements.timeMachineDetail.hidden = true
+  elements.timeMachineBranchName.value = ''
+  elements.timeMachineActionOutput.hidden = true
+  renderTimeMachineHistory()
+})
+
+elements.timeMachineBranchFromHereButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const startPoint = state.timeMachineSelectedHash
+  if (!startPoint) {
+    elements.timeMachineActionOutput.textContent = 'Select a save point first.'
+    elements.timeMachineActionOutput.hidden = false
+    return
+  }
+
+  const branchName =
+    elements.timeMachineBranchName.value.trim() || elements.timeMachineBranchName.placeholder
+
+  if (!branchName) {
+    elements.timeMachineActionOutput.textContent = 'Enter a branch name first.'
+    elements.timeMachineActionOutput.hidden = false
+    return
+  }
+
+  const safeToProceed = await ensureBranchActionSafety(projectPath, 'branch from a past save')
+  if (!safeToProceed) {
+    return
+  }
+
+  const result = await runWorkflowCommand(
+    'createBranchAt',
+    { projectPath, branchName, startPoint },
+    elements.timeMachineBranchFromHereButton
+  )
+
+  if (result?.ok) {
+    elements.timeMachineActionOutput.innerHTML =
+      `<p>Created branch <strong>${escapeHtml(branchName)}</strong> at save ` +
+      `<code>${escapeHtml(startPoint)}</code>. You are now on that branch.</p>`
+    elements.timeMachineActionOutput.hidden = false
+    elements.timeMachineBranchName.value = ''
+    await refreshBranchList(projectPath)
+  } else if (result) {
+    elements.timeMachineActionOutput.textContent =
+      result.userError?.message ?? 'Branch creation failed. Check the branch name and try again.'
+    elements.timeMachineActionOutput.hidden = false
+  }
 })
 
 elements.datasetSelect.addEventListener('change', async () => {
@@ -1100,6 +1220,164 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
   }
 }
 
+function clearTimeMachine() {
+  state.timeMachineCommits = []
+  state.timeMachineLimit = 50
+  state.timeMachineSelectedHash = null
+  state.timeMachineDetails = null
+  state.timeMachineProjectPath = null
+  elements.timeMachineDetail.hidden = true
+  elements.timeMachineActionOutput.hidden = true
+  elements.timeMachineBranchName.value = ''
+  renderTimeMachineHistory()
+}
+
+async function refreshTimeMachineHistory(projectPath) {
+  if (!projectPath) {
+    clearTimeMachine()
+    return
+  }
+
+  if (projectPath !== state.timeMachineProjectPath) {
+    state.timeMachineLimit = 50
+    state.timeMachineSelectedHash = null
+    state.timeMachineDetails = null
+    elements.timeMachineDetail.hidden = true
+    elements.timeMachineActionOutput.hidden = true
+    elements.timeMachineBranchName.value = ''
+    state.timeMachineProjectPath = projectPath
+  }
+
+  const requestToken = nextRequestToken('timeMachineHistory')
+  elements.timeMachineHistoryOutput.innerHTML = loadingPanelHtml('Loading history…')
+
+  try {
+    const history = await api.listRecentCommits(projectPath, { limit: state.timeMachineLimit })
+    if (!isLatestRequestToken('timeMachineHistory', requestToken)) {
+      return
+    }
+
+    state.timeMachineCommits = history.commits ?? []
+    renderTimeMachineHistory()
+  } catch (error) {
+    if (!isLatestRequestToken('timeMachineHistory', requestToken)) {
+      return
+    }
+
+    state.timeMachineCommits = []
+    elements.timeMachineHistoryOutput.textContent = `Could not load history: ${error.message}`
+    elements.timeMachineLoadMoreButton.disabled = true
+  }
+}
+
+function renderTimeMachineHistory() {
+  const commits = state.timeMachineCommits
+
+  if (!commits.length) {
+    elements.timeMachineHistoryOutput.textContent = 'No saves found in this project yet.'
+    elements.timeMachineLoadMoreButton.disabled = true
+    return
+  }
+
+  elements.timeMachineLoadMoreButton.disabled = false
+
+  const rows = commits
+    .map((entry) => {
+      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const hash = entry.commitHash || 'unknown'
+      const subject = entry.subject || '(no subject)'
+      const author = entry.author || 'Unknown'
+      const isSelected = hash === state.timeMachineSelectedHash
+
+      return (
+        `<li class="tm-commit-item${isSelected ? ' tm-commit-item-selected' : ''}" ` +
+        `data-hash="${escapeHtml(hash)}" role="button" tabindex="0" ` +
+        `aria-pressed="${isSelected ? 'true' : 'false'}">` +
+        '<div class="history-item-head">' +
+        `<span class="history-hash">${escapeHtml(hash)}</span>` +
+        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        '</div>' +
+        `<div class="history-subject">${escapeHtml(subject)}</div>` +
+        `<div class="history-author">${escapeHtml(author)}</div>` +
+        '</li>'
+      )
+    })
+    .join('')
+
+  elements.timeMachineHistoryOutput.innerHTML = `<ul class="tm-history-list">${rows}</ul>`
+}
+
+async function loadTimeMachineDetail(commitHash) {
+  state.timeMachineSelectedHash = commitHash
+  state.timeMachineDetails = null
+  renderTimeMachineHistory()
+
+  elements.timeMachineDetail.hidden = false
+  elements.timeMachineDetailOutput.innerHTML = loadingPanelHtml('Loading save details…')
+  elements.timeMachineActionOutput.hidden = true
+
+  const projectPath = state.timeMachineProjectPath
+  if (!projectPath) {
+    return
+  }
+
+  const requestToken = nextRequestToken('timeMachineDetail')
+
+  try {
+    const details = await api.getCommitDetails(projectPath, commitHash)
+    if (!isLatestRequestToken('timeMachineDetail', requestToken)) {
+      return
+    }
+
+    state.timeMachineDetails = details
+    renderTimeMachineDetail()
+  } catch (error) {
+    if (!isLatestRequestToken('timeMachineDetail', requestToken)) {
+      return
+    }
+
+    elements.timeMachineDetailOutput.textContent = `Could not load save details: ${error.message}`
+  }
+}
+
+function renderTimeMachineDetail() {
+  const details = state.timeMachineDetails
+  if (!details) {
+    return
+  }
+
+  const date = details.timestamp
+    ? new Date(details.timestamp * 1000).toLocaleString()
+    : 'Unknown date'
+
+  const statHtml = details.stat
+    ? `<pre class="panel panel-code tm-stat-block">${escapeHtml(details.stat)}</pre>`
+    : ''
+
+  const bodyText = (details.message ?? '').replace(/^\s*\n*/, '').trim()
+  const bodyHtml =
+    bodyText && bodyText !== details.subject
+      ? `<p class="tm-detail-body">${escapeHtml(bodyText)}</p>`
+      : ''
+
+  elements.timeMachineDetailOutput.innerHTML =
+    '<div class="tm-detail-meta">' +
+    `<span class="history-hash">${escapeHtml(details.commitHash ?? '')}</span>` +
+    `<span class="tm-detail-date">${escapeHtml(date)}</span>` +
+    `<span class="tm-detail-author">${escapeHtml(details.author ?? '')}</span>` +
+    '</div>' +
+    `<p class="tm-detail-subject">${escapeHtml(details.subject ?? '')}</p>` +
+    bodyHtml +
+    statHtml
+
+  if (!elements.timeMachineBranchName.value) {
+    const dateStr = details.timestamp
+      ? new Date(details.timestamp * 1000).toISOString().slice(0, 10)
+      : 'unknown'
+    elements.timeMachineBranchName.placeholder = `restore/${dateStr}`
+  }
+}
+
 async function revealPath(targetPath) {
   try {
     await api.revealPath(targetPath)
@@ -1684,6 +1962,11 @@ function setProjectDependentSectionsVisible(visible) {
     elements.projectSetupZone.removeAttribute('open')
   }
   elements.projectWorkspaceGrid.hidden = !visible
+  elements.timeMachineZone.hidden = !visible
+  if (!visible) {
+    elements.timeMachineZone.removeAttribute('open')
+    clearTimeMachine()
+  }
   elements.technicalDetailsAside.hidden = !visible
   updatePowerUserConsoleVisibility()
 }

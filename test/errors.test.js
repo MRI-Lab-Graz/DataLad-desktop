@@ -23,20 +23,30 @@ test('mapCommandError maps branch-already-exists output for createBranch', () =>
   assert.equal(result.code, 'BRANCH_EXISTS')
 })
 
+test('mapCommandError maps branch-already-exists output for createBranchAt', () => {
+  const result = mapCommandError('createBranchAt', { stderr: "fatal: a branch named 'restore/2024' already exists" })
+  assert.equal(result.code, 'BRANCH_EXISTS')
+})
+
+test('mapCommandError maps unknown-revision output for createBranchAt', () => {
+  const result = mapCommandError('createBranchAt', { stderr: 'fatal: Not a valid object name: abc1234' })
+  assert.equal(result.code, 'INVALID_START_POINT')
+})
+
 test('mapCommandError maps unknown revision output for switchBranch', () => {
   const result = mapCommandError('switchBranch', { stderr: "error: pathspec 'missing' did not match any file(s) known to git" })
   assert.equal(result.code, 'BRANCH_NOT_FOUND')
 })
 
 test('mapCommandError maps dirty worktree output for branch commands', () => {
-  for (const commandName of ['createBranch', 'switchBranch']) {
+  for (const commandName of ['createBranch', 'createBranchAt', 'switchBranch']) {
     const result = mapCommandError(commandName, { stderr: 'error: Your local changes would be overwritten by checkout' })
     assert.equal(result.code, 'WORKTREE_DIRTY')
   }
 })
 
 test('mapCommandError maps merge conflict output for update and branch commands', () => {
-  for (const commandName of ['update', 'switchBranch', 'createBranch']) {
+  for (const commandName of ['update', 'switchBranch', 'createBranch', 'createBranchAt']) {
     const result = mapCommandError(commandName, { stderr: 'error: you need to resolve your current index first' })
     assert.equal(result.code, 'MERGE_CONFLICT')
   }
