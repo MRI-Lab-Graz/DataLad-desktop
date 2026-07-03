@@ -451,7 +451,7 @@ export class DataLadAdapter {
       throw new Error(`Invalid commit hash format: ${commitHash}`)
     }
 
-    const [metaResult, statResult] = await Promise.all([
+    const [metaResult, statResult, nameResult] = await Promise.all([
       this.runner.run('git', [
         '-C', projectPath,
         'log', '-1',
@@ -461,6 +461,11 @@ export class DataLadAdapter {
       this.runner.run('git', [
         '-C', projectPath,
         'diff-tree', '--no-commit-id', '-r', '--stat', '--root',
+        commitHash
+      ]),
+      this.runner.run('git', [
+        '-C', projectPath,
+        'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
         commitHash
       ])
     ])
@@ -480,13 +485,19 @@ export class DataLadAdapter {
       .map((l) => l.trimEnd())
       .filter(Boolean)
 
+    const changedFiles = (nameResult.stdout ?? '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+
     return {
       commitHash: (longHash ?? commitHash).trim(),
       timestamp: Number.isFinite(timestamp) ? timestamp : null,
       author: (author ?? '').trim(),
       subject: (subject ?? '').trim(),
       message: bodyParts.join('\u0000').trim(),
-      stat: statLines.join('\n')
+      stat: statLines.join('\n'),
+      changedFiles
     }
   }
 

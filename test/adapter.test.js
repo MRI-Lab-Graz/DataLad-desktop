@@ -1148,6 +1148,16 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
     stderr: '',
     failed: false
   })
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
+    'abc1234'
+  ], {
+    exitCode: 0,
+    stdout: 'results.csv\ndata/raw.tsv\n',
+    stderr: '',
+    failed: false
+  })
 
   const adapter = new DataLadAdapter({ runner })
   const details = await adapter.getCommitDetails('/tmp/project', 'abc1234')
@@ -1156,6 +1166,7 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
   assert.equal(details.author, 'Alice')
   assert.equal(details.timestamp, 1_700_000_000)
   assert.ok(details.stat.includes('results.csv'))
+  assert.deepEqual(details.changedFiles, ['results.csv', 'data/raw.tsv'])
 })
 
 test('getCommitDetails rejects an invalid commit hash format', async () => {

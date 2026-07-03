@@ -228,6 +228,29 @@ elements.changedFilesSelectNoneButton.addEventListener('click', () => {
   updateSaveButtonState()
 })
 
+elements.changedFilesOutput.addEventListener('click', async (event) => {
+  const button = event.target.closest('.discard-file-button')
+  if (!button) {
+    return
+  }
+
+  const projectPath = readProjectPath()
+  const filePath = button.dataset.discardPath
+  if (!projectPath || !filePath) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Throw away your changes to "${filePath}" and return it to the last save point?\n\n` +
+    'This cannot be undone.'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  await runWorkflowCommand('discardChanges', { projectPath, paths: [filePath] }, button)
+})
+
 elements.changedFilesOutput.addEventListener('input', (event) => {
   const checkbox = event.target.closest('[data-changed-path]')
   if (!checkbox) {
@@ -612,6 +635,45 @@ elements.timeMachineBranchFromHereButton.addEventListener('click', async () => {
   } else if (result) {
     elements.timeMachineActionOutput.textContent =
       result.userError?.message ?? 'Branch creation failed. Check the branch name and try again.'
+    elements.timeMachineActionOutput.hidden = false
+  }
+})
+
+elements.timeMachineDetailOutput.addEventListener('click', async (event) => {
+  const button = event.target.closest('.tm-restore-file-button')
+  if (!button) {
+    return
+  }
+
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  const filePath = button.dataset.restorePath
+  if (!projectPath || !commitHash || !filePath) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Restore "${filePath}" to its version from this save point?\n\n` +
+    'Your current version of this file will be replaced. Other files stay untouched.'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  const result = await runWorkflowCommand(
+    'restoreFileFromCommit',
+    { projectPath, commitHash, paths: [filePath] },
+    button
+  )
+
+  if (result?.ok) {
+    elements.timeMachineActionOutput.innerHTML =
+      `<p>Restored <strong>${escapeHtml(filePath)}</strong> from save ` +
+      `<code>${escapeHtml(commitHash)}</code>. Review the file, then use Save to keep it.</p>`
+    elements.timeMachineActionOutput.hidden = false
+  } else if (result) {
+    elements.timeMachineActionOutput.textContent =
+      result.userError?.message ?? 'The file could not be restored from this save point.'
     elements.timeMachineActionOutput.hidden = false
   }
 })
@@ -1360,6 +1422,29 @@ function renderTimeMachineDetail() {
       ? `<p class="tm-detail-body">${escapeHtml(bodyText)}</p>`
       : ''
 
+  const changedFiles = details.changedFiles ?? []
+  const visibleRestoreFiles = changedFiles.slice(0, TM_RESTORE_FILES_RENDER_LIMIT)
+  const restoreTruncationNote =
+    changedFiles.length > TM_RESTORE_FILES_RENDER_LIMIT
+      ? `<p class="hint-inline">Showing the first ${TM_RESTORE_FILES_RENDER_LIMIT} of ${changedFiles.length} files in this save point.</p>`
+      : ''
+  const restoreFilesHtml = visibleRestoreFiles.length
+    ? '<div class="tm-restore-files">' +
+      '<h4 class="tm-restore-files-title">Files in this save point</h4>' +
+      '<p class="hint-inline">Restore brings back the version of a file from this save point. Your other files stay untouched; use Save afterwards to keep the restored version.</p>' +
+      restoreTruncationNote +
+      `<ul class="changed-files-list">${visibleRestoreFiles
+        .map(
+          (filePath) =>
+            '<li class="changed-file-item">' +
+            `<span class="changed-file-path" title="${escapeHtml(filePath)}">${escapeHtml(filePath)}</span>` +
+            `<button type="button" class="button button-ghost button-inline tm-restore-file-button" data-restore-path="${escapeHtml(filePath)}">Restore</button>` +
+            '</li>'
+        )
+        .join('')}</ul>` +
+      '</div>'
+    : ''
+
   elements.timeMachineDetailOutput.innerHTML =
     '<div class="tm-detail-meta">' +
     `<span class="history-hash">${escapeHtml(details.commitHash ?? '')}</span>` +
@@ -1368,7 +1453,8 @@ function renderTimeMachineDetail() {
     '</div>' +
     `<p class="tm-detail-subject">${escapeHtml(details.subject ?? '')}</p>` +
     bodyHtml +
-    statHtml
+    statHtml +
+    restoreFilesHtml
 
   if (!elements.timeMachineBranchName.value) {
     const dateStr = details.timestamp
@@ -1552,7 +1638,7 @@ function renderWorkingTreeSummary(overrideMessage = null) {
     '</div>'
 }
 
-function renderChangedFileItem(entry) {
+function renderChangedFileItem(entry, isNested = false) {
   const checked = state.selectedChangedPaths.has(entry.path) ? ' checked' : ''
   const stagedBadge = entry.staged ? '<span class="status-chip">staged</span>' : ''
   const conflictedBadge = entry.conflicted ? '<span class="status-chip status-chip-urgent">conflict</span>' : ''
@@ -1560,8 +1646,17 @@ function renderChangedFileItem(entry) {
   const nestedFiles = entry.isSubmodule ? entry.nestedFiles ?? [] : []
   const nestedList = nestedFiles.length
     ? `<ul class="changed-files-list changed-files-list-nested">${nestedFiles
-        .map((nestedEntry) => renderChangedFileItem(nestedEntry))
+        .map((nestedEntry) => renderChangedFileItem(nestedEntry, true))
         .join('')}</ul>`
+    : ''
+
+  // Discard returns a file to the last save point, so it only makes sense for
+  // tracked top-level files: untracked files have no saved version to go back
+  // to, and nested subdataset files belong to a different repository.
+  const canDiscard =
+    !isNested && !entry.isSubmodule && entry.status !== 'untracked' && !entry.conflicted
+  const discardButton = canDiscard
+    ? `<button type="button" class="button button-ghost button-inline discard-file-button" data-discard-path="${escapeHtml(entry.path)}" title="Throw away changes and return this file to the last save point">Discard</button>`
     : ''
 
   return (
@@ -1570,13 +1665,14 @@ function renderChangedFileItem(entry) {
     `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
     `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
     '</label>' +
-    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}</span>` +
+    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}${discardButton}</span>` +
     nestedList +
     '</li>'
   )
 }
 
 const CHANGED_FILES_RENDER_LIMIT = 300
+const TM_RESTORE_FILES_RENDER_LIMIT = 100
 
 function renderChangedFilesSelection() {
   const files = state.workingTreeSnapshot?.files ?? []
@@ -1856,6 +1952,18 @@ function actionLabel(commandName) {
 
   if (commandName === 'switchBranch') {
     return 'Switch Branch'
+  }
+
+  if (commandName === 'createBranchAt') {
+    return 'Branch From Save Point'
+  }
+
+  if (commandName === 'restoreFileFromCommit') {
+    return 'Restore File'
+  }
+
+  if (commandName === 'discardChanges') {
+    return 'Discard Changes'
   }
 
   return 'Action'

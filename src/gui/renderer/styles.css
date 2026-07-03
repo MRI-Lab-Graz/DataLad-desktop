@@ -957,6 +957,15 @@ h2 {
   margin-top: 12px;
 }
 
+.tm-restore-files {
+  margin-top: 12px;
+}
+
+.tm-restore-files-title {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+}
+
 .button {
   appearance: none;
   border: none;
