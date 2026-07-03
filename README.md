@@ -58,6 +58,27 @@ started with browsing and saving changes in an existing project.
 > and git-annex need to be installed on your system. See [datalad.org](https://www.datalad.org/) for
 > installation instructions for your platform.
 
+### macOS: "app can't be opened" warning
+
+Release builds are not yet signed with an Apple Developer certificate, so the
+first launch on macOS is blocked by Gatekeeper with a message like *"DataLad
+Desktop can't be opened because Apple cannot check it for malicious
+software."* This is expected for unsigned apps — you only need to allow it
+once:
+
+1. **Right-click** (or Control-click) **DataLad Desktop.app** and choose
+   **Open**, then click **Open** in the dialog. On recent macOS versions the
+   dialog may only offer "Done" — in that case open
+   **System Settings → Privacy & Security**, scroll down to the message about
+   DataLad Desktop, and click **Open Anyway**.
+2. After that first launch, the app opens normally like any other app.
+
+If you prefer the terminal, this removes the quarantine flag directly:
+
+```bash
+xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
+```
+
 ### Advanced: install from source
 
 This path is for contributors and advanced users who want to run the app
