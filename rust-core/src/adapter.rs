@@ -348,18 +348,7 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
             kind: "root".to_string(),
         }];
 
-        for relative_path in read_subdataset_paths_from_gitmodules(project_path) {
-            let path = Path::new(project_path)
-                .join(&relative_path)
-                .to_string_lossy()
-                .to_string();
-
-            datasets.push(DatasetEntry {
-                path,
-                relative_path,
-                kind: "subdataset".to_string(),
-            });
-        }
+        collect_subdatasets(project_path, project_path, "", &mut datasets);
 
         Ok(datasets)
     }
@@ -1478,6 +1467,33 @@ fn read_subdataset_paths_from_gitmodules(project_path: &str) -> Vec<String> {
     results
 }
 
+fn collect_subdatasets(
+    root_path: &str,
+    current_path: &str,
+    relative_prefix: &str,
+    datasets: &mut Vec<DatasetEntry>,
+) {
+    for relative_path in read_subdataset_paths_from_gitmodules(current_path) {
+        let combined_relative_path = if relative_prefix.is_empty() {
+            relative_path
+        } else {
+            format!("{relative_prefix}/{relative_path}")
+        };
+        let combined_path = Path::new(root_path)
+            .join(&combined_relative_path)
+            .to_string_lossy()
+            .to_string();
+
+        datasets.push(DatasetEntry {
+            path: combined_path.clone(),
+            relative_path: combined_relative_path.clone(),
+            kind: "subdataset".to_string(),
+        });
+
+        collect_subdatasets(root_path, &combined_path, &combined_relative_path, datasets);
+    }
+}
+
 // .gitmodules `path =` values come from repository content, which may belong to a cloned/untrusted
 // dataset. Every consumer joins this value onto a filesystem path, so a `../` or absolute path here
 // would let a malicious dataset make the app read or write outside the project directory.
@@ -2187,6 +2203,51 @@ mod tests {
             second.get("relativePath").and_then(Value::as_str),
             Some("inputs")
         );
+    }
+
+    #[test]
+    fn list_datasets_recurses_into_nested_subdatasets() {
+        let project_dir = unique_temp_dir("dlad-rust-list-datasets-nested");
+        let project_path = project_dir.to_string_lossy().to_string();
+
+        write(
+            project_dir.join(".gitmodules"),
+            "[submodule \"inputs\"]\n\tpath = inputs\n\turl = ../inputs.git\n",
+        )
+        .expect("root .gitmodules should be written");
+
+        let nested_dir = project_dir.join("inputs");
+        fs::create_dir_all(&nested_dir).expect("nested dataset dir should be created");
+        write(
+            nested_dir.join(".gitmodules"),
+            "[submodule \"raw\"]\n\tpath = raw\n\turl = ../raw.git\n",
+        )
+        .expect("nested .gitmodules should be written");
+
+        let rev_parse_args = vec![
+            "-C".to_string(),
+            project_path.clone(),
+            "rev-parse".to_string(),
+            "--is-inside-work-tree".to_string(),
+        ];
+
+        let runner = FakeRunner::default().with_response_owned(
+            "git",
+            rev_parse_args.clone(),
+            ok_result_owned("git", &rev_parse_args, "true\n"),
+        );
+
+        let adapter = DataLadAdapterCore::new(runner);
+        let datasets = adapter
+            .list_datasets(&project_path)
+            .expect("list_datasets should succeed");
+
+        let relative_paths: Vec<&str> = datasets
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect();
+        assert_eq!(relative_paths, vec![".", "inputs", "inputs/raw"]);
+        assert_eq!(datasets[2].kind, "subdataset");
     }
 
     #[test]
