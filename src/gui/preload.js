@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
       request
     }),
   runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
+  setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
   readGitignore: (projectPath, relativeDatasetPath) =>

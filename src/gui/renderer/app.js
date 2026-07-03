@@ -2632,6 +2632,7 @@ function initPowerUserConsole() {
   }
 
   elements.powerUserModeToggle.checked = powerUserModeEnabled
+  void api.setConsoleEnabled(powerUserModeEnabled)
   updatePowerUserConsoleVisibility()
   elements.consoleProjectPath.value = elements.commandProjectPath.value
   elements.consoleHelpText.innerHTML =
@@ -2648,6 +2649,7 @@ function initPowerUserConsole() {
 
   elements.powerUserModeToggle.addEventListener('change', () => {
     const enabled = elements.powerUserModeToggle.checked
+    void api.setConsoleEnabled(enabled)
     updatePowerUserConsoleVisibility()
     try {
       localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')

@@ -16,6 +16,14 @@ const __dirname = dirname(__filename)
 const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
 let activeProjectWatcher = null
+// The console executes arbitrary commands, so the renderer's power-user toggle
+// alone must not be the only gate — a compromised renderer could skip it. The
+// main process tracks the toggle itself and refuses console runs while off.
+let consoleEnabled = false
+// fs:* handlers only operate inside roots the user has legitimated: the
+// workspace the app started in, folders picked via the native dialog, and
+// paths that passed project detection or were created by clone/create.
+const authorizedRoots = new Set([resolve(process.cwd())])
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
@@ -29,6 +37,22 @@ function createAdapter() {
 
 
   return new DataLadAdapter()
+}
+
+function authorizeRoot(rootPath) {
+  if (typeof rootPath === 'string' && rootPath.trim()) {
+    authorizedRoots.add(resolve(rootPath))
+  }
+}
+
+function isWithinAuthorizedRoot(targetPath) {
+  const normalizedTarget = resolve(targetPath)
+  for (const root of authorizedRoots) {
+    if (normalizedTarget === root || normalizedTarget.startsWith(`${root}${sep}`)) {
+      return true
+    }
+  }
+  return false
 }
 
 function createMainWindow() {
@@ -96,11 +120,22 @@ ipcMain.handle('adapter:checkEnvironment', async () => {
 })
 
 ipcMain.handle('adapter:detectProject', async (_event, projectPath) => {
-  return adapter.detectProject(projectPath)
+  const result = await adapter.detectProject(projectPath)
+  if (result?.classification) {
+    authorizeRoot(projectPath)
+  }
+  return result
 })
 
 ipcMain.handle('adapter:runCommand', async (_event, payload) => {
-  return adapter.runCommand(payload.commandName, payload.request)
+  const result = await adapter.runCommand(payload.commandName, payload.request)
+  if (
+    result?.ok &&
+    (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
+  ) {
+    authorizeRoot(payload.request?.targetPath)
+  }
+  return result
 })
 
 ipcMain.handle('adapter:getContract', async () => {
@@ -170,7 +205,16 @@ ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
   return result
 })
 
+ipcMain.handle('console:setEnabled', async (_event, enabled) => {
+  consoleEnabled = Boolean(enabled)
+  return consoleEnabled
+})
+
 ipcMain.handle('console:runCommand', async (_event, payload = {}) => {
+  if (!consoleEnabled) {
+    throw new Error('The command console is disabled. Enable power-user mode first.')
+  }
+
   const commandSpec = buildConsoleCommand(payload)
   return consoleRunner.run(commandSpec.command, commandSpec.args, commandSpec.options)
 })
@@ -193,6 +237,7 @@ ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
     return null
   }
 
+  authorizeRoot(result.filePaths[0])
   return result.filePaths[0]
 })
 
@@ -205,12 +250,20 @@ ipcMain.handle('fs:listEntries', async (_event, payload = {}) => {
     throw new Error('rootPath is required for file listing')
   }
 
+  if (!isWithinAuthorizedRoot(rootPath)) {
+    throw new Error('This folder is not part of an opened project.')
+  }
+
   return listEntries(rootPath, maxDepth, maxEntries)
 })
 
 ipcMain.handle('fs:revealPath', async (_event, targetPath) => {
   if (!targetPath || typeof targetPath !== 'string') {
     throw new Error('targetPath is required')
+  }
+
+  if (!isWithinAuthorizedRoot(targetPath)) {
+    throw new Error('This path is not part of an opened project.')
   }
 
   const normalizedTargetPath = resolve(targetPath)
