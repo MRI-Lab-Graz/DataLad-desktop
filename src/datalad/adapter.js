@@ -141,16 +141,23 @@ export class DataLadAdapter {
       kind: 'root'
     }]
 
-    const subdatasetPaths = await this.#readSubdatasetPathsFromGitModules(projectPath)
-    for (const relativePath of subdatasetPaths) {
-      datasets.push({
-        path: join(projectPath, relativePath),
-        relativePath,
-        kind: 'subdataset'
-      })
-    }
+    await this.#collectSubdatasets(projectPath, projectPath, '', datasets)
 
     return datasets
+  }
+
+  async #collectSubdatasets(rootPath, currentPath, relativePrefix, datasets) {
+    const subdatasetPaths = await this.#readSubdatasetPathsFromGitModules(currentPath)
+    for (const relativePath of subdatasetPaths) {
+      const combinedRelativePath = relativePrefix ? `${relativePrefix}/${relativePath}` : relativePath
+      const combinedPath = join(rootPath, combinedRelativePath)
+      datasets.push({
+        path: combinedPath,
+        relativePath: combinedRelativePath,
+        kind: 'subdataset'
+      })
+      await this.#collectSubdatasets(rootPath, combinedPath, combinedRelativePath, datasets)
+    }
   }
 
   async readGitignore(projectPath, relativeDatasetPath = '.') {
@@ -735,7 +742,7 @@ export class DataLadAdapter {
       }
     }
 
-    return [...new Set(subdatasetPaths)]
+    return [...new Set(subdatasetPaths)].filter(isSafeRelativeSubdatasetPath)
   }
 
   #extractCommandWarnings(commandName, runResult) {
@@ -819,11 +826,13 @@ export class DataLadAdapter {
         const projectPath = request.projectPath
         const message = request.message
         const paths = request.paths ?? []
+        // `--message=<value>` binds the whole value as one token, so a message that happens to look
+        // like a flag (e.g. "--amend") can't be misparsed the way `-m <value>` can.
         return {
           command: 'datalad',
           args: paths.length > 0
-            ? ['-C', projectPath, 'save', '-m', message, '--', ...paths]
-            : ['-C', projectPath, 'save', '-m', message],
+            ? ['-C', projectPath, 'save', `--message=${message}`, '--', ...paths]
+            : ['-C', projectPath, 'save', `--message=${message}`],
           options: { cwd: projectPath }
         }
       }
@@ -887,6 +896,22 @@ async function fileExists(path) {
   } catch {
     return false
   }
+}
+
+// .gitmodules `path =` values come from repository content, which may belong to a cloned/untrusted
+// dataset. Every consumer joins this value onto a filesystem path, so a `../` or absolute path here
+// would let a malicious dataset make the app read or write outside the project directory.
+function isSafeRelativeSubdatasetPath(relativePath) {
+  if (typeof relativePath !== 'string' || relativePath.length === 0) {
+    return false
+  }
+
+  if (relativePath.startsWith('/') || relativePath.startsWith('\\') || /^[a-zA-Z]:/.test(relativePath)) {
+    return false
+  }
+
+  const segments = relativePath.split(/[\\/]+/)
+  return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
 }
 
 export function createDataLadAdapter(options) {

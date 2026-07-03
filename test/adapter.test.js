@@ -308,6 +308,64 @@ test('listDatasets returns only root dataset when no .gitmodules exists', async 
   assert.equal(datasets[0].relativePath, '.')
 })
 
+test('listDatasets ignores .gitmodules entries that escape the project directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-list-datasets-traversal-'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "evil-relative"]\n\tpath = ../../../../etc\n\turl = ../evil.git\n' +
+      '[submodule "evil-absolute"]\n\tpath = /etc\n\turl = ../evil2.git\n' +
+      '[submodule "legit"]\n\tpath = inputs\n\turl = ../inputs.git\n'
+  )
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const datasets = await adapter.listDatasets(root)
+
+  assert.deepEqual(
+    datasets.map((dataset) => dataset.relativePath),
+    ['.', 'inputs']
+  )
+})
+
+test('listDatasets recurses into subdatasets to find nested-within-nested datasets', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-list-datasets-deep-'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "sub"]\n\tpath = sub\n\turl = ../sub.git\n'
+  )
+
+  const subPath = join(root, 'sub')
+  await mkdir(subPath, { recursive: true })
+  await writeFile(
+    join(subPath, '.gitmodules'),
+    '[submodule "subsub"]\n\tpath = subsub\n\turl = ../subsub.git\n'
+  )
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const datasets = await adapter.listDatasets(root)
+
+  assert.deepEqual(
+    datasets.map((dataset) => dataset.relativePath),
+    ['.', 'sub', 'sub/subsub']
+  )
+  assert.equal(datasets[2].path, join(root, 'sub', 'subsub'))
+})
+
 test('listBranches returns current branch and local branch names', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-list-branches-'))
   const runner = new FakeRunner()
@@ -340,7 +398,7 @@ test('listBranches returns current branch and local branch names', async () => {
 
 test('runCommand routes save through curated datalad invocation', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-m', 'checkpoint', '--', 'results.csv'], {
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '--message=checkpoint', '--', 'results.csv'], {
     exitCode: 0,
     stdout: 'save ok\n',
     stderr: '',
@@ -356,8 +414,27 @@ test('runCommand routes save through curated datalad invocation', async () => {
 
   assert.equal(result.ok, true)
   assert.equal(runner.calls.length, 1)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-m', 'checkpoint', '--', 'results.csv'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '--message=checkpoint', '--', 'results.csv'])
   assert.deepEqual(result.warnings, [])
+})
+
+test('runCommand builds a safe save invocation even when the message looks like a CLI flag', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '--message=--amend'], {
+    exitCode: 0,
+    stdout: 'save ok\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('save', {
+    projectPath: '/tmp/project',
+    message: '--amend'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '--message=--amend'])
 })
 
 test('runCommand routes createBranch through curated git invocation', async () => {

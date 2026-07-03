@@ -943,12 +943,13 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
             "save" => {
                 let project_path = request_required_string(request, "projectPath")?;
                 let message = request_required_string(request, "message")?;
+                // `--message=<value>` binds the whole value as one token, so a message that happens
+                // to look like a flag (e.g. "--amend") can't be misparsed the way `-m <value>` can.
                 let mut args = vec![
                     "-C".to_string(),
                     project_path.clone(),
                     "save".to_string(),
-                    "-m".to_string(),
-                    message,
+                    format!("--message={}", message),
                 ];
                 let paths = request_optional_paths(request)?;
                 if !paths.is_empty() {
@@ -1466,7 +1467,7 @@ fn read_subdataset_paths_from_gitmodules(project_path: &str) -> Vec<String> {
         let mut parts = trimmed.splitn(2, '=');
         let left = parts.next().unwrap_or("").trim();
         let right = parts.next().unwrap_or("").trim();
-        if left == "path" && !right.is_empty() {
+        if left == "path" && !right.is_empty() && is_safe_relative_subdataset_path(right) {
             let value = right.to_string();
             if seen.insert(value.clone()) {
                 results.push(value);
@@ -1475,6 +1476,25 @@ fn read_subdataset_paths_from_gitmodules(project_path: &str) -> Vec<String> {
     }
 
     results
+}
+
+// .gitmodules `path =` values come from repository content, which may belong to a cloned/untrusted
+// dataset. Every consumer joins this value onto a filesystem path, so a `../` or absolute path here
+// would let a malicious dataset make the app read or write outside the project directory.
+fn is_safe_relative_subdataset_path(relative_path: &str) -> bool {
+    if relative_path.is_empty()
+        || relative_path.starts_with('/')
+        || relative_path.starts_with('\\')
+        || (relative_path.len() >= 2
+            && relative_path.as_bytes()[1] == b':'
+            && relative_path.as_bytes()[0].is_ascii_alphabetic())
+    {
+        return false;
+    }
+
+    relative_path
+        .split(['/', '\\'])
+        .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 #[cfg(test)]
@@ -1639,8 +1659,7 @@ mod tests {
                 "-C",
                 project_path,
                 "save",
-                "-m",
-                "checkpoint",
+                "--message=checkpoint",
                 "--",
                 "a.txt",
                 "b.txt",
@@ -1651,8 +1670,7 @@ mod tests {
                     "-C",
                     project_path,
                     "save",
-                    "-m",
-                    "checkpoint",
+                    "--message=checkpoint",
                     "--",
                     "a.txt",
                     "b.txt",
