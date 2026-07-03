@@ -470,7 +470,7 @@ export class DataLadAdapter {
     }
 
     const [timestampRaw, longHash, author, subject, ...bodyParts] =
-      (metaResult.stdout ?? '').split(' ')
+      (metaResult.stdout ?? '').split('\u0000')
     const timestamp = Number.parseInt(timestampRaw, 10)
 
     const statLines = (statResult.stdout ?? '')
@@ -483,7 +483,7 @@ export class DataLadAdapter {
       timestamp: Number.isFinite(timestamp) ? timestamp : null,
       author: (author ?? '').trim(),
       subject: (subject ?? '').trim(),
-      message: bodyParts.join(' ').trim(),
+      message: bodyParts.join('\u0000').trim(),
       stat: statLines.join('\n')
     }
   }
