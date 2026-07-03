@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/gui/main.js",
   "description": "DataLad Desktop cross-platform project workflow app",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "test": "node --test",
@@ -34,7 +35,9 @@
     },
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "src/gui/assets/icons/datalad_desktop.icns"
+      "icon": "src/gui/assets/icons/datalad_desktop.icns",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "win": {
       "target": [

@@ -26,9 +26,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Signing/notarization is opt-in via the MACOS_SIGNING_ENABLED repo variable, mirroring the
+      # Windows/SignPath gate below. To enable it, set that variable to 'true' and add these repo
+      # secrets: MACOS_CSC_LINK (base64-encoded .p12 developer ID certificate), MACOS_CSC_KEY_PASSWORD,
+      # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID. electron-builder signs and notarizes
+      # automatically once those are present — no other config is needed. Until then this step
+      # produces the same unsigned build it always has.
       - name: Build macOS artifacts (Intel + Apple Silicon)
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
+          CSC_LINK: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.MACOS_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.MACOS_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_TEAM_ID || '' }}
         run: npm run package:mac:both -- --publish=never
 
       - name: Upload macOS artifacts
