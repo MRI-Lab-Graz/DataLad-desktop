@@ -41,6 +41,14 @@ const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   createBranchAt: {
     required: ['projectPath', 'branchName', 'startPoint'],
     optional: []
+  },
+  restoreFileFromCommit: {
+    required: ['projectPath', 'commitHash', 'paths'],
+    optional: []
+  },
+  discardChanges: {
+    required: ['projectPath', 'paths'],
+    optional: []
   }
 })
 
@@ -76,6 +84,10 @@ export function assertCommandRequest(commandName, request) {
 
   if (Object.hasOwn(request, 'paths') && !Array.isArray(request.paths)) {
     throw new Error(`Invalid request for ${commandName}: paths must be an array`)
+  }
+
+  if (schema.required.includes('paths') && (request.paths?.length ?? 0) === 0) {
+    throw new Error(`Invalid request for ${commandName}: paths must be a non-empty array`)
   }
 
   for (const field of LEADING_DASH_FIELDS[commandName] ?? []) {

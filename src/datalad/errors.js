@@ -42,11 +42,34 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
-  if (commandName === 'createBranchAt' && hasPattern(stderr, /unknown revision|not a valid object name|bad object/)) {
+  if (
+    (commandName === 'createBranchAt' || commandName === 'restoreFileFromCommit') &&
+    hasPattern(stderr, /unknown revision|not a valid object name|bad object|could not resolve/)
+  ) {
     return {
       code: 'INVALID_START_POINT',
       title: 'Save point not found',
       message: 'The selected save point could not be found in this project\'s history.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'restoreFileFromCommit' && hasPattern(stderr, /pathspec|did not match any file/)) {
+    return {
+      code: 'FILE_NOT_IN_SAVE_POINT',
+      title: 'File not found in that save point',
+      message:
+        'The selected file does not exist in that save point. It may have been added later or had a different name back then.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'discardChanges' && hasPattern(stderr, /pathspec|did not match any file/)) {
+    return {
+      code: 'FILE_NOT_TRACKED',
+      title: 'File has never been saved',
+      message:
+        'Changes to this file cannot be discarded because it has never been part of a save point. Delete the file manually if you no longer need it.',
       technicalDetails: details
     }
   }

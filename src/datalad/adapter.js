@@ -19,7 +19,9 @@ const CURATED_COMMANDS = new Set([
   'push',
   'createBranch',
   'switchBranch',
-  'createBranchAt'
+  'createBranchAt',
+  'restoreFileFromCommit',
+  'discardChanges'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
@@ -880,6 +882,28 @@ export class DataLadAdapter {
         return {
           command: 'git',
           args: ['-C', projectPath, 'checkout', '-b', branchName, startPoint],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'restoreFileFromCommit': {
+        const projectPath = request.projectPath
+        const commitHash = request.commitHash
+        if (!COMMIT_HASH_PATTERN.test(commitHash)) {
+          throw new Error(`Invalid commit hash format: ${commitHash}`)
+        }
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'restore', `--source=${commitHash}`, '--worktree', '--', ...request.paths],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'discardChanges': {
+        const projectPath = request.projectPath
+        // --staged --worktree returns the file fully to the last save point even if
+        // something already staged it (datalad save stages as part of saving).
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'restore', '--source=HEAD', '--staged', '--worktree', '--', ...request.paths],
           options: { cwd: projectPath }
         }
       }

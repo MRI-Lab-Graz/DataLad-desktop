@@ -1170,3 +1170,157 @@ test('getCommitDetails rejects an invalid commit hash format', async () => {
     /invalid commit hash format/i
   )
 })
+test('runCommand routes restoreFileFromCommit to git restore with a source commit', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'restore', '--source=abc1234', '--worktree',
+    '--', 'results.csv', 'data/raw.tsv'
+  ], {
+    exitCode: 0, stdout: '', stderr: '', failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('restoreFileFromCommit', {
+    projectPath: '/tmp/project',
+    commitHash: 'abc1234',
+    paths: ['results.csv', 'data/raw.tsv']
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, [
+    '-C', '/tmp/project',
+    'restore', '--source=abc1234', '--worktree',
+    '--', 'results.csv', 'data/raw.tsv'
+  ])
+})
+
+test('runCommand rejects restoreFileFromCommit with an invalid commit hash', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  await assert.rejects(
+    () => adapter.runCommand('restoreFileFromCommit', {
+      projectPath: '/tmp/project',
+      commitHash: 'not-a-hash!',
+      paths: ['results.csv']
+    }),
+    /invalid commit hash format/i
+  )
+})
+
+test('runCommand rejects restoreFileFromCommit without paths', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  await assert.rejects(
+    () => adapter.runCommand('restoreFileFromCommit', {
+      projectPath: '/tmp/project',
+      commitHash: 'abc1234',
+      paths: []
+    }),
+    /paths must be a non-empty array/i
+  )
+})
+
+test('runCommand maps restoreFileFromCommit pathspec failure to a friendly message', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'restore', '--source=abc1234', '--worktree',
+    '--', 'missing.csv'
+  ], {
+    exitCode: 1,
+    stdout: '',
+    stderr: "error: pathspec 'missing.csv' did not match any file(s) known to git\n",
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('restoreFileFromCommit', {
+    projectPath: '/tmp/project',
+    commitHash: 'abc1234',
+    paths: ['missing.csv']
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'FILE_NOT_IN_SAVE_POINT')
+})
+
+test('runCommand maps restoreFileFromCommit unknown-revision failure to save-point-not-found', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'restore', '--source=dead1234', '--worktree',
+    '--', 'results.csv'
+  ], {
+    exitCode: 1,
+    stdout: '',
+    stderr: "fatal: could not resolve dead1234\n",
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('restoreFileFromCommit', {
+    projectPath: '/tmp/project',
+    commitHash: 'dead1234',
+    paths: ['results.csv']
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'INVALID_START_POINT')
+})
+
+test('runCommand routes discardChanges to git restore from HEAD across index and worktree', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'restore', '--source=HEAD', '--staged', '--worktree',
+    '--', 'notes.txt'
+  ], {
+    exitCode: 0, stdout: '', stderr: '', failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('discardChanges', {
+    projectPath: '/tmp/project',
+    paths: ['notes.txt']
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, [
+    '-C', '/tmp/project',
+    'restore', '--source=HEAD', '--staged', '--worktree',
+    '--', 'notes.txt'
+  ])
+})
+
+test('runCommand rejects discardChanges without paths', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  await assert.rejects(
+    () => adapter.runCommand('discardChanges', { projectPath: '/tmp/project' }),
+    /missing required field paths/i
+  )
+})
+
+test('runCommand maps discardChanges pathspec failure to never-saved message', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', [
+    '-C', '/tmp/project',
+    'restore', '--source=HEAD', '--staged', '--worktree',
+    '--', 'brand-new.txt'
+  ], {
+    exitCode: 1,
+    stdout: '',
+    stderr: "error: pathspec 'brand-new.txt' did not match any file(s) known to git\n",
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('discardChanges', {
+    projectPath: '/tmp/project',
+    paths: ['brand-new.txt']
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'FILE_NOT_TRACKED')
+})
