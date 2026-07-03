@@ -225,3 +225,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .DS_Store
+
+# Local DataLad test dataset (not part of the app source)
+/ds008055/
