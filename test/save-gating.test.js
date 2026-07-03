@@ -5,7 +5,7 @@ import { computeSaveGating } from '../src/gui/renderer/save-gating.js'
 test('stays enabled without a message, but warns one will be requested', () => {
   const gating = computeSaveGating({ hasMessage: false, hasSelection: false, hasConflicts: false, hasChanges: false })
   assert.equal(gating.disabled, false)
-  assert.equal(gating.guidance.text, 'Add a save message, or Save will ask you for one.')
+  assert.equal(gating.guidance.text, 'Add a checkpoint message, or Save will ask you for one.')
   assert.equal(gating.guidance.warning, true)
 })
 
@@ -47,4 +47,15 @@ test('enabled with a message even when there are no local changes (manual/empty 
 test('conflicts take priority over the missing-selection guidance', () => {
   const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: true, hasChanges: true })
   assert.match(gating.guidance.text, /Resolve conflicts/)
+})
+
+test('messageLabel lets callers swap in git terminology for power users', () => {
+  const gating = computeSaveGating({
+    hasMessage: false,
+    hasSelection: false,
+    hasConflicts: false,
+    hasChanges: false,
+    messageLabel: 'commit message'
+  })
+  assert.equal(gating.guidance.text, 'Add a commit message, or Save will ask you for one.')
 })

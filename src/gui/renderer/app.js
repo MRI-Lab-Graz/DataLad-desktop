@@ -1,4 +1,9 @@
-import { computeDatasetGating, computeRemoteGating } from './button-gating.js'
+import {
+  computeDatasetGating,
+  computeRemoteGating,
+  computeSyncSectionVisible,
+  computeSyncActionsQuietMessage
+} from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
 import { computeSaveStatusChip, computeSyncStatusChip, computeMissingContentChip } from './project-health-chips.js'
 
@@ -7,6 +12,7 @@ const api = window.dataladDesktop
 const state = {
   rootProjectPath: null,
   rootProjectClassification: 'unknown',
+  currentProjectClassification: 'unknown',
   fileListing: null,
   commitMetaRequestToken: 0,
   requestTokens: {
@@ -112,6 +118,9 @@ const elements = {
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
+  syncDataSection: document.getElementById('sync-data-section'),
+  syncActionsStrip: document.getElementById('sync-actions-strip'),
+  syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
@@ -119,6 +128,8 @@ const elements = {
   refreshFilesButton: document.getElementById('refresh-files'),
   filesSearchInput: document.getElementById('files-search'),
   message: document.getElementById('message'),
+  messageFieldLabel: document.getElementById('message-field-label'),
+  projectActionsTitle: document.getElementById('project-actions-title'),
   saveGuidance: document.getElementById('save-guidance'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
@@ -389,8 +400,9 @@ elements.saveProjectButton.addEventListener('click', async () => {
   const message = elements.message.value.trim()
 
   if (!message) {
-    elements.commandOutput.textContent = 'Add a save message before running Save.'
-    setLastActionState('Add a save message first.', 'error')
+    const messageLabel = getMessageTermLabel()
+    elements.commandOutput.textContent = `Add a ${messageLabel} before running Save.`
+    setLastActionState(`Add a ${messageLabel} first.`, 'error')
     updateSaveButtonState()
     return
   }
@@ -1751,12 +1763,41 @@ function updateSaveButtonState() {
     hasMessage: Boolean(elements.message.value.trim()),
     hasSelection: gatherSavePaths().length > 0,
     hasConflicts: Boolean(snapshot?.conflictCount),
-    hasChanges: Boolean(snapshot && !snapshot.clean)
+    hasChanges: Boolean(snapshot && !snapshot.clean),
+    messageLabel: getMessageTermLabel()
   })
 
   elements.saveProjectButton.disabled = gating.disabled
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
+}
+
+// Plain-language "checkpoint" terms are the default so non-git users aren't
+// confronted with jargon, but Power User Mode swaps in the git vocabulary
+// (commit) those users already know instead.
+function getMessageTermLabel() {
+  return elements.powerUserModeToggle.checked ? 'commit message' : 'checkpoint message'
+}
+
+function applyWorkTerminology() {
+  const powerUser = elements.powerUserModeToggle.checked
+
+  elements.projectActionsTitle.textContent = powerUser ? 'Commit Changes' : 'Save a Checkpoint'
+  elements.messageFieldLabel.textContent = powerUser ? 'Commit Message' : 'Checkpoint Message'
+  setIdleButtonLabel(elements.saveProjectButton, powerUser ? 'Commit' : 'Save Checkpoint')
+  updateSaveButtonState()
+}
+
+// setButtonBusy captures the current textContent as the idle label the first
+// time it runs, so terminology changes need to go through the same field
+// (dataset.idleLabel) while a save is in flight, rather than clobbering it.
+function setIdleButtonLabel(button, label) {
+  if (button.classList.contains('is-busy')) {
+    button.dataset.idleLabel = label
+    return
+  }
+
+  button.textContent = label
 }
 
 async function ensureBranchActionSafety(projectPath, actionDescription) {
@@ -2048,10 +2089,28 @@ function setCurrentProjectHeader(projectPath, classification) {
 }
 
 function applyDatasetGatedButtons(classification) {
-  const gating = computeDatasetGating(classification)
+  state.currentProjectClassification = classification
+  updateGetDataGating()
+  updateSyncSectionVisibility()
+}
+
+function updateGetDataGating() {
+  const gating = computeDatasetGating(state.currentProjectClassification, state.projectHealthSnapshot)
 
   elements.getDataButton.disabled = gating.disabled
   elements.getDataButton.title = gating.title
+}
+
+function updateSyncSectionVisibility() {
+  const classification = state.currentProjectClassification
+  const health = state.projectHealthSnapshot
+
+  elements.syncDataSection.hidden = !computeSyncSectionVisible(classification, health)
+
+  const quietMessage = computeSyncActionsQuietMessage(classification, health)
+  elements.syncActionsStrip.hidden = Boolean(quietMessage)
+  elements.syncActionsQuiet.hidden = !quietMessage
+  elements.syncActionsQuiet.textContent = quietMessage ?? ''
 }
 
 function setOnboardingExpanded(expanded) {
@@ -2141,6 +2200,9 @@ function applyRemoteGatedButtons(health) {
   elements.publishProjectButton.title = gating.publish.title
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
+
+  updateGetDataGating()
+  updateSyncSectionVisibility()
 }
 
 function renderProjectHealth(overrideMessage = null) {
@@ -2634,6 +2696,7 @@ function initPowerUserConsole() {
   elements.powerUserModeToggle.checked = powerUserModeEnabled
   void api.setConsoleEnabled(powerUserModeEnabled)
   updatePowerUserConsoleVisibility()
+  applyWorkTerminology()
   elements.consoleProjectPath.value = elements.commandProjectPath.value
   elements.consoleHelpText.innerHTML =
     api.platform === 'win32'
@@ -2651,6 +2714,7 @@ function initPowerUserConsole() {
     const enabled = elements.powerUserModeToggle.checked
     void api.setConsoleEnabled(enabled)
     updatePowerUserConsoleVisibility()
+    applyWorkTerminology()
     try {
       localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')
     } catch {

@@ -9,10 +9,20 @@
  * message at click time) rather than by disabling the button, since a
  * disabled button with no explanation reads as broken.
  *
- * @param {{ hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean }} input
+ * @param {{
+ *   hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean,
+ *   messageLabel?: string
+ * }} input messageLabel lets callers swap in git terminology ("commit message") for power users
+ *   while plain-language users ("checkpoint message") get the default.
  * @returns {{ disabled: boolean, guidance: { text: string, warning: boolean } }}
  */
-export function computeSaveGating({ hasMessage, hasSelection, hasConflicts, hasChanges }) {
+export function computeSaveGating({
+  hasMessage,
+  hasSelection,
+  hasConflicts,
+  hasChanges,
+  messageLabel = 'checkpoint message'
+}) {
   const disabled = hasConflicts || (hasChanges && !hasSelection)
 
   if (hasConflicts) {
@@ -32,7 +42,7 @@ export function computeSaveGating({ hasMessage, hasSelection, hasConflicts, hasC
   if (!hasMessage) {
     return {
       disabled,
-      guidance: { text: 'Add a save message, or Save will ask you for one.', warning: true }
+      guidance: { text: `Add a ${messageLabel}, or Save will ask you for one.`, warning: true }
     }
   }
 

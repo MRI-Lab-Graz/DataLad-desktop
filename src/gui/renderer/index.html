@@ -251,10 +251,10 @@
         <section class="card save-hero reveal reveal-4 full-span" aria-labelledby="project-actions-title">
           <span class="card-icon-badge" aria-hidden="true">💾</span>
           <div class="section-head">
-            <h2 id="project-actions-title">Save Your Work</h2>
+            <h2 id="project-actions-title">Save a Checkpoint</h2>
           </div>
           <p class="lede-small">
-            Record a checkpoint of your files with a short message — like a commit. This is the action you'll
+            Write down what you've done and record a checkpoint of your files. This is the action you'll
             use most, and it works fully offline.
           </p>
 
@@ -296,16 +296,19 @@
           </section>
 
           <label class="field">
-            <span>Save Message</span>
+            <span id="message-field-label">Checkpoint Message</span>
             <input id="message" type="text" placeholder="Describe this checkpoint" />
           </label>
 
-          <p id="save-guidance" class="hint-inline">Add a save message, or Save will ask you for one.</p>
+          <p id="save-guidance" class="hint-inline">Add a checkpoint message, or Save will ask you for one.</p>
 
-          <label class="field">
-            <span>Manual File Paths (optional, comma separated)</span>
-            <input id="paths" type="text" placeholder="results.csv, notes.md" />
-          </label>
+          <details class="branch-details">
+            <summary>Advanced: manual file paths</summary>
+            <label class="field">
+              <span>Manual File Paths (optional, comma separated)</span>
+              <input id="paths" type="text" placeholder="results.csv, notes.md" />
+            </label>
+          </details>
 
           <button
             id="save-project"
@@ -313,7 +316,7 @@
             type="button"
             title="Record the current state of your files with a message, like a commit. Works fully offline."
           >
-            Save
+            Save Checkpoint
           </button>
 
           <section class="status-box" aria-labelledby="command-output-title">
@@ -334,7 +337,7 @@
           </section>
         </section>
 
-        <section class="card reveal reveal-4 full-span" aria-labelledby="sync-data-title">
+        <section id="sync-data-section" class="card reveal reveal-4 full-span" aria-labelledby="sync-data-title" hidden>
           <span class="card-icon-badge" aria-hidden="true">🔄</span>
           <div class="section-head">
             <h2 id="sync-data-title">Get Data &amp; Remote Sync</h2>
@@ -344,7 +347,7 @@
             this project.
           </p>
 
-          <div class="action-strip">
+          <div id="sync-actions-strip" class="action-strip">
             <button id="get-data" class="button button-ghost" type="button">Get Data</button>
             <span class="sibling-action-group">
               <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
@@ -360,6 +363,7 @@
               </button>
             </span>
           </div>
+          <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>
         </section>
 

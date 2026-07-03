@@ -47,12 +47,12 @@ test('Save shows a busy state while the command is in flight, then recovers', as
   await app.page.waitForFunction(
     () => {
       const el = document.getElementById('save-project')
-      return !el.disabled && el.textContent.trim() === 'Save'
+      return !el.disabled && el.textContent.trim() === 'Save Checkpoint'
     },
     { timeout: 15_000 }
   )
   const after = await app.buttonState('save-project')
-  assert.equal(after.text, 'Save')
+  assert.equal(after.text, 'Save Checkpoint')
   assert.doesNotMatch(after.classes, /is-busy/)
 })
 
