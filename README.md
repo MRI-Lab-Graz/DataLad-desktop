@@ -79,6 +79,18 @@ If you prefer the terminal, this removes the quarantine flag directly:
 xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
 ```
 
+### Windows: "Windows protected your PC" warning
+
+Release builds are not yet signed with a code-signing certificate, so the
+installer's first run may be blocked by Microsoft Defender SmartScreen with a
+blue screen titled *"Windows protected your PC"*. This is expected for
+unsigned installers — you only need to allow it once:
+
+1. On the SmartScreen screen, click **More info**.
+2. Click **Run anyway**.
+3. The installer proceeds normally, and the installed app opens like any
+   other app afterward.
+
 ### Advanced: install from source
 
 This path is for contributors and advanced users who want to run the app

@@ -109,6 +109,19 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  // Left behind when a previous git/git-annex process for this project was
+  // killed (app crash, force-quit, power loss) mid-operation instead of
+  // exiting cleanly and removing its own lock.
+  if (hasPattern(stderr, /unable to create.*index\.lock|index\.lock.*file exists|another git process/)) {
+    return {
+      code: 'REPO_LOCKED',
+      title: 'A previous operation left a lock behind',
+      message:
+        'A previous Save/Update/Publish was interrupted (e.g. the app or your computer was closed mid-operation) and left a lock file in place, which blocks new operations. If no other Git or DataLad process is currently running for this project, it is safe to remove the lock and retry.',
+      technicalDetails: details
+    }
+  }
+
   if (hasPattern(stderr, /you have not concluded your merge|merge_head exists|merge in progress/)) {
     return {
       code: 'MERGE_IN_PROGRESS',

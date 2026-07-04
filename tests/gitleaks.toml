@@ -1,0 +1,14 @@
+title = "DataLad Desktop gitleaks config"
+
+# Start from gitleaks' built-in rule set (API keys, tokens, private keys,
+# cloud credentials, etc.) and only add project-specific exclusions here —
+# don't disable whole rule categories just to silence one false positive.
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  # Test/e2e fixtures use fixed placeholder identities (e2e@example.org and
+  # similar), never real credentials — see e2e/fixtures.mjs.
+  '''e2e/fixtures\.mjs''',
+]

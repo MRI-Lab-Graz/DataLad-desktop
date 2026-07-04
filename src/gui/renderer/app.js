@@ -834,6 +834,10 @@ async function runWorkflowCommand(commandName, request, button = null) {
 
     elements.commandOutput.innerHTML = renderCommandResult(result, saveSummary)
 
+    if (!result.ok && result.userError?.code === 'REPO_LOCKED' && nextProjectPath) {
+      addLockRecoveryAction(commandName, request, button, nextProjectPath)
+    }
+
     if (!result.ok && nextProjectPath) {
       void refreshWorkingTreeStatus(nextProjectPath)
     }
@@ -865,6 +869,35 @@ async function runWorkflowCommand(commandName, request, button = null) {
       void refreshFileBrowser(state.rootProjectPath)
     }
   }
+}
+
+// Offered when a command fails with REPO_LOCKED (errors.js): lets the user
+// remove the leftover lock from an interrupted operation and immediately
+// retry, instead of having to find and delete '.git/index.lock' by hand.
+function addLockRecoveryAction(commandName, request, button, projectPath) {
+  const actionButton = document.createElement('button')
+  actionButton.type = 'button'
+  actionButton.className = 'lock-recovery-button'
+  actionButton.textContent = 'Remove lock and retry'
+  actionButton.addEventListener('click', async () => {
+    const confirmed = window.confirm(
+      'Only do this if no other Git or DataLad process is currently running for this project. Remove the lock and retry?'
+    )
+    if (!confirmed) {
+      return
+    }
+
+    actionButton.disabled = true
+    try {
+      await api.clearRepositoryLock(projectPath)
+      await runWorkflowCommand(commandName, request, button)
+    } catch (error) {
+      setLastActionState(`Could not remove the lock: ${error.message}`, 'error')
+      actionButton.disabled = false
+    }
+  })
+
+  elements.commandOutput.appendChild(actionButton)
 }
 
 async function refreshDatasetList(projectPath) {

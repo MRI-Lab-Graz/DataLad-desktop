@@ -773,6 +773,44 @@ test('addIgnorePatterns creates a new .gitignore and skips already-present patte
   assert.equal(await readFile(join(subPath, '.gitignore'), 'utf8'), '.DS_Store\nThumbs.db\n')
 })
 
+test('clearRepositoryLock removes a leftover .git/index.lock file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-lock-'))
+  await mkdir(join(root, '.git'), { recursive: true })
+  await writeFile(join(root, '.git', 'index.lock'), '')
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.clearRepositoryLock(root)
+
+  assert.equal(result.removed, true)
+  await assert.rejects(readFile(join(root, '.git', 'index.lock')))
+})
+
+test('clearRepositoryLock is a no-op when there is no lock file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-lock-none-'))
+  await mkdir(join(root, '.git'), { recursive: true })
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.clearRepositoryLock(root)
+
+  assert.equal(result.removed, false)
+})
+
 test('listRecentCommits returns commit metadata in log order', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-history-'))
   const runner = new FakeRunner()

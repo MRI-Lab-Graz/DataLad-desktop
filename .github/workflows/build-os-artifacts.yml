@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run tests
+        run: npm test
+
       # Signing/notarization is opt-in via the MACOS_SIGNING_ENABLED repo variable, mirroring the
       # Windows/SignPath gate below. To enable it, set that variable to 'true' and add these repo
       # secrets: MACOS_CSC_LINK (base64-encoded .p12 developer ID certificate), MACOS_CSC_KEY_PASSWORD,
@@ -69,6 +72,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run tests
+        run: npm test
 
       - name: Build Windows artifacts
         run: npm run package:win:x64 -- --publish=never
@@ -116,12 +122,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  linux:
+    name: Linux (x64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build Linux artifacts
+        run: npm run package:linux -- --publish=never
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: datalad-desktop-linux
+          path: |
+            dist/*.AppImage
+            dist/latest-linux.yml
+            dist/builder-debug.yml
+          if-no-files-found: error
+          retention-days: 14
+
   publish-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs:
       - macos
       - windows
+      - linux
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download packaged artifacts
@@ -140,4 +180,5 @@ jobs:
             release-assets/**/*.zip
             release-assets/**/*.exe
             release-assets/**/*.blockmap
+            release-assets/**/*.AppImage
             release-assets/**/*.yml

@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
@@ -132,6 +132,21 @@ export class DataLadAdapter {
     }
 
     return buildCommandResult(commandName, result, mapCommandError(commandName, result), warnings)
+  }
+
+  // Recovery action offered alongside the REPO_LOCKED error (errors.js):
+  // removes the standard git index lock left behind by an interrupted
+  // Save/Update/Publish so the user can retry without a manual terminal fix.
+  async clearRepositoryLock(projectPath) {
+    await this.#ensureGitProject(projectPath)
+
+    const lockPath = join(projectPath, '.git', 'index.lock')
+    const existed = await fileExists(lockPath)
+    if (existed) {
+      await rm(lockPath, { force: true })
+    }
+
+    return { ok: true, removed: existed, lockPath }
   }
 
   async listDatasets(projectPath) {

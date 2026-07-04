@@ -52,6 +52,13 @@ test('mapCommandError maps merge conflict output for update and branch commands'
   }
 })
 
+test('mapCommandError maps a leftover git index lock regardless of command', () => {
+  const result = mapCommandError('save', {
+    stderr: "fatal: Unable to create '/tmp/proj/.git/index.lock': File exists."
+  })
+  assert.equal(result.code, 'REPO_LOCKED')
+})
+
 test('mapCommandError maps in-progress merge output regardless of command', () => {
   const result = mapCommandError('update', { stderr: 'fatal: You have not concluded your merge (MERGE_HEAD exists)' })
   assert.equal(result.code, 'MERGE_IN_PROGRESS')

@@ -55,6 +55,15 @@ function isWithinAuthorizedRoot(targetPath) {
   return false
 }
 
+// Every IPC handler that accepts a renderer-supplied path must call this
+// before touching the filesystem — a handler that skips it is a path-
+// confinement gap (see commit 2df927e's fs:* handlers for the pattern).
+function requireAuthorizedRoot(targetPath) {
+  if (!targetPath || typeof targetPath !== 'string' || !isWithinAuthorizedRoot(targetPath)) {
+    throw new Error('This folder is not part of an opened project.')
+  }
+}
+
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
     width: 1240,
@@ -147,37 +156,50 @@ ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
 })
 
 ipcMain.handle('adapter:readGitignore', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
   return adapter.readGitignore(payload.projectPath, payload.relativeDatasetPath)
 })
 
 ipcMain.handle('adapter:addIgnorePatterns', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
   return adapter.addIgnorePatterns(payload.projectPath, payload.relativeDatasetPaths, payload.patterns)
 })
 
 ipcMain.handle('adapter:listBranches', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.listBranches(projectPath)
 })
 
 ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.getLastCommit(projectPath)
 })
 
 ipcMain.handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.getWorkingTreeStatus(projectPath)
 })
 
 ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
   const projectPath = payload.projectPath
   const options = payload.options ?? {}
+  requireAuthorizedRoot(projectPath)
   return adapter.listRecentCommits(projectPath, options)
 })
 
 ipcMain.handle('adapter:getCommitDetails', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
 })
 
 ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.getProjectHealth(projectPath)
+})
+
+ipcMain.handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.clearRepositoryLock(projectPath)
 })
 
 ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
@@ -189,6 +211,8 @@ ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
   if (!projectPath) {
     return { ok: true }
   }
+
+  requireAuthorizedRoot(projectPath)
 
   const watcher = createProjectWatcher({
     onChange: (watchedPath) => {
