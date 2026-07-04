@@ -2,7 +2,7 @@
 
 ## Current state
 
-This repository is currently a focused Electron prototype for DataLad workflows. It is not yet a GitHub Desktop fork and it does not currently preserve GitHub Desktop shell areas such as the native changes view, history UI, or project list.
+This repository is a focused, standalone Electron app for DataLad workflows. It is not, and will not become, a GitHub Desktop fork — the product decision (see Phase 6) is to stay independent of GitHub Desktop, not to track or preserve its shell areas (native changes view, history UI, project list, etc.).
 
 What exists today:
 
@@ -13,12 +13,9 @@ What exists today:
 
 ## Product direction
 
-The product goal is still a researcher-first desktop app where scientists can open a project, understand local state, fetch missing data, save work, update, and publish without needing to understand DataLad internals.
+The product goal is a researcher-first desktop app where scientists can open a project, understand local state, fetch missing data, save work, update, and publish without needing to understand DataLad internals — delivered as a stable, easy-to-use, secure, multi-platform version-control app that is explicitly independent of GitHub Desktop, not a fork or lookalike of it.
 
-The next roadmap is therefore split into two tracks:
-
-1. Stabilize and secure the current prototype so it is truthful, reliable, and testable.
-2. Only then decide whether to keep evolving this standalone shell or replace it with a true GitHub Desktop fork baseline.
+The near-term roadmap is a single track: stabilize and secure this standalone app so it is truthful, reliable, and testable, then keep evolving it as its own product (Phase 6 below records this decision — the "fork GitHub Desktop" alternative is closed).
 
 ## Near-term roadmap
 
@@ -60,13 +57,14 @@ The next roadmap is therefore split into two tracks:
 - Add release smoke tests for packaged apps, not just source checkouts.
 - Separate packaging validation from product validation.
 
-### Phase 6: Shell decision point
+### Phase 6: Shell decision — decided
 
-- Decide explicitly between:
-  - continuing this standalone Electron shell, or
-  - rebasing onto a real GitHub Desktop fork.
-- If the fork path is chosen, record the exact upstream baseline and sync strategy before claiming shell parity.
-- If the standalone path is chosen, rewrite product and UX docs to stop implying GitHub Desktop compatibility.
+**Decision: standalone.** DataLad Desktop stays its own independent Electron app; it will not be rebased onto or claim parity with GitHub Desktop. The explicit product framing going forward is: a stable, easy-to-use, secure, multi-platform version-control app in its own right.
+
+Follow-up from this decision (tracked here, not left implicit):
+- Product/UX docs have been updated to stop implying GitHub Desktop compatibility (`docs/product/researcher-workflow.md`, `docs/architecture/datalad-adapter.md`).
+- Marketing/README copy should describe the app on its own terms (done — README does not reference GitHub Desktop).
+- No further work should frame missing GitHub Desktop shell areas (native changes view, history UI, project list) as gaps to close — they are out of scope by decision, not by omission.
 
 ## Exit criteria for the current prototype
 
@@ -78,7 +76,7 @@ The next roadmap is therefore split into two tracks:
 
 ## Explicit non-goals for the current phase
 
-- Claiming GitHub Desktop shell parity before that code is actually present.
+- Claiming or pursuing GitHub Desktop shell parity — closed by the Phase 6 decision to stay standalone and independent, not just deferred.
 - Expanding the curated GUI action set to generic DataLad command forms.
 - Adding broad metadata management UI.
 - Building GUI buttons that mirror the full DataLad CLI surface.

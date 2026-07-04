@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GITLEAKS_VERSION: '8.30.1'
+
 jobs:
   secret-scan:
     name: Secret scan
@@ -19,11 +22,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The gitleaks GitHub Action now requires a paid license for
+      # organization-owned repos; the underlying gitleaks CLI itself stays
+      # free/open-source, so run it directly instead of through the action.
+      - name: Install gitleaks
+        run: |
+          curl -sSL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_CONFIG: tests/gitleaks.toml
+        run: gitleaks detect --source . --config tests/gitleaks.toml --redact -v
 
   dependency-audit:
     name: npm audit (high/critical)

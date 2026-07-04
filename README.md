@@ -1,7 +1,8 @@
 # DataLad Desktop
 
-A desktop app that makes day-to-day data version control approachable for
-researchers — no command line required.
+A stable, easy-to-use, secure version control app for research data — for
+macOS, Windows, and Linux, no command line required. DataLad Desktop is its
+own independent app, not a fork of or add-on to any other Git client.
 
 ## What is DataLad Desktop?
 

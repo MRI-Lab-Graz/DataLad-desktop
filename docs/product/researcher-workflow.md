@@ -8,7 +8,7 @@ A researcher opens DataLad Desktop and selects one of their projects. They revie
 
 1. Keep the product center on the project, not the filesystem.
 2. Keep one active project at a time.
-3. Preserve standard GitHub Desktop commit/history/branch workflows.
+3. Preserve familiar, standard commit/history/branch workflows (this app is standalone and independent of GitHub Desktop — see `docs/roadmap.md` Phase 6 — "standard" here means conventional Git UX, not GitHub Desktop parity).
 4. Show DataLad controls only for DataLad-enabled projects.
 5. Keep Git-only projects uncluttered by DataLad-specific UI.
 6. Keep language researcher-friendly; avoid annex/sibling internals unless required for recovery.

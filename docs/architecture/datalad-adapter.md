@@ -2,7 +2,7 @@
 
 ## Goal
 
-Keep DataLad integration behind one boundary so shell/UI code remains close to upstream GitHub Desktop behavior and does not issue DataLad shell calls directly.
+Keep DataLad integration behind one boundary so shell/UI code stays consistent and testable and does not issue DataLad shell calls directly. This app is standalone and independent of GitHub Desktop (`docs/roadmap.md` Phase 6) — this boundary is about internal consistency, not upstream parity.
 
 Detailed request/result schema and interface guarantees are documented in `docs/architecture/datalad-adapter-interface.md`.
 
@@ -49,5 +49,5 @@ Errors surfaced to UI should be mapped into researcher language first, with tech
 ## Integration rules
 
 - Do not scatter DataLad shell calls through UI components.
-- Keep branch workflows, history, and commit interactions aligned with standard GitHub Desktop behavior.
+- Keep branch workflows, history, and commit interactions consistent and conventional (standard Git UX), independent of GitHub Desktop's specific behavior.
 - Route normal commit action through DataLad-aware save path for DataLad-enabled projects.
