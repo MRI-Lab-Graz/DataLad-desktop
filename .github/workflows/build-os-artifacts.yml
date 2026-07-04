@@ -35,14 +35,25 @@ jobs:
       # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID. electron-builder signs and notarizes
       # automatically once those are present — no other config is needed. Until then this step
       # produces the same unsigned build it always has.
+      #
+      # electron-builder treats CSC_LINK="" (empty string) as "a link was
+      # provided", not as "unset" — it resolves the empty string to a path
+      # and fails trying to import the project directory as a certificate
+      # file. So when signing is disabled, these vars must be left entirely
+      # unset (this step skipped) rather than set to ''.
+      - name: Configure macOS signing env
+        if: ${{ vars.MACOS_SIGNING_ENABLED == 'true' }}
+        run: |
+          echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> "$GITHUB_ENV"
+          echo "CSC_LINK=${{ secrets.MACOS_CSC_LINK }}" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=${{ secrets.MACOS_CSC_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
+
       - name: Build macOS artifacts (Intel + Apple Silicon)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
-          CSC_LINK: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.MACOS_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.MACOS_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_TEAM_ID || '' }}
         run: npm run package:mac:both -- --publish=never
 
       - name: Upload macOS artifacts
