@@ -49,6 +49,10 @@ const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   discardChanges: {
     required: ['projectPath', 'paths'],
     optional: []
+  },
+  unlock: {
+    required: ['projectPath', 'paths'],
+    optional: []
   }
 })
 

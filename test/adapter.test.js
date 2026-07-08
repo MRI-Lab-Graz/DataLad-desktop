@@ -1373,3 +1373,47 @@ test('runCommand maps discardChanges pathspec failure to never-saved message', a
   assert.equal(result.ok, false)
   assert.equal(result.userError.code, 'FILE_NOT_TRACKED')
 })
+
+test('runCommand routes unlock to datalad unlock with explicit paths', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'unlock', '--', 'big-file.dat'], {
+    exitCode: 0, stdout: 'unlock(ok): big-file.dat\n', stderr: '', failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('unlock', {
+    projectPath: '/tmp/project',
+    paths: ['big-file.dat']
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'unlock', '--', 'big-file.dat'])
+})
+
+test('runCommand rejects unlock without paths', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  await assert.rejects(
+    () => adapter.runCommand('unlock', { projectPath: '/tmp/project' }),
+    /missing required field paths/i
+  )
+})
+
+test('runCommand maps unlock failure to content-not-local message when content is missing', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'unlock', '--', 'big-file.dat'], {
+    exitCode: 1,
+    stdout: 'unlock(error): big-file.dat (content not present)\n',
+    stderr: '',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('unlock', {
+    projectPath: '/tmp/project',
+    paths: ['big-file.dat']
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'CONTENT_NOT_LOCAL')
+})

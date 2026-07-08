@@ -206,6 +206,18 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  // Unlock needs the actual file content on disk first, unlike Save/Get which can
+  // operate on placeholders — so this is the most common way Unlock fails.
+  if (commandName === 'unlock' && hasPattern(`${stdout}\n${stderr}`, /not available|content not present|no content present|not present/)) {
+    return {
+      code: 'CONTENT_NOT_LOCAL',
+      title: 'File content is not downloaded yet',
+      message:
+        'Unlock needs the actual file content on your computer first. Run "Get Data" for this file, then try Unlock again.',
+      technicalDetails: (details || stdout.trim())
+    }
+  }
+
   return {
     ...DEFAULT_ERROR,
     technicalDetails: details

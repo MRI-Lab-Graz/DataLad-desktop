@@ -21,7 +21,8 @@ const CURATED_COMMANDS = new Set([
   'switchBranch',
   'createBranchAt',
   'restoreFileFromCommit',
-  'discardChanges'
+  'discardChanges',
+  'unlock'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
@@ -930,6 +931,14 @@ export class DataLadAdapter {
         return {
           command: 'git',
           args: ['-C', projectPath, 'restore', '--source=HEAD', '--staged', '--worktree', '--', ...request.paths],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'unlock': {
+        const projectPath = request.projectPath
+        return {
+          command: 'datalad',
+          args: ['-C', projectPath, 'unlock', '--', ...request.paths],
           options: { cwd: projectPath }
         }
       }

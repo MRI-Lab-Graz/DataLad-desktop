@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   computeDatasetGating,
+  computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
@@ -54,6 +55,28 @@ test('computeDatasetGating enables Get Data for a dataset before health has reso
 test('computeDatasetGating enables Get Data for a dataset when annex support is unknown', () => {
   const gating = computeDatasetGating('dataset', { annexSupported: false, missingContentCount: null })
   assert.equal(gating.disabled, false)
+})
+
+test('computeUnlockGating disables Unlock for a plain git project', () => {
+  const gating = computeUnlockGating('git')
+  assert.equal(gating.disabled, true)
+  assert.match(gating.title, /not a DataLad dataset/)
+})
+
+test('computeUnlockGating disables Unlock for null/undefined/unknown classification', () => {
+  assert.equal(computeUnlockGating(null).disabled, true)
+  assert.equal(computeUnlockGating(undefined).disabled, true)
+  assert.equal(computeUnlockGating('unknown').disabled, true)
+})
+
+test('computeUnlockGating enables Unlock for a dataset', () => {
+  const gating = computeUnlockGating('dataset')
+  assert.equal(gating.disabled, false)
+  assert.match(gating.title, /Use with caution/)
+})
+
+test('computeUnlockGating enables Unlock for a superdataset', () => {
+  assert.equal(computeUnlockGating('superdataset').disabled, false)
 })
 
 test('computeRemoteGating disables Update/Publish when there is no health snapshot', () => {

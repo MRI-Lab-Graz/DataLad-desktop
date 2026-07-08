@@ -33,6 +33,7 @@ test('plain git project with no remote: Update, Publish, Get Data all disabled',
   const update = await app.buttonState('update-project')
   const publish = await app.buttonState('publish-project')
   const getData = await app.buttonState('get-data')
+  const unlock = await app.buttonState('unlock-files')
 
   assert.equal(update.disabled, true)
   assert.match(update.title, /No remote is configured/)
@@ -40,6 +41,8 @@ test('plain git project with no remote: Update, Publish, Get Data all disabled',
   assert.match(publish.title, /No remote is configured/)
   assert.equal(getData.disabled, true)
   assert.match(getData.title, /not a DataLad dataset/)
+  assert.equal(unlock.disabled, true)
+  assert.match(unlock.title, /not a DataLad dataset/)
 })
 
 test('plain git project with a remote: Update/Publish enabled, Get Data still disabled', async () => {
@@ -70,9 +73,11 @@ test('DataLad dataset with no remote: Get Data enabled, Update/Publish still dis
 
   const getData = await app.buttonState('get-data')
   const update = await app.buttonState('update-project')
+  const unlock = await app.buttonState('unlock-files')
 
   assert.equal(getData.disabled, false)
   assert.equal(update.disabled, true)
+  assert.equal(unlock.disabled, false)
 })
 
 test('DataLad superdataset: Get Data enabled', async () => {
@@ -80,7 +85,9 @@ test('DataLad superdataset: Get Data enabled', async () => {
   await app.openProject(projectPath)
 
   const getData = await app.buttonState('get-data')
+  const unlock = await app.buttonState('unlock-files')
   assert.equal(getData.disabled, false)
+  assert.equal(unlock.disabled, false)
 })
 
 test('Check Setup shows a busy state while running, then recovers', async () => {

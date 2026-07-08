@@ -350,6 +350,18 @@
           <div id="sync-actions-strip" class="action-strip">
             <button id="get-data" class="button button-ghost" type="button">Get Data</button>
             <span class="sibling-action-group">
+              <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
+              <button
+                id="unlock-info"
+                class="info-hint"
+                type="button"
+                aria-label="What does Unlock for Editing do?"
+                title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
+              >
+                ⓘ
+              </button>
+            </span>
+            <span class="sibling-action-group">
               <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
               <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
               <button
@@ -363,6 +375,10 @@
               </button>
             </span>
           </div>
+          <p class="hint-inline">
+            If a file won't open in another program (it may show up as a link/alias instead of a normal
+            file), select it in Manual File Paths above, then try Unlock for Editing.
+          </p>
           <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>
         </section>

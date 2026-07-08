@@ -1,5 +1,6 @@
 import {
   computeDatasetGating,
+  computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
@@ -122,6 +123,7 @@ const elements = {
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
+  unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
   openActiveFolderButton: document.getElementById('open-active-folder'),
@@ -451,6 +453,36 @@ elements.getDataButton.addEventListener('click', async () => {
     projectPath,
     paths: parsePaths(elements.paths.value)
   }, elements.getDataButton)
+
+  await refreshFileBrowser(projectPath)
+})
+
+elements.unlockFilesButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const paths = parsePaths(elements.paths.value)
+  if (paths.length === 0) {
+    elements.commandOutput.textContent =
+      'Enter the file(s) to unlock in Manual File Paths above first.'
+    setLastActionState('Select files to unlock first.', 'error')
+    return
+  }
+
+  const confirmed = window.confirm(
+    'Unlock replaces the link to this file with a real, editable copy.\n\n' +
+    '- The file\'s content must already be downloaded (Get Data) or this will fail.\n' +
+    '- This roughly doubles disk usage for the file until you Save again.\n' +
+    '- Run Save afterward to put it back under normal DataLad tracking.\n\n' +
+    'Continue?'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  await runWorkflowCommand('unlock', { projectPath, paths }, elements.unlockFilesButton)
 
   await refreshFileBrowser(projectPath)
 })
@@ -1976,6 +2008,10 @@ function buildWorkflowStatusLine(result) {
     return 'Requested data retrieval finished.'
   }
 
+  if (result.commandName === 'unlock') {
+    return 'File(s) unlocked for editing. Run Save afterward to put them back under DataLad tracking.'
+  }
+
   if (result.commandName === 'update') {
     return 'Project update finished.'
   }
@@ -2038,6 +2074,10 @@ function actionLabel(commandName) {
 
   if (commandName === 'discardChanges') {
     return 'Discard Changes'
+  }
+
+  if (commandName === 'unlock') {
+    return 'Unlock for Editing'
   }
 
   return 'Action'
@@ -2132,6 +2172,10 @@ function updateGetDataGating() {
 
   elements.getDataButton.disabled = gating.disabled
   elements.getDataButton.title = gating.title
+
+  const unlockGating = computeUnlockGating(state.currentProjectClassification)
+  elements.unlockFilesButton.disabled = unlockGating.disabled
+  elements.unlockFilesButton.title = unlockGating.title
 }
 
 function updateSyncSectionVisibility() {

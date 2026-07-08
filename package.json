@@ -67,10 +67,13 @@
   },
   "devDependencies": {
     "electron": "^42.3.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.15.3",
     "playwright-core": "^1.61.1"
   },
   "engines": {
     "node": ">=20"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true
   }
 }

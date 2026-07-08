@@ -16,6 +16,13 @@ const GET_DATA_READY_TITLE =
 const NOTHING_TO_GET_TITLE =
   'All tracked file content is already downloaded here, so there is nothing to get.'
 
+const NOT_A_DATASET_UNLOCK_TITLE =
+  'This is a plain Git project, not a DataLad dataset, so there is nothing to unlock.'
+
+const UNLOCK_READY_TITLE =
+  'Use with caution: replaces the link to selected file(s) with a real, editable copy. ' +
+  'Content must already be downloaded (Get Data), and this roughly doubles disk usage until you Save again.'
+
 /**
  * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
  * @param {{ annexSupported?: boolean, missingContentCount?: number|null } | null | undefined} health
@@ -36,6 +43,20 @@ export function computeDatasetGating(classification, health) {
   }
 
   return { disabled: false, title: GET_DATA_READY_TITLE }
+}
+
+/**
+ * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
+ * @returns {{ disabled: boolean, title: string }}
+ */
+export function computeUnlockGating(classification) {
+  const isDataLadDataset = classification === 'dataset' || classification === 'superdataset'
+
+  if (!isDataLadDataset) {
+    return { disabled: true, title: NOT_A_DATASET_UNLOCK_TITLE }
+  }
+
+  return { disabled: false, title: UNLOCK_READY_TITLE }
 }
 
 /**
