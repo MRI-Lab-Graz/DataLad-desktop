@@ -6,7 +6,12 @@ import {
   computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
-import { computeSaveStatusChip, computeSyncStatusChip, computeMissingContentChip } from './project-health-chips.js'
+import {
+  computeSaveStatusChip,
+  computeSyncStatusChip,
+  computeMissingContentChip,
+  computeStatusLine
+} from './project-health-chips.js'
 
 const api = window.dataladDesktop
 
@@ -45,7 +50,8 @@ const state = {
   timeMachineLimit: 50,
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
-  timeMachineProjectPath: null
+  timeMachineProjectPath: null,
+  syncSectionAutoOpenPending: false
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
@@ -88,6 +94,7 @@ const elements = {
   projectWorkspaceGrid: document.getElementById('project-workspace-grid'),
   technicalDetailsAside: document.getElementById('technical-details-aside'),
   projectHealthOutput: document.getElementById('project-health-output'),
+  projectStatusLine: document.getElementById('project-status-line'),
   lastActionState: document.getElementById('last-action-state'),
   lastCommitMeta: document.getElementById('last-commit-meta'),
   createProjectPath: document.getElementById('create-project-path'),
@@ -120,6 +127,7 @@ const elements = {
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
   syncDataSection: document.getElementById('sync-data-section'),
+  syncDataSummaryHint: document.getElementById('sync-data-summary-hint'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
@@ -2189,6 +2197,7 @@ function setCurrentProjectHeader(projectPath, classification) {
   // as a side effect and would otherwise repaint the *previous* project's
   // remote/sync chips and button gating until the real fetch resolves.
   state.projectHealthSnapshot = null
+  state.syncSectionAutoOpenPending = true
   renderProjectHealth()
   void refreshProjectHealth(projectPath)
   applyDatasetGatedButtons(classification)
@@ -2215,12 +2224,25 @@ function updateSyncSectionVisibility() {
   const classification = state.currentProjectClassification
   const health = state.projectHealthSnapshot
 
-  elements.syncDataSection.hidden = !computeSyncSectionVisible(classification, health)
+  const nowVisible = computeSyncSectionVisible(classification, health)
+  elements.syncDataSection.hidden = !nowVisible
 
   const quietMessage = computeSyncActionsQuietMessage(classification, health)
   elements.syncActionsStrip.hidden = Boolean(quietMessage)
   elements.syncActionsQuiet.hidden = !quietMessage
   elements.syncActionsQuiet.textContent = quietMessage ?? ''
+  elements.syncDataSummaryHint.textContent = quietMessage ? '— nothing to do right now' : ''
+
+  // Auto-open/close exactly once per project load: expanded when there's an
+  // actionable button, collapsed (but still discoverable) when there isn't.
+  // After that, leave it alone so we don't fight a user who toggled it.
+  // Wait for health to actually resolve first — before that,
+  // computeSyncActionsQuietMessage always returns null (to avoid a
+  // premature flash), which would otherwise force this open every time.
+  if (nowVisible && state.syncSectionAutoOpenPending && health) {
+    elements.syncDataSection.open = !quietMessage
+    state.syncSectionAutoOpenPending = false
+  }
 }
 
 function setOnboardingExpanded(expanded) {
@@ -2315,9 +2337,15 @@ function applyRemoteGatedButtons(health) {
   updateSyncSectionVisibility()
 }
 
+function setStatusLine(text, tone) {
+  elements.projectStatusLine.textContent = text
+  elements.projectStatusLine.className = `status-line status-line-${tone}`
+}
+
 function renderProjectHealth(overrideMessage = null) {
   if (overrideMessage) {
     elements.projectHealthOutput.textContent = overrideMessage
+    setStatusLine(overrideMessage, 'neutral')
     return
   }
 
@@ -2325,7 +2353,9 @@ function renderProjectHealth(overrideMessage = null) {
   applyRemoteGatedButtons(health)
 
   if (!health) {
-    elements.projectHealthOutput.textContent = 'Select a project to see its save, sync, and data status.'
+    const message = 'Select a project to see its save, sync, and data status.'
+    elements.projectHealthOutput.textContent = message
+    setStatusLine(message, 'neutral')
     return
   }
 
@@ -2335,6 +2365,9 @@ function renderProjectHealth(overrideMessage = null) {
 
   elements.projectHealthOutput.innerHTML =
     `<div class="project-health-grid">${unsavedChip}${syncChip}${missingChip}</div>`
+
+  const statusLine = computeStatusLine(state.workingTreeSnapshot, health)
+  setStatusLine(statusLine.label, statusLine.tone)
 }
 
 function chipHtml(chip) {

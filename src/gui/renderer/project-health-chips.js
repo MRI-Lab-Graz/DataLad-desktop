@@ -61,3 +61,39 @@ export function computeMissingContentChip(health) {
 
   return { tone: 'good', label: 'All data present' }
 }
+
+/**
+ * A single plain-language summary of the three chips above, for people who
+ * just want to know "am I okay?" without parsing git jargon. The detailed
+ * chips stay available behind a "Show details" disclosure for anyone who
+ * wants the specifics.
+ *
+ * @param {{ clean: boolean, totalChanged: number } | null | undefined} tree
+ * @param {{ hasUpstream?: boolean, upstream?: string|null, ahead?: number|null, behind?: number|null, annexSupported?: boolean, missingContentCount?: number|null } | null | undefined} health
+ * @returns {{ tone: 'good'|'warning'|'urgent'|'neutral', label: string }}
+ */
+export function computeStatusLine(tree, health) {
+  if (!tree || !health) {
+    return { tone: 'neutral', label: 'Status unknown.' }
+  }
+
+  if (!tree.clean) {
+    const changed = tree.totalChanged
+    return {
+      tone: 'urgent',
+      label: `⚠️ ${changed} unsaved change${changed === 1 ? '' : 's'} — save a checkpoint when ready.`
+    }
+  }
+
+  const missingChip = computeMissingContentChip(health)
+  if (missingChip?.tone === 'warning') {
+    return { tone: 'warning', label: '⚠️ Saved, but some file content has not been downloaded yet.' }
+  }
+
+  const syncChip = computeSyncStatusChip(health)
+  if (syncChip.tone === 'warning') {
+    return { tone: 'warning', label: `⚠️ Saved, but out of sync with remote (${syncChip.label}).` }
+  }
+
+  return { tone: 'good', label: '✅ Everything is saved and up to date.' }
+}

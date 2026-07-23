@@ -195,18 +195,26 @@
         <div class="section-head">
           <h2 id="project-health-title">Project Health</h2>
         </div>
-        <div id="project-health-output" class="panel panel-muted panel-compact">
+        <p id="project-status-line" class="status-line status-line-neutral">
           Select a project to see its save, sync, and data status.
-        </div>
+        </p>
 
-        <section class="status-box" aria-labelledby="working-tree-title">
-          <div class="section-head branch-head">
-            <h3 id="working-tree-title">Working Tree</h3>
+        <details class="status-details">
+          <summary>Show details</summary>
+
+          <div id="project-health-output" class="panel panel-muted panel-compact">
+            Select a project to see its save, sync, and data status.
           </div>
-          <div id="working-tree-summary" class="panel panel-muted panel-compact">
-            Choose a project to see local changes.
-          </div>
-        </section>
+
+          <section class="status-box" aria-labelledby="working-tree-title">
+            <div class="section-head branch-head">
+              <h3 id="working-tree-title">Working Tree</h3>
+            </div>
+            <div id="working-tree-summary" class="panel panel-muted panel-compact">
+              Choose a project to see local changes.
+            </div>
+          </section>
+        </details>
       </section>
 
       <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
@@ -337,51 +345,54 @@
           </section>
         </section>
 
-        <section id="sync-data-section" class="card reveal reveal-4 full-span" aria-labelledby="sync-data-title" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🔄</span>
-          <div class="section-head">
-            <h2 id="sync-data-title">Get Data &amp; Remote Sync</h2>
-          </div>
-          <p class="lede-small">
-            Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
-            this project.
-          </p>
+        <details id="sync-data-section" class="card setup-zone reveal reveal-4 full-span" aria-labelledby="sync-data-title" hidden>
+          <summary id="sync-data-title" class="setup-zone-summary">
+            <span class="card-icon-badge" aria-hidden="true">🔄</span>
+            Get Data &amp; Remote Sync
+            <span id="sync-data-summary-hint" class="setup-zone-summary-hint"></span>
+          </summary>
+          <div class="setup-zone-body">
+            <p class="lede-small">
+              Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
+              this project.
+            </p>
 
-          <div id="sync-actions-strip" class="action-strip">
-            <button id="get-data" class="button button-ghost" type="button">Get Data</button>
-            <span class="sibling-action-group">
-              <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
-              <button
-                id="unlock-info"
-                class="info-hint"
-                type="button"
-                aria-label="What does Unlock for Editing do?"
-                title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
-              >
-                ⓘ
-              </button>
-            </span>
-            <span class="sibling-action-group">
-              <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
-              <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
-              <button
-                id="sibling-actions-info"
-                class="info-hint"
-                type="button"
-                aria-label="What are remote/sibling actions?"
-                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work."
-              >
-                ⓘ
-              </button>
-            </span>
+            <div id="sync-actions-strip" class="action-strip">
+              <button id="get-data" class="button button-ghost" type="button">Get Data</button>
+              <span class="sibling-action-group">
+                <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
+                <button
+                  id="unlock-info"
+                  class="info-hint"
+                  type="button"
+                  aria-label="What does Unlock for Editing do?"
+                  title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
+                >
+                  ⓘ
+                </button>
+              </span>
+              <span class="sibling-action-group">
+                <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
+                <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
+                <button
+                  id="sibling-actions-info"
+                  class="info-hint"
+                  type="button"
+                  aria-label="What are remote/sibling actions?"
+                  title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work."
+                >
+                  ⓘ
+                </button>
+              </span>
+            </div>
+            <p class="hint-inline">
+              If a file won't open in another program (it may show up as a link/alias instead of a normal
+              file), select it in Manual File Paths above, then try Unlock for Editing.
+            </p>
+            <p id="sync-actions-quiet" class="lede-small" hidden></p>
+            <p id="remote-info" class="lede-small" hidden></p>
           </div>
-          <p class="hint-inline">
-            If a file won't open in another program (it may show up as a link/alias instead of a normal
-            file), select it in Manual File Paths above, then try Unlock for Editing.
-          </p>
-          <p id="sync-actions-quiet" class="lede-small" hidden></p>
-          <p id="remote-info" class="lede-small" hidden></p>
-        </section>
+        </details>
 
         <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
           <span class="card-icon-badge" aria-hidden="true">🗂️</span>

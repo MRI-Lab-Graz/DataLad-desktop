@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   computeSaveStatusChip,
   computeSyncStatusChip,
-  computeMissingContentChip
+  computeMissingContentChip,
+  computeStatusLine
 } from '../src/gui/renderer/project-health-chips.js'
 
 test('save status chip: unknown when there is no working tree snapshot yet', () => {
@@ -72,4 +73,60 @@ test('missing content chip: warning with count when content is missing', () => {
     computeMissingContentChip({ annexSupported: true, missingContentCount: 4 }),
     { tone: 'warning', label: 'Data not downloaded: 4' }
   )
+})
+
+test('status line: neutral when tree or health has not resolved yet', () => {
+  assert.deepEqual(computeStatusLine(null, { hasUpstream: false }), { tone: 'neutral', label: 'Status unknown.' })
+  assert.deepEqual(computeStatusLine({ clean: true, totalChanged: 0 }, null), {
+    tone: 'neutral',
+    label: 'Status unknown.'
+  })
+})
+
+test('status line: urgent for unsaved changes, singular vs plural', () => {
+  assert.deepEqual(computeStatusLine({ clean: false, totalChanged: 1 }, { hasUpstream: false }), {
+    tone: 'urgent',
+    label: '⚠️ 1 unsaved change — save a checkpoint when ready.'
+  })
+  assert.deepEqual(computeStatusLine({ clean: false, totalChanged: 3 }, { hasUpstream: false }), {
+    tone: 'urgent',
+    label: '⚠️ 3 unsaved changes — save a checkpoint when ready.'
+  })
+})
+
+test('status line: warning when saved but content is missing', () => {
+  assert.deepEqual(
+    computeStatusLine(
+      { clean: true, totalChanged: 0 },
+      { hasUpstream: false, annexSupported: true, missingContentCount: 2 }
+    ),
+    { tone: 'warning', label: '⚠️ Saved, but some file content has not been downloaded yet.' }
+  )
+})
+
+test('status line: warning when saved and data present but out of sync with remote', () => {
+  assert.deepEqual(
+    computeStatusLine(
+      { clean: true, totalChanged: 0 },
+      { hasUpstream: true, upstream: 'origin/main', ahead: 2, behind: 0, annexSupported: false }
+    ),
+    { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (2 to publish).' }
+  )
+})
+
+test('status line: good when clean, in sync, and all data present', () => {
+  assert.deepEqual(
+    computeStatusLine(
+      { clean: true, totalChanged: 0 },
+      { hasUpstream: true, upstream: 'origin/main', ahead: 0, behind: 0, annexSupported: true, missingContentCount: 0 }
+    ),
+    { tone: 'good', label: '✅ Everything is saved and up to date.' }
+  )
+})
+
+test('status line: good when clean and there is no remote/annex to worry about', () => {
+  assert.deepEqual(computeStatusLine({ clean: true, totalChanged: 0 }, { hasUpstream: false }), {
+    tone: 'good',
+    label: '✅ Everything is saved and up to date.'
+  })
 })
