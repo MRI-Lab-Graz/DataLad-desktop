@@ -301,10 +301,20 @@ elements.checkEnvButton.addEventListener('click', async () => {
     elements.environmentOutput.innerHTML = renderEnvironment(diagnostics)
   } catch (error) {
     elements.environmentOutput.hidden = false
-    elements.environmentOutput.textContent = String(error.message)
+    elements.environmentOutput.innerHTML = renderEnvironmentError(error)
   } finally {
     setButtonBusy(elements.checkEnvButton, false)
   }
+})
+
+elements.environmentOutput.addEventListener('click', (event) => {
+  const closeButton = event.target.closest('[data-close-environment-output]')
+  if (!closeButton) {
+    return
+  }
+
+  elements.environmentOutput.hidden = true
+  elements.environmentOutput.innerHTML = ''
 })
 
 elements.detectProjectButton.addEventListener('click', async () => {
@@ -1648,11 +1658,31 @@ function renderEnvironment(diagnostics) {
         .join('')}</ol>`
     : '<p>No recovery steps needed.</p>'
 
-  return (
+  const bodyHtml =
     `<p><strong>${escapeHtml(report.headline)}</strong></p>` +
     `<p>${escapeHtml(report.summary)}</p>` +
     `<ul>${checksHtml}</ul>` +
     stepsHtml
+
+  return renderDismissibleEnvironmentOutput(bodyHtml)
+}
+
+function setCreateProjectOutputTone(tone) {
+  elements.createProjectOutput.classList.toggle('panel-warning', tone === 'warning')
+}
+
+function renderEnvironmentError(error) {
+  const message = error?.message ? String(error.message) : String(error)
+  return renderDismissibleEnvironmentOutput(`<p>${escapeHtml(message)}</p>`, 'Setup check failed')
+}
+
+function renderDismissibleEnvironmentOutput(bodyHtml, label = 'Setup status') {
+  return (
+    '<div class="environment-output-head">' +
+    `<strong>${escapeHtml(label)}</strong>` +
+    '<button type="button" class="button button-ghost button-inline" data-close-environment-output>Close</button>' +
+    '</div>' +
+    `<div class="environment-output-body">${bodyHtml}</div>`
   )
 }
 
@@ -1914,8 +1944,16 @@ async function buildSaveSummary(projectPath, savedPaths) {
 function renderCommandResult(result, summary = null) {
   const statusLine = buildWorkflowStatusLine(result)
   const warningCount = result.warnings?.length ?? 0
+  const statusToneClass = result.ok ? 'result-status-ok' : 'result-status-error'
+  const statusMarker = result.ok ? 'OK' : 'X'
+  const statusMarkerLabel = result.ok ? 'Success' : 'Error'
 
-  let html = `<p><strong>${escapeHtml(statusLine)}</strong></p>`
+  let html =
+    `<p class="result-status ${statusToneClass}">` +
+    `<span class="result-status-marker" aria-hidden="true">${statusMarker}</span>` +
+    `<span class="sr-only">${escapeHtml(statusMarkerLabel)}:</span>` +
+    `<strong>${escapeHtml(statusLine)}</strong>` +
+    '</p>'
 
   if (result.command && result.args) {
     html += `<p class="cmd-preview"><code>${escapeHtml(buildCroppedCmdLine(result.command, result.args))}</code></p>`
@@ -1933,18 +1971,13 @@ function renderCommandResult(result, summary = null) {
 
   if (warningCount > 0) {
     html +=
-      '<p><strong>Advisories</strong> (non-fatal):</p>' +
+      '<p class="result-warning-title"><span class="result-warning-marker" aria-hidden="true">!</span><strong>Advisories</strong> (non-fatal):</p>' +
       `<ul>${result.warnings
         .map((warning) => {
           const actionHint = warning.actionHint ? ` (Tip: ${escapeHtml(warning.actionHint)})` : ''
           return `<li>${escapeHtml(warning.message)}${actionHint}</li>`
         })
         .join('')}</ul>`
-  }
-
-  if (!result.ok && result.userError) {
-    html +=
-      `<p><strong>${escapeHtml(result.userError.title)}</strong></p>` +
       `<p>${escapeHtml(result.userError.message)}</p>`
   }
 

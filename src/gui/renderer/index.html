@@ -25,6 +25,14 @@
                 <input type="checkbox" id="power-user-mode-toggle" role="switch" />
                 Power user mode
               </label>
+              <button
+                id="check-env"
+                class="button button-ghost button-inline"
+                type="button"
+                title="Check whether Python 3, DataLad, and git-annex are installed and working on this computer."
+              >
+                Check Setup
+              </button>
             </div>
             <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
           </div>
@@ -33,6 +41,7 @@
         <p class="lede">
           Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
+        <div id="environment-output" class="panel panel-muted panel-compact hero-setup-output" hidden></div>
       </header>
 
       <section id="onboarding-group" class="onboarding-group">
@@ -57,14 +66,6 @@
 
               <div class="row-actions">
                 <button id="detect-project" class="button button-primary" type="button">Check Project Folder</button>
-                <button
-                  id="check-env"
-                  class="button button-ghost"
-                  type="button"
-                  title="Check whether Python 3, DataLad, and git-annex are installed and working on this computer."
-                >
-                  Check Setup
-                </button>
               </div>
             </div>
 
@@ -76,7 +77,6 @@
 
           <div class="open-project-panels">
             <div id="classification-output" class="panel panel-muted" hidden></div>
-            <div id="environment-output" class="panel panel-muted" hidden></div>
           </div>
         </section>
 

@@ -146,6 +146,7 @@ npm run package:win     # Windows
 
 - [Roadmap](docs/roadmap.md)
 - [Researcher workflow & UX rules](docs/product/researcher-workflow.md)
+- [Tutorial pack: progressive research demos](docs/tutorials/README.md)
 
 ## License
 
