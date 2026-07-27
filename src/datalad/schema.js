@@ -6,6 +6,14 @@ const BRIDGE_COMMAND_SCHEMAS = Object.freeze({
     required: ['source', 'targetPath'],
     optional: []
   },
+  // `procedure`/`force` (BIDS mode) are intentionally NOT listed here even
+  // though the JS adapter accepts them — they're JS-only extensions on top
+  // of this bridge command, not part of the Rust-checked contract. Adding
+  // them here would assert Rust parity that doesn't exist: the Rust adapter
+  // hardcodes a plain `create -- targetPath` and ignores unknown fields
+  // rather than rejecting them, and validateRustAdapterContract only checks
+  // command names, not each command's required/optional fields, so it can't
+  // catch that drift. Use `extendedCommands` (below) to gate BIDS UI instead.
   createProject: {
     required: ['targetPath'],
     optional: []
@@ -53,6 +61,10 @@ const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   unlock: {
     required: ['projectPath', 'paths'],
     optional: []
+  },
+  createSubdataset: {
+    required: ['projectPath', 'relativePath'],
+    optional: ['procedure', 'force']
   }
 })
 
@@ -62,7 +74,9 @@ const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', '
 const LEADING_DASH_FIELDS = Object.freeze({
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
-  createBranchAt: ['branchName', 'startPoint']
+  createBranchAt: ['branchName', 'startPoint'],
+  createProject: ['procedure'],
+  createSubdataset: ['procedure']
 })
 
 /**
@@ -131,6 +145,12 @@ export function getAdapterInterfaceContract() {
   return {
     version: ADAPTER_INTERFACE_VERSION,
     classificationValues: ['git', 'dataset', 'superdataset'],
-    commands: BRIDGE_COMMAND_SCHEMAS
+    commands: BRIDGE_COMMAND_SCHEMAS,
+    // Purely additive — validateRustAdapterContract (rust-bridge.js) only
+    // compares `.version` and the key set of `.commands`, so this field is
+    // safe to add without risking a false contract-mismatch under the Rust
+    // adapter. The renderer uses it to feature-detect JS-only capabilities
+    // (e.g. BIDS mode's createSubdataset) instead of assuming they exist.
+    extendedCommands: Object.keys(EXTENDED_COMMAND_SCHEMAS)
   }
 }

@@ -25,6 +25,14 @@
                 <input type="checkbox" id="power-user-mode-toggle" role="switch" />
                 Power user mode
               </label>
+              <label
+                class="power-toggle-wrap"
+                for="bids-auto-nest-toggle"
+                title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
+              >
+                <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
+                Auto-nest BIDS datasets
+              </label>
               <button
                 id="check-env"
                 class="button button-ghost button-inline"
@@ -49,10 +57,6 @@
           <button type="button" class="onboarding-tile" id="onboarding-tile-open" data-onboarding-target="open-project-panel" role="tab" aria-selected="false" aria-controls="open-project-panel">
             <span class="onboarding-tile-icon" aria-hidden="true">📂</span>
             <span class="onboarding-tile-label">Open Project</span>
-          </button>
-          <button type="button" class="onboarding-tile" id="onboarding-tile-remote" data-onboarding-target="get-from-remote-panel" role="tab" aria-selected="false" aria-controls="get-from-remote-panel">
-            <span class="onboarding-tile-icon" aria-hidden="true">🌐</span>
-            <span class="onboarding-tile-label">Get from Remote</span>
           </button>
           <button type="button" class="onboarding-tile" id="onboarding-tile-create" data-onboarding-target="create-project-panel" role="tab" aria-selected="false" aria-controls="create-project-panel">
             <span class="onboarding-tile-icon" aria-hidden="true">✨</span>
@@ -95,72 +99,60 @@
           </div>
         </section>
 
-        <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="get-from-remote-panel" aria-labelledby="get-from-remote-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🌐</span>
-          <div class="section-head">
-            <h2 id="get-from-remote-title">Get from Remote</h2>
-          </div>
-
-          <p class="lede-small">Download a copy of an existing project from a remote URL or a network folder. Do this once per project.</p>
-
-          <div class="get-remote-mode-row" role="group" aria-label="Source type">
-            <label class="get-remote-mode-option">
-              <input type="radio" name="get-remote-mode" id="get-remote-mode-url" value="url" checked />
-              Remote URL
-            </label>
-            <label class="get-remote-mode-option">
-              <input type="radio" name="get-remote-mode" id="get-remote-mode-network" value="network" />
-              Network Folder
-            </label>
-          </div>
-
-          <div class="open-project-controls">
-            <div id="get-remote-url-panel">
-              <label class="field">
-                <span>Remote URL</span>
-                <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
-              </label>
-              <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
-            </div>
-
-            <div id="get-remote-network-panel" hidden>
-              <label class="field">
-                <span>Network Folder Path</span>
-                <div class="field-row">
-                  <input id="get-remote-source-network" type="text" placeholder="\\server\share\dataset  or  smb://server/share" />
-                  <button id="pick-get-remote-network-path" class="button button-ghost button-inline" type="button">Browse</button>
-                </div>
-              </label>
-              <p class="hint-inline">UNC paths (\\server\share), smb:// URLs, or any locally-mounted network folder.</p>
-            </div>
-
-            <label class="field">
-              <span>Save Into Folder</span>
-              <div class="field-row">
-                <input id="get-remote-target" type="text" placeholder="/path/to/save/project" />
-                <button id="pick-get-remote-target" class="button button-ghost button-inline" type="button">Browse</button>
-              </div>
-            </label>
-
-            <div class="row-actions">
-              <button id="get-from-remote" class="button button-primary" type="button">Get from Remote</button>
-            </div>
-          </div>
-
-          <div id="get-remote-output" class="panel panel-muted" hidden></div>
-        </section>
-
         <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="create-project-panel" aria-labelledby="create-project-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">✨</span>
           <div class="section-head">
             <h2 id="create-project-title">Create Project</h2>
           </div>
 
-          <p class="lede-small">Start a brand-new DataLad project. The folder must be empty or not exist yet.</p>
+          <p class="lede-small">Start a brand-new project, or bring one in from a remote URL or network folder.</p>
+
+          <div class="get-remote-mode-row" role="group" aria-label="Project source">
+            <label class="get-remote-mode-option">
+              <input type="radio" name="create-project-source" id="create-source-new" value="new" checked />
+              New empty project
+            </label>
+            <label class="get-remote-mode-option">
+              <input type="radio" name="create-project-source" id="create-source-remote" value="remote" />
+              Based on a remote dataset
+            </label>
+          </div>
 
           <div class="open-project-controls">
+            <div id="create-remote-source-panel" hidden>
+              <div class="get-remote-mode-row" role="group" aria-label="Source type">
+                <label class="get-remote-mode-option">
+                  <input type="radio" name="get-remote-mode" id="get-remote-mode-url" value="url" checked />
+                  Remote URL
+                </label>
+                <label class="get-remote-mode-option">
+                  <input type="radio" name="get-remote-mode" id="get-remote-mode-network" value="network" />
+                  Network Folder
+                </label>
+              </div>
+
+              <div id="get-remote-url-panel">
+                <label class="field">
+                  <span>Remote URL</span>
+                  <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
+                </label>
+                <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
+              </div>
+
+              <div id="get-remote-network-panel" hidden>
+                <label class="field">
+                  <span>Network Folder Path</span>
+                  <div class="field-row">
+                    <input id="get-remote-source-network" type="text" placeholder="\\server\share\dataset  or  smb://server/share" />
+                    <button id="pick-get-remote-network-path" class="button button-ghost button-inline" type="button">Browse</button>
+                  </div>
+                </label>
+                <p class="hint-inline">UNC paths (\\server\share), smb:// URLs, or any locally-mounted network folder.</p>
+              </div>
+            </div>
+
             <label class="field">
-              <span>New Project Folder</span>
+              <span id="create-project-path-label">New Project Folder</span>
               <div class="field-row">
                 <input id="create-project-path" type="text" placeholder="/path/to/new-project" />
                 <button id="pick-create-project-path" class="button button-ghost button-inline" type="button">
@@ -169,7 +161,10 @@
               </div>
             </label>
 
-            <p class="hint-inline">Pick an empty folder, or type a new folder name to create it.</p>
+            <p class="hint-inline" id="create-project-path-hint">
+              Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset,
+              subject/rawdata/derivatives folders are automatically nested into subdatasets.
+            </p>
 
             <div class="row-actions">
               <button id="create-project" class="button button-primary" type="button">Create Project</button>
@@ -198,6 +193,7 @@
         </div>
         <div class="strip-state-group">
           <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
+          <span id="current-project-bids-badge" class="badge badge-bids" hidden>BIDS</span>
           <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
           <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
             Switch Project

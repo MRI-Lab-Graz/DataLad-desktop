@@ -20,8 +20,12 @@ export function mapCommandError(commandName, runResult) {
 
   // datalad prints this particular failure as a create(error) result line on
   // stdout, not stderr, so this one check needs to look at both streams.
+  // Guarded on --force not being present: BIDS mode intentionally passes
+  // --force to adopt an already-non-empty folder, so that case must not be
+  // mapped as "choose an empty folder" — see the branch below instead.
   if (
     commandName === 'createProject' &&
+    !(runResult.args ?? []).includes('--force') &&
     hasPattern(`${stdout}\n${stderr}`, /not empty|non-empty|already exists|refuse to create/)
   ) {
     return {
@@ -29,6 +33,20 @@ export function mapCommandError(commandName, runResult) {
       title: 'Folder already has content',
       message:
         'DataLad will not create a new project inside a folder that already has files in it. Choose an empty or brand-new folder.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
+
+  if (
+    (commandName === 'createProject' || commandName === 'createSubdataset') &&
+    (runResult.args ?? []).includes('--force') &&
+    hasPattern(`${stdout}\n${stderr}`, /not empty|non-empty|already exists|refuse to create/)
+  ) {
+    return {
+      code: 'FORCE_CREATE_FAILED',
+      title: 'Could not set up this folder',
+      message:
+        'DataLad could not initialize this folder even with an existing-content override. Review the technical details below.',
       technicalDetails: details || stdout.trim()
     }
   }

@@ -1,5 +1,5 @@
-import { access, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
 import { ProcessRunner } from './process-runner.js'
@@ -13,6 +13,7 @@ import {
 const CURATED_COMMANDS = new Set([
   'cloneInstall',
   'createProject',
+  'createSubdataset',
   'get',
   'save',
   'update',
@@ -25,6 +26,8 @@ const CURATED_COMMANDS = new Set([
   'unlock'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+const BIDS_MARKER_FILE = 'dataset_description.json'
+const BIDS_SUBJECT_DIR_PATTERN = /^sub-[A-Za-z0-9._-]+$/
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
@@ -82,6 +85,7 @@ export class DataLadAdapter {
 
     const hasDataladConfig = await fileExists(join(projectPath, '.datalad', 'config'))
     const datasetProbe = await this.#probeDataLadDataset(projectPath)
+    const { isBids, bidsReason } = await this.#probeBidsMarker(projectPath)
 
     const isDataset =
       datasetProbe.isDataset !== null ? datasetProbe.isDataset : hasDataladConfig
@@ -94,7 +98,9 @@ export class DataLadAdapter {
           datasetProbe.reason ??
           (hasDataladConfig
             ? 'DataLad metadata probe failed and no supported fallback confirmed dataset state.'
-            : 'DataLad probe did not detect a dataset.')
+            : 'DataLad probe did not detect a dataset.'),
+        isBids,
+        bidsReason
       }
     }
 
@@ -113,8 +119,141 @@ export class DataLadAdapter {
       classificationSource: {
         dataset: datasetProbe.source,
         subdatasets: subdatasetProbe.source
-      }
+      },
+      isBids,
+      bidsReason
     }
+  }
+
+  // The BIDS spec's own root marker file — used as-is rather than inventing
+  // app-specific config, since it's already what publishers/tools rely on.
+  async #probeBidsMarker(projectPath) {
+    const isBids = await fileExists(join(projectPath, BIDS_MARKER_FILE))
+    return {
+      isBids,
+      bidsReason: isBids ? `Found ${BIDS_MARKER_FILE} at the project root (BIDS root marker).` : null
+    }
+  }
+
+  // Lightweight, git-agnostic probe for the Create Project flow: the target
+  // folder isn't a repo yet at this point, so detectProject (which requires
+  // one) doesn't apply. Never throws — an unreadable/nonexistent folder is
+  // just "not BIDS-like", not an error worth surfacing here.
+  async inspectBidsCandidate(folderPath) {
+    let entries
+    try {
+      entries = await readdir(folderPath, { withFileTypes: true })
+    } catch {
+      return { folderPath, bidsLikely: false, confidence: 'none', signals: [], candidateSubpaths: [] }
+    }
+
+    const names = new Set(entries.map((entry) => entry.name))
+    const signals = []
+    if (names.has(BIDS_MARKER_FILE)) signals.push(BIDS_MARKER_FILE)
+    if (names.has('participants.tsv')) signals.push('participants.tsv')
+    if (names.has('participants.json')) signals.push('participants.json')
+    if (names.has('rawdata')) signals.push('rawdata/')
+    if (names.has('derivatives')) signals.push('derivatives/')
+
+    const subjectDirs = entries
+      .filter((entry) => entry.isDirectory() && BIDS_SUBJECT_DIR_PATTERN.test(entry.name))
+      .map((entry) => entry.name)
+    if (subjectDirs.length > 0) signals.push(`${subjectDirs.length} sub-* folder(s)`)
+
+    const confidence = names.has(BIDS_MARKER_FILE) ? 'high' : signals.length > 0 ? 'medium' : 'none'
+    const candidateSubpaths = [
+      ...subjectDirs,
+      ...(names.has('rawdata') ? ['rawdata'] : []),
+      ...(names.has('derivatives') ? ['derivatives'] : [])
+    ]
+
+    return { folderPath, bidsLikely: confidence !== 'none', confidence, signals, candidateSubpaths }
+  }
+
+  // Writes the BIDS root marker file if one isn't already present — needed
+  // so a freshly-scaffolded (not adopted) BIDS project is actually
+  // recognizable as BIDS afterward, since detectProject's isBids check has
+  // nothing else to go on for a project that never had this file to begin
+  // with. Idempotent: never overwrites an existing marker (e.g. one already
+  // brought in by an adopted folder).
+  async ensureBidsMarker(projectPath, metadata = {}) {
+    const markerPath = join(projectPath, BIDS_MARKER_FILE)
+    if (await fileExists(markerPath)) {
+      return { created: false, markerPath }
+    }
+
+    const name = metadata.name?.trim() || basename(projectPath)
+    const content = `${JSON.stringify({ Name: name, BIDSVersion: '1.8.0' }, null, 2)}\n`
+    await writeFile(markerPath, content, 'utf8')
+    return { created: true, markerPath }
+  }
+
+  // Unlike inspectBidsCandidate (a pre-git folder probe), this runs against
+  // an already-existing project — used to find BIDS-like top-level folders
+  // that exist on disk but aren't yet registered as subdatasets, whether
+  // that's because they came in flat from a remote clone, were already
+  // sitting there when the project was opened, or are new since the last
+  // check. Self-limiting: once everything is nested this returns [], so
+  // calling it on every project open/detect is naturally a no-op.
+  async findUnnestedBidsCandidates(projectPath) {
+    const registered = new Set(await this.#readSubdatasetPathsFromGitModules(projectPath))
+
+    let entries
+    try {
+      entries = await readdir(projectPath, { withFileTypes: true })
+    } catch {
+      return []
+    }
+
+    return entries
+      .filter((entry) => entry.isDirectory() && !registered.has(entry.name))
+      .filter((entry) => BIDS_SUBJECT_DIR_PATTERN.test(entry.name) || entry.name === 'rawdata' || entry.name === 'derivatives')
+      .map((entry) => entry.name)
+  }
+
+  // Idempotent pre-step for nesting a folder that may already be tracked in
+  // the parent's history (a flat remote clone, or a pre-existing project
+  // opened from disk) — as opposed to the loose-untracked-files case, where
+  // there's nothing to untrack. --cached only touches git's index, never
+  // the working tree, so this never risks losing file content (or annex
+  // symlinks, fetched or not).
+  //
+  // The removal has to be committed, not just staged: `datalad create
+  // --force` refuses with a "collision with content in parent dataset"
+  // error if the path is still present in the parent's *committed* tree,
+  // even once `git rm --cached` has staged its removal — verified directly
+  // against real DataLad 1.6 behavior.
+  //
+  // The commit deliberately has NO pathspec: `git commit -- <pathspec>`
+  // re-stages that pathspec's current *working-tree* content before
+  // comparing to HEAD (effectively an implicit `git add`), which undoes the
+  // --cached removal above since the files are still physically present —
+  // verified directly, it reports "nothing to commit" and leaves the
+  // removal uncommitted. A plain `git commit` just commits whatever is
+  // currently staged, which is exactly (and only) this removal.
+  async untrackPath(projectPath, relativePath) {
+    if (!isSafeRelativeSubdatasetPath(relativePath)) {
+      throw new Error(`Invalid path: ${relativePath}`)
+    }
+
+    const tracked = await this.runner.run('git', ['-C', projectPath, 'ls-files', '--', relativePath])
+    if (!tracked.stdout.trim()) {
+      return { removed: false }
+    }
+
+    const rmResult = await this.runner.run('git', ['-C', projectPath, 'rm', '-r', '--cached', '--', relativePath])
+    if (rmResult.failed) {
+      throw new Error(`Could not untrack ${relativePath}: ${rmResult.stderr || rmResult.stdout}`)
+    }
+
+    const commitResult = await this.runner.run('git', [
+      '-C', projectPath, 'commit', '-m', `Untrack ${relativePath} for subdataset conversion`
+    ])
+    if (commitResult.failed) {
+      throw new Error(`Could not commit untracking of ${relativePath}: ${commitResult.stderr || commitResult.stdout}`)
+    }
+
+    return { removed: true }
   }
 
   async runCommand(commandName, request = {}) {
@@ -841,11 +980,34 @@ export class DataLadAdapter {
         }
       }
       case 'createProject': {
-        return {
-          command: 'datalad',
-          args: ['create', '--', request.targetPath],
-          options: {}
+        // `procedure`/`force` are JS-only extensions (see the comment on
+        // BRIDGE_COMMAND_SCHEMAS.createProject in schema.js) — omitted, they
+        // produce the exact same args as before this existed.
+        const args = ['create']
+        if (request.procedure) {
+          args.push('-c', request.procedure)
         }
+        if (request.force) {
+          args.push('--force')
+        }
+        args.push('--', request.targetPath)
+        return { command: 'datalad', args, options: {} }
+      }
+      case 'createSubdataset': {
+        const parentPath = request.projectPath
+        const relativePath = request.relativePath
+        if (!isSafeRelativeSubdatasetPath(relativePath)) {
+          throw new Error(`Invalid subdataset path: ${relativePath}`)
+        }
+        const args = ['create', '-d', parentPath]
+        if (request.procedure) {
+          args.push('-c', request.procedure)
+        }
+        if (request.force) {
+          args.push('--force')
+        }
+        args.push('--', relativePath)
+        return { command: 'datalad', args, options: { cwd: parentPath } }
       }
       case 'get': {
         const projectPath = request.projectPath
@@ -953,9 +1115,14 @@ export class DataLadAdapter {
   }
 }
 
+// lstat, not access/stat — existence must not depend on a symlink resolving.
+// A git-annex file that's been cloned but not yet `get`'d is a symlink whose
+// target doesn't exist locally; it still very much exists as a tracked path
+// (e.g. for isBids's dataset_description.json check), so following the link
+// would incorrectly report it as missing.
 async function fileExists(path) {
   try {
-    await access(path)
+    await lstat(path)
     return true
   } catch {
     return false

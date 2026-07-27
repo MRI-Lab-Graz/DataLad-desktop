@@ -61,7 +61,7 @@ body {
 
 .onboarding-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1688,6 +1688,11 @@ select:disabled {
 .badge-unknown {
   background: #f0ece6;
   color: #675a44;
+}
+
+.badge-bids {
+  background: #ffe0e6;
+  color: #99213d;
 }
 
 .state-pill {

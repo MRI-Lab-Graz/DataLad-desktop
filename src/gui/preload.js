@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   platform: process.platform,
   checkEnvironment: () => ipcRenderer.invoke('adapter:checkEnvironment'),
   detectProject: (projectPath) => ipcRenderer.invoke('adapter:detectProject', projectPath),
+  inspectBidsCandidate: (folderPath) => ipcRenderer.invoke('adapter:inspectBidsCandidate', folderPath),
+  ensureBidsMarker: (projectPath, metadata) =>
+    ipcRenderer.invoke('adapter:ensureBidsMarker', { projectPath, metadata }),
+  findUnnestedBidsCandidates: (projectPath) => ipcRenderer.invoke('adapter:findUnnestedBidsCandidates', projectPath),
+  untrackPath: (projectPath, relativePath) =>
+    ipcRenderer.invoke('adapter:untrackPath', { projectPath, relativePath }),
   runCommand: (commandName, request) =>
     ipcRenderer.invoke('adapter:runCommand', {
       commandName,

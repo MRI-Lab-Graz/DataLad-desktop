@@ -51,8 +51,13 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
-  syncSectionAutoOpenPending: false
+  syncSectionAutoOpenPending: false,
+  extendedCommands: [],
+  rootProjectIsBids: false,
+  createProjectBidsCandidate: null
 }
+
+const BIDS_PROCEDURE = 'text2git'
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_PROJECTS = 8
@@ -61,11 +66,17 @@ const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
 const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
 const RECENT_PROJECT_TITLES_STORAGE_KEY = 'dataladDesktop.recentProjectTitles'
 const POWER_USER_MODE_STORAGE_KEY = 'dataladDesktop.powerUserMode'
+const BIDS_AUTO_NEST_STORAGE_KEY = 'dataladDesktop.bidsAutoNest'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
 const elements = {
   recentProjectsOutput: document.getElementById('recent-projects-output'),
   clearRecentProjectsButton: document.getElementById('clear-recent-projects'),
+  createSourceNewRadio: document.getElementById('create-source-new'),
+  createSourceRemoteRadio: document.getElementById('create-source-remote'),
+  createRemoteSourcePanel: document.getElementById('create-remote-source-panel'),
+  createProjectPathLabel: document.getElementById('create-project-path-label'),
+  createProjectPathHint: document.getElementById('create-project-path-hint'),
   getRemoteModeUrlRadio: document.getElementById('get-remote-mode-url'),
   getRemoteModeNetworkRadio: document.getElementById('get-remote-mode-network'),
   getRemoteUrlPanel: document.getElementById('get-remote-url-panel'),
@@ -73,10 +84,6 @@ const elements = {
   getRemoteSourceUrl: document.getElementById('get-remote-source-url'),
   getRemoteSourceNetwork: document.getElementById('get-remote-source-network'),
   pickGetRemoteNetworkPathButton: document.getElementById('pick-get-remote-network-path'),
-  getRemoteTarget: document.getElementById('get-remote-target'),
-  pickGetRemoteTargetButton: document.getElementById('pick-get-remote-target'),
-  getFromRemoteButton: document.getElementById('get-from-remote'),
-  getRemoteOutput: document.getElementById('get-remote-output'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -86,6 +93,7 @@ const elements = {
   currentProjectTitleInput: document.getElementById('current-project-title-input'),
   currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
+  currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
   onboardingTiles: Array.from(document.querySelectorAll('.onboarding-tile')),
@@ -153,6 +161,7 @@ const elements = {
   contractOutput: document.getElementById('contract-output'),
   remoteInfo: document.getElementById('remote-info'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
+  bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
   powerUserConsole: document.getElementById('power-user-console'),
   consoleHelpText: document.getElementById('console-help-text'),
   consoleProjectPath: document.getElementById('console-project-path'),
@@ -182,6 +191,7 @@ elements.commandProjectPath.value = ''
 setCurrentProjectHeader('', 'unknown')
 updateSaveButtonState()
 initPowerUserConsole()
+initBidsAutoNestToggle()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -198,12 +208,13 @@ wireFolderPicker(elements.pickGetRemoteNetworkPathButton, elements.getRemoteSour
   title: 'Select network or local source folder'
 })
 
-wireFolderPicker(elements.pickGetRemoteTargetButton, elements.getRemoteTarget, {
-  title: 'Select target folder for the downloaded project'
+wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
+  title: 'Select or create a new project folder',
+  onSelected: checkCreateProjectBidsCandidate
 })
 
-wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
-  title: 'Select or create a new project folder'
+elements.createProjectPath.addEventListener('blur', () => {
+  void checkCreateProjectBidsCandidate(elements.createProjectPath.value.trim())
 })
 
 elements.recentProjectsOutput.addEventListener('click', async (event) => {
@@ -337,7 +348,10 @@ elements.detectProjectButton.addEventListener('click', async () => {
 
   setButtonBusy(elements.detectProjectButton, true)
   try {
-    await detectProjectType(projectPath)
+    const nestResult = await detectAndMaybeNestBids(projectPath, elements.detectProjectButton)
+    if (nestResult) {
+      elements.classificationOutput.innerHTML += renderBidsNestSummary(nestResult, false)
+    }
   } finally {
     setButtonBusy(elements.detectProjectButton, false)
   }
@@ -372,50 +386,49 @@ function updateGetRemoteMode() {
 elements.getRemoteModeUrlRadio.addEventListener('change', updateGetRemoteMode)
 elements.getRemoteModeNetworkRadio.addEventListener('change', updateGetRemoteMode)
 
-elements.getFromRemoteButton.addEventListener('click', async () => {
-  const isUrl = elements.getRemoteModeUrlRadio.checked
-  const source = isUrl
-    ? elements.getRemoteSourceUrl.value.trim()
-    : elements.getRemoteSourceNetwork.value.trim()
-  const targetPath = elements.getRemoteTarget.value.trim()
+function updateCreateProjectSourceMode() {
+  const isRemote = elements.createSourceRemoteRadio.checked
+  elements.createRemoteSourcePanel.hidden = !isRemote
+  elements.createProjectPathLabel.textContent = isRemote ? 'Save Into Folder' : 'New Project Folder'
+  elements.createProjectPath.placeholder = isRemote ? '/path/to/save/project' : '/path/to/new-project'
+  elements.createProjectPathHint.textContent = isRemote
+    ? 'Choose an empty or brand-new folder to clone into.'
+    : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
+      'subject/rawdata/derivatives folders are automatically nested into subdatasets.'
+}
 
-  if (!source || !targetPath) {
-    elements.getRemoteOutput.hidden = false
-    elements.getRemoteOutput.textContent = 'Provide both a source and a target folder.'
-    setLastActionState('Add source and target folder.', 'error')
-    return
-  }
-
-  // This runs in the onboarding area before any project is open — render the
-  // result here too, not just into the Save & Sync panel (hidden until open).
-  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.getFromRemoteButton)
-  if (cloneResult) {
-    elements.getRemoteOutput.hidden = false
-    elements.getRemoteOutput.innerHTML = renderCommandResult(cloneResult)
-  }
-  if (!cloneResult?.ok) {
-    return
-  }
-
-  elements.commandProjectPath.value = targetPath
-  elements.projectPath.value = targetPath
-  setCurrentProjectHeader(targetPath, 'unknown')
-  await detectProjectType(targetPath)
-  await refreshDatasetList(targetPath)
-  await refreshFileBrowser(targetPath)
-})
+elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSourceMode)
+elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectSourceMode)
 
 elements.createProjectButton.addEventListener('click', async () => {
   const targetPath = elements.createProjectPath.value.trim()
 
   if (!targetPath) {
     elements.createProjectOutput.hidden = false
-    elements.createProjectOutput.textContent = 'Choose a folder for the new project first.'
+    elements.createProjectOutput.textContent = 'Choose a folder first.'
     setLastActionState('Add a target folder first.', 'error')
     return
   }
 
-  const createResult = await runWorkflowCommand('createProject', { targetPath }, elements.createProjectButton)
+  if (elements.createSourceRemoteRadio.checked) {
+    await runCreateFromRemote(targetPath)
+  } else {
+    await runCreateNewProject(targetPath)
+  }
+})
+
+// Plain new-project path, unchanged apart from the silent (no UI) BIDS
+// adopt-detection from inspectBidsCandidate deciding `force`, and calling
+// the shared detectAndMaybeNestBids afterward instead of a bespoke loop.
+async function runCreateNewProject(targetPath) {
+  const candidate = state.createProjectBidsCandidate
+  const isAdopting = isBidsModeSupported() && Boolean(candidate?.bidsLikely)
+
+  const createResult = await runWorkflowCommand(
+    'createProject',
+    isAdopting ? { targetPath, procedure: BIDS_PROCEDURE, force: true } : { targetPath },
+    elements.createProjectButton
+  )
   if (createResult) {
     elements.createProjectOutput.hidden = false
     elements.createProjectOutput.innerHTML = renderCommandResult(createResult)
@@ -424,13 +437,164 @@ elements.createProjectButton.addEventListener('click', async () => {
     return
   }
 
+  if (isAdopting) {
+    // Idempotent — only writes the marker if adopted content didn't already
+    // bring one in. Without this, a freshly-scaffolded (non-adopted) BIDS
+    // project would have no dataset_description.json at all, so detectProject
+    // could never recognize it as BIDS afterward.
+    await api.ensureBidsMarker(targetPath).catch(() => {})
+  }
+
   elements.commandProjectPath.value = targetPath
   elements.projectPath.value = targetPath
   setCurrentProjectHeader(targetPath, 'unknown')
-  await detectProjectType(targetPath)
-  await refreshDatasetList(targetPath)
-  await refreshFileBrowser(targetPath)
-})
+  const nestResult = await detectAndMaybeNestBids(targetPath, elements.createProjectButton)
+  if (nestResult) {
+    elements.createProjectOutput.innerHTML += renderBidsNestSummary(nestResult, false)
+  }
+}
+
+// Replaces the old standalone Get from Remote action: clones exactly as
+// before (unchanged cloneInstall args/behavior), then runs the same
+// automatic BIDS nesting pass any other project-opening path gets.
+async function runCreateFromRemote(targetPath) {
+  const isUrl = elements.getRemoteModeUrlRadio.checked
+  const source = isUrl
+    ? elements.getRemoteSourceUrl.value.trim()
+    : elements.getRemoteSourceNetwork.value.trim()
+
+  if (!source) {
+    elements.createProjectOutput.hidden = false
+    elements.createProjectOutput.textContent = 'Provide a remote source first.'
+    setLastActionState('Add a remote source first.', 'error')
+    return
+  }
+
+  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.createProjectButton)
+  if (cloneResult) {
+    elements.createProjectOutput.hidden = false
+    elements.createProjectOutput.innerHTML = renderCommandResult(cloneResult)
+  }
+  if (!cloneResult?.ok) {
+    return
+  }
+
+  elements.commandProjectPath.value = targetPath
+  elements.projectPath.value = targetPath
+  setCurrentProjectHeader(targetPath, 'unknown')
+  const nestResult = await detectAndMaybeNestBids(targetPath, elements.createProjectButton)
+  if (nestResult) {
+    elements.createProjectOutput.innerHTML += renderBidsNestSummary(nestResult, true)
+  }
+}
+
+// The one shared nesting pipeline, used by Open Project, Create Project
+// (new and adopted-existing-folder), and Create Project's "based on a
+// remote dataset" path. Re-checks detection first since state.rootProjectIsBids
+// needs to be fresh; self-limiting since findUnnestedBidsCandidates returns
+// [] once everything is already nested, so calling this on every open/detect
+// is a no-op in the common case.
+async function detectAndMaybeNestBids(projectPath, button) {
+  await detectProjectType(projectPath)
+  if (!state.rootProjectIsBids || !isBidsModeSupported() || !isBidsAutoNestEnabled()) {
+    return null
+  }
+
+  const candidates = await api.findUnnestedBidsCandidates(projectPath).catch(() => [])
+  if (candidates.length === 0) {
+    return null
+  }
+
+  const { steps, succeeded } = await nestBidsCandidates(projectPath, candidates, button)
+  setLastActionState(`Nested ${succeeded.length} of ${candidates.length} BIDS folder(s) into subdatasets.`, 'success')
+  await detectProjectType(projectPath)
+  await refreshDatasetList(projectPath)
+  await refreshFileBrowser(projectPath)
+  return { steps, succeeded, candidateCount: candidates.length }
+}
+
+// Nests a set of top-level BIDS-like folders into subdatasets: untrack from
+// the parent first (a no-op if nothing was tracked there yet — the loose,
+// never-committed case), create the subdataset with text2git, save its
+// existing content into it, then save the parent to register it. One
+// candidate failing doesn't abort the rest — one bad subject folder
+// shouldn't block the other nine; any failure can be retried later via
+// "Convert to subdataset" in the Files browser.
+async function nestBidsCandidates(projectPath, candidatePaths, button) {
+  const steps = []
+  const succeeded = []
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      await api.untrackPath(projectPath, candidatePath).catch(() => {})
+
+      const createResult = await runWorkflowCommand(
+        'createSubdataset',
+        { projectPath, relativePath: candidatePath, procedure: BIDS_PROCEDURE, force: true },
+        button,
+        `Nesting ${candidatePath}…`
+      )
+      steps.push({ label: `Create subdataset: ${candidatePath}`, result: createResult })
+      if (!createResult?.ok) {
+        continue
+      }
+
+      const saveResult = await runWorkflowCommand(
+        'save',
+        { projectPath: `${projectPath}/${candidatePath}`, message: `Add existing ${candidatePath} content` },
+        button,
+        `Saving ${candidatePath} contents…`
+      )
+      steps.push({ label: `Save subdataset content: ${candidatePath}`, result: saveResult })
+      if (saveResult?.ok) {
+        succeeded.push(candidatePath)
+      }
+    } catch (error) {
+      // One candidate throwing unexpectedly shouldn't take the rest down
+      // with it — same best-effort philosophy as an ordinary command
+      // failure, just covering truly unexpected errors too.
+      steps.push({ label: `Create subdataset: ${candidatePath}`, result: { ok: false, userError: { message: String(error.message) } } })
+    }
+  }
+
+  const rootSaveResult = await runWorkflowCommand(
+    'save',
+    { projectPath, message: 'Nest BIDS dataset structure' },
+    button,
+    'Saving parent project…'
+  )
+  steps.push({ label: 'Save project setup', result: rootSaveResult })
+
+  return { steps, succeeded }
+}
+
+function renderBidsNestSummary(nestResult, fromRemote) {
+  const { steps, succeeded, candidateCount } = nestResult
+  const failed = steps.filter((step) => !step.result?.ok)
+  const summaryLine =
+    `${succeeded.length} of ${candidateCount} folder(s) converted to subdatasets. ` +
+    (failed.length > 0
+      ? 'Any that failed can be retried anytime via "Convert to subdataset" in the Files browser. '
+      : '') +
+    (fromRemote
+      ? "This project's local structure now differs from its origin remote — future Update/Publish " +
+        'against origin may not behave as expected.'
+      : '')
+
+  const stepsHtml = steps
+    .map((step) => {
+      const statusMarker = step.result?.ok ? 'OK' : 'X'
+      return (
+        '<details>' +
+        `<summary>${statusMarker} ${escapeHtml(step.label)}</summary>` +
+        (step.result ? renderCommandResult(step.result) : '<p>This step did not run.</p>') +
+        '</details>'
+      )
+    })
+    .join('')
+
+  return `<p>${escapeHtml(summaryLine)}</p>` + stepsHtml
+}
 
 elements.saveProjectButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
@@ -813,6 +977,76 @@ elements.filesOutput.addEventListener('click', async (event) => {
   await revealPath(targetPath)
 })
 
+// Generic, non-BIDS-specific action: promotes any untracked top-level folder
+// into its own nested dataset. Defaults text2git only when the open project
+// is already flagged BIDS, so the action itself stays useful for any
+// growing superdataset, not just BIDS ones. This is also the retry path for
+// any candidate that failed during Create Project's BIDS adopt sequence.
+elements.filesOutput.addEventListener('click', async (event) => {
+  const target = event.target.closest('[data-convert-subdataset-path]')
+  if (!target) {
+    return
+  }
+
+  event.preventDefault()
+  const relativePath = target.getAttribute('data-convert-subdataset-path')
+  const projectPath = state.rootProjectPath
+  if (!relativePath || !projectPath) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Convert "${relativePath}" into its own nested dataset?\n\n` +
+      '- Its existing content will be saved into the new subdataset.\n' +
+      (state.rootProjectIsBids ? '- Text files inside it will be kept in Git (text2git).\n' : '') +
+      '- The parent project will then be saved to register it.\n\n' +
+      'Continue?'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  const procedure = state.rootProjectIsBids ? BIDS_PROCEDURE : undefined
+  const createResult = await runWorkflowCommand(
+    'createSubdataset',
+    { projectPath, relativePath, procedure, force: true },
+    target,
+    `Converting ${relativePath}…`
+  )
+
+  if (!createResult?.ok) {
+    elements.commandOutput.innerHTML = renderCommandResult(
+      createResult ?? { ok: false, commandName: 'createSubdataset' }
+    )
+    setLastActionState(`Could not convert ${relativePath}.`, 'error')
+    return
+  }
+
+  const saveSubResult = await runWorkflowCommand(
+    'save',
+    { projectPath: `${projectPath}/${relativePath}`, message: `Add existing ${relativePath} content` },
+    target,
+    `Saving ${relativePath} contents…`
+  )
+
+  const saveRootResult = await runWorkflowCommand(
+    'save',
+    { projectPath, message: `Register ${relativePath} as a subdataset` },
+    target,
+    'Saving parent project…'
+  )
+
+  elements.commandOutput.innerHTML = renderCommandResult(saveRootResult ?? saveSubResult ?? createResult)
+  setLastActionState(
+    saveRootResult?.ok ? `Converted ${relativePath} to a subdataset.` : `Converted ${relativePath}, but saving it into the parent project failed.`,
+    saveRootResult?.ok ? 'success' : 'warning'
+  )
+
+  await refreshDatasetList(projectPath)
+  await refreshFileBrowser(projectPath)
+  await refreshWorkingTreeStatus(projectPath)
+})
+
 elements.refreshContractButton.addEventListener('click', async () => {
   await renderContract()
 })
@@ -838,6 +1072,7 @@ async function detectProjectType(projectPath) {
     elements.classificationOutput.innerHTML = renderProjectCheckOutput(result)
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
+    state.rootProjectIsBids = Boolean(result.isBids)
     setCurrentProjectHeader(projectPath, result.classification)
     rememberRecentProject(projectPath)
     void api.setWatchedProject(projectPath)
@@ -871,7 +1106,7 @@ function readProjectPath() {
   return path
 }
 
-async function runWorkflowCommand(commandName, request, button = null) {
+async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined) {
   if (state.pendingCommands.has(commandName)) {
     setLastActionState(`${actionLabel(commandName)} is already running.`, 'warning')
     return null
@@ -880,7 +1115,8 @@ async function runWorkflowCommand(commandName, request, button = null) {
   state.pendingCommands.add(commandName)
   const pathCount = Array.isArray(request.paths) ? request.paths.length : 0
   const busyLabel =
-    commandName === 'save' && pathCount > BUSY_LABEL_FILE_COUNT_THRESHOLD ? `Saving ${pathCount} files…` : undefined
+    busyLabelOverride ??
+    (commandName === 'save' && pathCount > BUSY_LABEL_FILE_COUNT_THRESHOLD ? `Saving ${pathCount} files…` : undefined)
   setButtonBusy(button, true, busyLabel)
 
   try {
@@ -1645,6 +1881,10 @@ function wireFolderPicker(button, input, options) {
       updateSaveButtonState()
     }
 
+    if (options.onSelected) {
+      await options.onSelected(selectedPath)
+    }
+
     setLastActionState('Folder selected.', 'success')
   })
 }
@@ -1666,8 +1906,39 @@ async function renderContract() {
   try {
     const contract = await api.getContract()
     elements.contractOutput.textContent = JSON.stringify(contract, null, 2)
+    state.extendedCommands = contract.extendedCommands ?? []
   } catch (error) {
     elements.contractOutput.textContent = String(error.message)
+    state.extendedCommands = []
+  }
+  applyBidsFeatureGate()
+}
+
+// BIDS mode (createSubdataset + the procedure/force createProject fields) is
+// a JS-adapter-only extension — under the Rust adapter (DATALAD_DESKTOP_USE_RUST_ADAPTER=1)
+// extendedCommands won't include it, so the UI hides itself rather than
+// offering an action that would silently no-op.
+function isBidsModeSupported() {
+  return state.extendedCommands.includes('createSubdataset')
+}
+
+function applyBidsFeatureGate() {
+  elements.bidsAutoNestToggle.closest('label').hidden = !isBidsModeSupported()
+}
+
+// Silent, no-UI probe of a not-yet-a-project folder — used only to decide
+// `force: true` before calling createProject on a non-empty target. What
+// actually gets nested afterward is decided automatically by
+// detectAndMaybeNestBids once the folder is a real project, not by this.
+async function checkCreateProjectBidsCandidate(folderPath) {
+  if (!isBidsModeSupported() || !folderPath) {
+    return
+  }
+
+  try {
+    state.createProjectBidsCandidate = await api.inspectBidsCandidate(folderPath)
+  } catch {
+    // Best-effort only — never block the Create Project flow over this.
   }
 }
 
@@ -2188,9 +2459,14 @@ function renderProjectCheckOutput(result) {
   const datasetSource = result.classificationSource?.dataset ?? 'n/a'
   const subdatasetSource = result.classificationSource?.subdatasets ?? 'n/a'
 
+  const bidsBadgeHtml = result.isBids
+    ? ` <span class="badge badge-bids">BIDS dataset</span>`
+    : ''
+
   return (
-    `<div><span class="badge ${badgeClass}">${escapeHtml(label)}</span></div>` +
+    `<div><span class="badge ${badgeClass}">${escapeHtml(label)}</span>${bidsBadgeHtml}</div>` +
     `<div style="margin-top: 8px;">${escapeHtml(summary)}</div>` +
+    (result.isBids ? `<div style="margin-top: 8px;">${escapeHtml(result.bidsReason)}</div>` : '') +
     '<details style="margin-top: 8px;">' +
     '<summary>Technical details</summary>' +
     `<div style="margin-top: 8px;">${escapeHtml(detailsReason)}</div>` +
@@ -2225,6 +2501,11 @@ function setCurrentProjectHeader(projectPath, classification) {
   renderProjectHealth()
   void refreshProjectHealth(projectPath)
   applyDatasetGatedButtons(classification)
+  setBidsBadge(projectPath)
+}
+
+function setBidsBadge(projectPath) {
+  elements.currentProjectBidsBadge.hidden = !projectPath || !state.rootProjectIsBids
 }
 
 function applyDatasetGatedButtons(classification) {
@@ -2910,6 +3191,28 @@ function initPowerUserConsole() {
   })
 }
 
+// Defaults to true when never set — unlike Power User Mode, this is an
+// opt-out, not opt-in, preference.
+function isBidsAutoNestEnabled() {
+  try {
+    const stored = localStorage.getItem(BIDS_AUTO_NEST_STORAGE_KEY)
+    return stored === null ? true : stored === '1'
+  } catch {
+    return true
+  }
+}
+
+function initBidsAutoNestToggle() {
+  elements.bidsAutoNestToggle.checked = isBidsAutoNestEnabled()
+  elements.bidsAutoNestToggle.addEventListener('change', () => {
+    try {
+      localStorage.setItem(BIDS_AUTO_NEST_STORAGE_KEY, elements.bidsAutoNestToggle.checked ? '1' : '0')
+    } catch {
+      // Ignore storage errors (for example private mode restrictions).
+    }
+  })
+}
+
 function updatePowerUserConsoleVisibility() {
   const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
   elements.powerUserConsole.hidden = !visible
@@ -3107,12 +3410,22 @@ function renderFileTreeNodes(children, expandAll, depth) {
 
       if (node.type === 'directory') {
         const openAttribute = expandAll || depth === 0 ? ' open' : ''
+        // A brand-new untracked top-level folder shows up as gitStatus
+        // 'changed' at the directory level (git only reports a status line
+        // per file, not per folder — 'untracked' only appears on the files
+        // inside it), so the real signal for "not yet a subdataset" is
+        // whether it's registered in state.datasets, not its gitStatus.
+        const isRegisteredSubdataset = (state.datasets ?? []).some((dataset) => dataset.relativePath === node.name)
+        const convertButton =
+          depth === 0 && !isRegisteredSubdataset && isBidsModeSupported()
+            ? `<button type="button" class="button button-ghost button-mini" data-convert-subdataset-path="${escapeHtml(node.name)}">Convert to subdataset</button>`
+            : ''
         return (
           '<li class="file-node folder-node">' +
           `<details${openAttribute}>` +
           '<summary class="finder-row finder-row-folder">' +
           label +
-          `<span class="finder-action-cell">${openButton}</span>` +
+          `<span class="finder-action-cell">${convertButton}${openButton}</span>` +
           '</summary>' +
           renderFileTreeNodes(node.children, expandAll, depth + 1) +
           '</details>' +

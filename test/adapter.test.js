@@ -1112,6 +1112,375 @@ test('runCommand maps createProject failure to researcher-facing non-empty-folde
   assert.equal(result.userError.code, 'TARGET_NOT_EMPTY')
 })
 
+test('runCommand builds createProject with a config procedure', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '-c', 'text2git', '--', '/tmp/bids-proj'], {
+    exitCode: 0,
+    stdout: 'create(ok)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', { targetPath: '/tmp/bids-proj', procedure: 'text2git' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '-c', 'text2git', '--', '/tmp/bids-proj'])
+})
+
+test('runCommand builds createProject with procedure and force for adopting existing content', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '-c', 'text2git', '--force', '--', '/tmp/existing-bids'], {
+    exitCode: 0,
+    stdout: 'create(ok)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', {
+    targetPath: '/tmp/existing-bids',
+    procedure: 'text2git',
+    force: true
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '-c', 'text2git', '--force', '--', '/tmp/existing-bids'])
+})
+
+test('runCommand createProject is unchanged when procedure/force are omitted', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '--', '/tmp/plain-proj'], {
+    exitCode: 0,
+    stdout: 'create(ok)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', { targetPath: '/tmp/plain-proj' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '--', '/tmp/plain-proj'])
+})
+
+test('runCommand rejects a createProject procedure value that looks like a CLI flag', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(
+    adapter.runCommand('createProject', { targetPath: '/tmp/proj', procedure: '--evil' }),
+    /procedure cannot start with -/
+  )
+
+  assert.equal(runner.calls.length, 0)
+})
+
+test('runCommand routes createSubdataset through curated datalad invocation', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '-d', '/tmp/proj', '-c', 'text2git', '--force', '--', 'sub-01'], {
+    exitCode: 0,
+    stdout: 'create(ok)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createSubdataset', {
+    projectPath: '/tmp/proj',
+    relativePath: 'sub-01',
+    procedure: 'text2git',
+    force: true
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '-d', '/tmp/proj', '-c', 'text2git', '--force', '--', 'sub-01'])
+  assert.deepEqual(runner.calls[0].options, { cwd: '/tmp/proj' })
+})
+
+test('runCommand createSubdataset omits force/procedure when not provided', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '-d', '/tmp/proj', '--', 'rawdata'], {
+    exitCode: 0,
+    stdout: 'create(ok)\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createSubdataset', {
+    projectPath: '/tmp/proj',
+    relativePath: 'rawdata'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['create', '-d', '/tmp/proj', '--', 'rawdata'])
+})
+
+test('runCommand createSubdataset rejects a path-traversal relativePath', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(
+    adapter.runCommand('createSubdataset', { projectPath: '/tmp/proj', relativePath: '../outside' }),
+    /Invalid subdataset path/
+  )
+
+  assert.equal(runner.calls.length, 0)
+})
+
+test('createProject non-empty-directory error maps to FORCE_CREATE_FAILED when --force was used', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['create', '-c', 'text2git', '--force', '--', '/tmp/x'], {
+    exitCode: 1,
+    stdout: 'create(error): /tmp/x (dataset) [will not create a dataset in a non-empty directory, ' +
+      'use `--force` option to ignore]\n',
+    stderr: '',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createProject', {
+    targetPath: '/tmp/x',
+    procedure: 'text2git',
+    force: true
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'FORCE_CREATE_FAILED')
+})
+
+test('detectProject flags isBids when dataset_description.json is present at the root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-detect-'))
+  await writeFile(join(root, 'dataset_description.json'), '{}')
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('datalad', ['-C', root, 'status', '--dataset', '.', '--json'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'NoDatasetFound: no dataset found at this location',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const project = await adapter.detectProject(root)
+
+  assert.equal(project.isBids, true)
+  assert.match(project.bidsReason, /dataset_description\.json/)
+})
+
+test('detectProject reports isBids false for a plain git project', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-absent-'))
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('datalad', ['-C', root, 'status', '--dataset', '.', '--json'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'NoDatasetFound: no dataset found at this location',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const project = await adapter.detectProject(root)
+
+  assert.equal(project.isBids, false)
+  assert.equal(project.bidsReason, null)
+})
+
+test('inspectBidsCandidate reports high confidence when dataset_description.json exists', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-candidate-'))
+  await writeFile(join(root, 'dataset_description.json'), '{}')
+  await mkdir(join(root, 'sub-01'))
+
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const result = await adapter.inspectBidsCandidate(root)
+
+  assert.equal(result.confidence, 'high')
+  assert.equal(result.bidsLikely, true)
+  assert.deepEqual(result.candidateSubpaths, ['sub-01'])
+})
+
+test('inspectBidsCandidate reports medium confidence from folder-name heuristics alone', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-heuristic-'))
+  await mkdir(join(root, 'rawdata'))
+  await mkdir(join(root, 'derivatives'))
+  await mkdir(join(root, 'sub-02'))
+
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const result = await adapter.inspectBidsCandidate(root)
+
+  assert.equal(result.confidence, 'medium')
+  assert.equal(result.bidsLikely, true)
+  assert.deepEqual(new Set(result.candidateSubpaths), new Set(['sub-02', 'rawdata', 'derivatives']))
+})
+
+test('inspectBidsCandidate returns bidsLikely=false for a nonexistent folder without throwing', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const result = await adapter.inspectBidsCandidate('/tmp/this-folder-does-not-exist-dlad-test')
+
+  assert.equal(result.bidsLikely, false)
+  assert.equal(result.confidence, 'none')
+  assert.deepEqual(result.candidateSubpaths, [])
+})
+
+test('ensureBidsMarker writes a placeholder dataset_description.json when none exists', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-marker-'))
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  const result = await adapter.ensureBidsMarker(root)
+
+  assert.equal(result.created, true)
+  const written = JSON.parse(await readFile(join(root, 'dataset_description.json'), 'utf8'))
+  assert.equal(written.Name, root.split('/').pop())
+  assert.equal(written.BIDSVersion, '1.8.0')
+})
+
+test('ensureBidsMarker does not overwrite an existing dataset_description.json', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-bids-marker-existing-'))
+  await writeFile(join(root, 'dataset_description.json'), '{"Name":"Original"}')
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  const result = await adapter.ensureBidsMarker(root)
+
+  assert.equal(result.created, false)
+  const content = await readFile(join(root, 'dataset_description.json'), 'utf8')
+  assert.equal(content, '{"Name":"Original"}')
+})
+
+test('findUnnestedBidsCandidates returns un-registered sub-*/rawdata/derivatives folders', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-unnested-'))
+  await mkdir(join(root, 'sub-01'))
+  await mkdir(join(root, 'sub-02'))
+  await mkdir(join(root, 'rawdata'))
+  await mkdir(join(root, 'derivatives'))
+  await mkdir(join(root, 'code')) // not a BIDS-like name, should be ignored
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "sub-01"]\n\tpath = sub-01\n\turl = ./sub-01\n'
+  )
+
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const candidates = await adapter.findUnnestedBidsCandidates(root)
+
+  assert.deepEqual(new Set(candidates), new Set(['sub-02', 'rawdata', 'derivatives']))
+})
+
+test('findUnnestedBidsCandidates returns an empty array once everything is nested', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-fully-nested-'))
+  await mkdir(join(root, 'sub-01'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "sub-01"]\n\tpath = sub-01\n\turl = ./sub-01\n'
+  )
+
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const candidates = await adapter.findUnnestedBidsCandidates(root)
+
+  assert.deepEqual(candidates, [])
+})
+
+test('findUnnestedBidsCandidates returns an empty array for a nonexistent folder without throwing', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const candidates = await adapter.findUnnestedBidsCandidates('/tmp/this-folder-does-not-exist-dlad-test')
+
+  assert.deepEqual(candidates, [])
+})
+
+test('untrackPath removes an already-tracked path from the parent index', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/proj', 'ls-files', '--', 'sub-01'], {
+    exitCode: 0,
+    stdout: 'sub-01/anat/sub-01_T1w.nii.gz\nsub-01/dwi/sub-01_dwi.json\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', '/tmp/proj', 'rm', '-r', '--cached', '--', 'sub-01'], {
+    exitCode: 0,
+    stdout: "rm 'sub-01/anat/sub-01_T1w.nii.gz'\n",
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', '/tmp/proj', 'commit', '-m', 'Untrack sub-01 for subdataset conversion'], {
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.untrackPath('/tmp/proj', 'sub-01')
+
+  assert.deepEqual(result, { removed: true })
+  assert.equal(runner.calls.length, 3)
+  // The commit call must NOT carry a pathspec: `git commit -- <pathspec>`
+  // re-stages that path's current working-tree content before committing,
+  // which undoes the --cached removal above (verified against real git —
+  // it reports "nothing to commit" and leaves the removal uncommitted).
+  assert.deepEqual(runner.calls[2].args, ['-C', '/tmp/proj', 'commit', '-m', 'Untrack sub-01 for subdataset conversion'])
+})
+
+test('untrackPath throws when the commit reports nothing to commit', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/proj', 'ls-files', '--', 'sub-01'], {
+    exitCode: 0,
+    stdout: 'sub-01/notes.txt\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', '/tmp/proj', 'rm', '-r', '--cached', '--', 'sub-01'], {
+    exitCode: 0,
+    stdout: "rm 'sub-01/notes.txt'\n",
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', '/tmp/proj', 'commit', '-m', 'Untrack sub-01 for subdataset conversion'], {
+    exitCode: 1,
+    stdout: 'nothing to commit, working tree clean\n',
+    stderr: '',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(adapter.untrackPath('/tmp/proj', 'sub-01'), /Could not commit untracking/)
+})
+
+test('untrackPath is a no-op when nothing is tracked at that path', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/proj', 'ls-files', '--', 'rawdata'], {
+    exitCode: 0,
+    stdout: '',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.untrackPath('/tmp/proj', 'rawdata')
+
+  assert.deepEqual(result, { removed: false })
+  assert.equal(runner.calls.length, 1)
+})
+
+test('untrackPath rejects a path-traversal relativePath', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(adapter.untrackPath('/tmp/proj', '../outside'), /Invalid path/)
+  assert.equal(runner.calls.length, 0)
+})
+
 test('createDataLadAdapter builds a usable adapter instance', () => {
   const adapter = createDataLadAdapter({ runner: new FakeRunner() })
 

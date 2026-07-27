@@ -136,6 +136,27 @@ ipcMain.handle('adapter:detectProject', async (_event, projectPath) => {
   return result
 })
 
+// Read-only probe of a folder that isn't (and may never become) a project —
+// deliberately does not call authorizeRoot, unlike detectProject above.
+ipcMain.handle('adapter:inspectBidsCandidate', async (_event, folderPath) => {
+  return adapter.inspectBidsCandidate(folderPath)
+})
+
+ipcMain.handle('adapter:ensureBidsMarker', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.ensureBidsMarker(payload.projectPath, payload.metadata)
+})
+
+ipcMain.handle('adapter:findUnnestedBidsCandidates', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.findUnnestedBidsCandidates(projectPath)
+})
+
+ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.untrackPath(payload.projectPath, payload.relativePath)
+})
+
 ipcMain.handle('adapter:runCommand', async (_event, payload) => {
   const result = await adapter.runCommand(payload.commandName, payload.request)
   if (
