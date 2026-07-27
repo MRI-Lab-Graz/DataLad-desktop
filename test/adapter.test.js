@@ -1023,6 +1023,35 @@ test('runCommand routes update through datalad update --merge', async () => {
   assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'update', '--merge'])
 })
 
+test('runCommand routes disconnectRemote through datalad siblings remove', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['siblings', 'remove', '-d', '/tmp/project', '-s', 'origin'], {
+    exitCode: 0,
+    stdout: '.: origin(?) [git]\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('disconnectRemote', { projectPath: '/tmp/project', remoteName: 'origin' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['siblings', 'remove', '-d', '/tmp/project', '-s', 'origin'])
+  assert.deepEqual(runner.calls[0].options, { cwd: '/tmp/project' })
+})
+
+test('runCommand rejects a disconnectRemote remoteName that looks like a CLI flag', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(
+    adapter.runCommand('disconnectRemote', { projectPath: '/tmp/project', remoteName: '--all' }),
+    /remoteName cannot start with -/
+  )
+
+  assert.equal(runner.calls.length, 0)
+})
+
 test('runCommand does not add a generic advisory when clone stderr only has [INFO] lines', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['install', '-r', '-s', 'https://example.org/ds.git', '--', '/tmp/ds'], {

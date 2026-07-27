@@ -79,24 +79,27 @@ test('computeUnlockGating enables Unlock for a superdataset', () => {
   assert.equal(computeUnlockGating('superdataset').disabled, false)
 })
 
-test('computeRemoteGating disables Update/Publish when there is no health snapshot', () => {
+test('computeRemoteGating disables Update/Publish/Disconnect when there is no health snapshot', () => {
   const gating = computeRemoteGating(null)
   assert.equal(gating.update.disabled, true)
   assert.equal(gating.publish.disabled, true)
+  assert.equal(gating.disconnect.disabled, true)
   assert.match(gating.update.title, /No remote is configured/)
   assert.match(gating.publish.title, /No remote is configured/)
+  assert.match(gating.disconnect.title, /No remote is configured/)
   assert.equal(gating.remoteInfo.hidden, true)
   assert.equal(gating.remoteInfo.text, '')
 })
 
-test('computeRemoteGating disables Update/Publish when hasUpstream is false', () => {
+test('computeRemoteGating disables Update/Publish/Disconnect when hasUpstream is false', () => {
   const gating = computeRemoteGating({ hasUpstream: false, upstream: null, remoteUrl: null })
   assert.equal(gating.update.disabled, true)
   assert.equal(gating.publish.disabled, true)
+  assert.equal(gating.disconnect.disabled, true)
   assert.equal(gating.remoteInfo.hidden, true)
 })
 
-test('computeRemoteGating enables Update/Publish and shows remote URL when present', () => {
+test('computeRemoteGating enables Update/Publish/Disconnect and shows remote URL when present', () => {
   const gating = computeRemoteGating({
     hasUpstream: true,
     upstream: 'origin/main',
@@ -105,8 +108,10 @@ test('computeRemoteGating enables Update/Publish and shows remote URL when prese
 
   assert.equal(gating.update.disabled, false)
   assert.equal(gating.publish.disabled, false)
+  assert.equal(gating.disconnect.disabled, false)
   assert.match(gating.update.title, /origin\/main \(git@example\.org:lab\/study\.git\)/)
   assert.match(gating.publish.title, /origin\/main \(git@example\.org:lab\/study\.git\)/)
+  assert.match(gating.disconnect.title, /"origin"/)
   assert.equal(gating.remoteInfo.hidden, false)
   assert.equal(gating.remoteInfo.text, 'Remote: origin/main (git@example.org:lab/study.git)')
 })

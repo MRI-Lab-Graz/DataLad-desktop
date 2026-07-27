@@ -143,6 +143,7 @@ const elements = {
   unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
+  disconnectRemoteButton: document.getElementById('disconnect-remote'),
   openActiveFolderButton: document.getElementById('open-active-folder'),
   refreshFilesButton: document.getElementById('refresh-files'),
   filesSearchInput: document.getElementById('files-search'),
@@ -577,8 +578,10 @@ function renderBidsNestSummary(nestResult, fromRemote) {
       ? 'Any that failed can be retried anytime via "Convert to subdataset" in the Files browser. '
       : '') +
     (fromRemote
-      ? "This project's local structure now differs from its origin remote — future Update/Publish " +
-        'against origin may not behave as expected.'
+      ? "This project's local structure now differs from its origin remote, so a future Update " +
+        '(pulling from origin) may not merge cleanly — re-cloning is usually simpler than updating if ' +
+        'you need newer data from the source. If this remote is read-only anyway (e.g. OpenNeuro), you ' +
+        'can remove the link entirely with "Disconnect from Source" in Get Data & Remote Sync.'
       : '')
 
   const stepsHtml = steps
@@ -706,6 +709,32 @@ elements.publishProjectButton.addEventListener('click', async () => {
   }
 
   await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
+})
+
+elements.disconnectRemoteButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const remoteName = state.projectHealthSnapshot?.upstream?.split('/')[0]
+  if (!remoteName) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Disconnect this project from "${remoteName}"?\n\n` +
+      '- Removes the remote link entirely (the git remote and any DataLad sibling config for it).\n' +
+      '- Everything already saved locally is unaffected.\n' +
+      `- Update and Publish against ${remoteName} will no longer be available afterward.\n\n` +
+      'Continue?'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  await runWorkflowCommand('disconnectRemote', { projectPath, remoteName }, elements.disconnectRemoteButton)
+  await refreshProjectHealth(projectPath)
 })
 
 elements.refreshDatasetsButton.addEventListener('click', async () => {
@@ -2635,6 +2664,13 @@ function applyRemoteGatedButtons(health) {
   elements.updateProjectButton.title = gating.update.title
   elements.publishProjectButton.disabled = gating.publish.disabled
   elements.publishProjectButton.title = gating.publish.title
+
+  // JS-adapter-only, same as BIDS mode — hide rather than offer an action
+  // that would fail under the experimental Rust adapter.
+  elements.disconnectRemoteButton.hidden = !state.extendedCommands.includes('disconnectRemote')
+  elements.disconnectRemoteButton.disabled = gating.disconnect.disabled
+  elements.disconnectRemoteButton.title = gating.disconnect.title
+
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
 

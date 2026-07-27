@@ -64,6 +64,7 @@ export function computeUnlockGating(classification) {
  * @returns {{
  *   update: { disabled: boolean, title: string },
  *   publish: { disabled: boolean, title: string },
+ *   disconnect: { disabled: boolean, title: string },
  *   remoteInfo: { hidden: boolean, text: string }
  * }}
  */
@@ -74,15 +75,24 @@ export function computeRemoteGating(health) {
     return {
       update: { disabled: true, title: NO_REMOTE_TITLE },
       publish: { disabled: true, title: NO_REMOTE_TITLE },
+      disconnect: { disabled: true, title: NO_REMOTE_TITLE },
       remoteInfo: { hidden: true, text: '' }
     }
   }
 
   const remoteLabel = health.remoteUrl ? `${health.upstream} (${health.remoteUrl})` : health.upstream
+  const remoteName = health.upstream?.split('/')[0] ?? health.upstream
 
   return {
     update: { disabled: false, title: `Pull and merge the latest changes from ${remoteLabel}.` },
     publish: { disabled: false, title: `Push your saved changes to ${remoteLabel}.` },
+    disconnect: {
+      disabled: false,
+      title:
+        `Remove the "${remoteName}" remote from this project. Useful for read-only sources ` +
+        `(e.g. OpenNeuro) you never intend to push to or pull further updates from — nothing already ` +
+        `saved here is affected, this project just stops being linked to ${remoteName}.`
+    },
     remoteInfo: { hidden: false, text: `Remote: ${remoteLabel}` }
   }
 }
