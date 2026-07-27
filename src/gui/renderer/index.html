@@ -45,7 +45,22 @@
       </header>
 
       <section id="onboarding-group" class="onboarding-group">
-        <section class="card reveal reveal-2 open-project-strip" aria-labelledby="open-project-title">
+        <div class="onboarding-picker reveal reveal-2" role="tablist" aria-label="Choose how to start">
+          <button type="button" class="onboarding-tile" id="onboarding-tile-open" data-onboarding-target="open-project-panel" role="tab" aria-selected="false" aria-controls="open-project-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">📂</span>
+            <span class="onboarding-tile-label">Open Project</span>
+          </button>
+          <button type="button" class="onboarding-tile" id="onboarding-tile-remote" data-onboarding-target="get-from-remote-panel" role="tab" aria-selected="false" aria-controls="get-from-remote-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">🌐</span>
+            <span class="onboarding-tile-label">Get from Remote</span>
+          </button>
+          <button type="button" class="onboarding-tile" id="onboarding-tile-create" data-onboarding-target="create-project-panel" role="tab" aria-selected="false" aria-controls="create-project-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">✨</span>
+            <span class="onboarding-tile-label">Create Project</span>
+          </button>
+        </div>
+
+        <section id="open-project-panel" class="card reveal reveal-3 open-project-strip onboarding-panel" aria-labelledby="open-project-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">📂</span>
           <div class="section-head">
             <h2 id="open-project-title">Open Project</h2>
@@ -80,7 +95,7 @@
           </div>
         </section>
 
-        <section class="card reveal reveal-3 open-project-strip" id="get-from-remote-card" aria-labelledby="get-from-remote-title">
+        <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="get-from-remote-panel" aria-labelledby="get-from-remote-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">🌐</span>
           <div class="section-head">
             <h2 id="get-from-remote-title">Get from Remote</h2>
@@ -135,7 +150,7 @@
           <div id="get-remote-output" class="panel panel-muted" hidden></div>
         </section>
 
-        <section class="card reveal reveal-3 open-project-strip" aria-labelledby="create-project-title">
+        <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="create-project-panel" aria-labelledby="create-project-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">✨</span>
           <div class="section-head">
             <h2 id="create-project-title">Create Project</h2>

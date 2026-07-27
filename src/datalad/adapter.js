@@ -829,9 +829,14 @@ export class DataLadAdapter {
   #buildCommand(commandName, request) {
     switch (commandName) {
       case 'cloneInstall': {
+        // `datalad clone` has no -r/--recursive flag; recursive subdataset
+        // install requires the `install` command, which in turn requires
+        // -s to take an explicit destination path (otherwise a bare
+        // positional after the source is treated as a get target within
+        // an already-resolved dataset, not as the clone destination).
         return {
           command: 'datalad',
-          args: ['clone', '-r', '--', request.source, request.targetPath],
+          args: ['install', '-r', '-s', request.source, '--', request.targetPath],
           options: {}
         }
       }

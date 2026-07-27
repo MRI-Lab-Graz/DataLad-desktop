@@ -477,7 +477,7 @@ test('runCommand routes switchBranch through curated git invocation', async () =
 
 test('runCommand returns non-fatal clone advisories from stderr output', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['install', '-r', '-s', 'https://example.org/ds.git', '--', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr:
@@ -1025,7 +1025,7 @@ test('runCommand routes update through datalad update --merge', async () => {
 
 test('runCommand does not add a generic advisory when clone stderr only has [INFO] lines', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['install', '-r', '-s', 'https://example.org/ds.git', '--', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr: 'some other unrecognized clone output\n',
@@ -1044,7 +1044,7 @@ test('runCommand does not add a generic advisory when clone stderr only has [INF
 
 test('runCommand suppresses the generic clone advisory when stderr is only routine [INFO] logging', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '-r', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['install', '-r', '-s', 'https://example.org/ds.git', '--', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr: '[INFO] some other informational clone output\n',
@@ -1062,7 +1062,7 @@ test('runCommand suppresses the generic clone advisory when stderr is only routi
 
 test('runCommand adds a generic advisory when clone stderr has non-INFO output that matches no known pattern', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['clone', '--', 'https://example.org/ds.git', '/tmp/ds'], {
+  runner.set('datalad', ['install', '-r', '-s', 'https://example.org/ds.git', '--', '/tmp/ds'], {
     exitCode: 0,
     stdout: 'install(ok): /tmp/ds (dataset)\n',
     stderr: 'some unexpected warning output\n',

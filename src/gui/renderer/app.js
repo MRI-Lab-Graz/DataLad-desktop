@@ -88,6 +88,7 @@ const elements = {
   currentProjectBadge: document.getElementById('current-project-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
+  onboardingTiles: Array.from(document.querySelectorAll('.onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
   projectHealthCard: document.getElementById('project-health-card'),
   projectSetupZone: document.getElementById('project-setup-zone'),
@@ -341,6 +342,26 @@ elements.detectProjectButton.addEventListener('click', async () => {
     setButtonBusy(elements.detectProjectButton, false)
   }
 })
+
+function selectOnboardingTile(targetId) {
+  for (const tile of elements.onboardingTiles) {
+    const isSelected = tile.dataset.onboardingTarget === targetId
+    tile.setAttribute('aria-selected', String(isSelected))
+    const panel = document.getElementById(tile.dataset.onboardingTarget)
+    if (panel) {
+      panel.hidden = !isSelected
+    }
+  }
+}
+
+for (const tile of elements.onboardingTiles) {
+  tile.addEventListener('click', () => {
+    // Clicking the already-open tile closes it again so a user can get back
+    // to the plain picker row without switching to a different option.
+    const alreadySelected = tile.getAttribute('aria-selected') === 'true'
+    selectOnboardingTile(alreadySelected ? null : tile.dataset.onboardingTarget)
+  })
+}
 
 function updateGetRemoteMode() {
   const isUrl = elements.getRemoteModeUrlRadio.checked
@@ -1986,7 +2007,10 @@ function renderCommandResult(result, summary = null) {
           return `<li>${escapeHtml(warning.message)}${actionHint}</li>`
         })
         .join('')}</ul>`
-      `<p>${escapeHtml(result.userError.message)}</p>`
+  }
+
+  if (!result.ok && result.userError) {
+    html += `<p>${escapeHtml(result.userError.message)}</p>`
   }
 
   html +=
@@ -2170,7 +2194,7 @@ function renderProjectCheckOutput(result) {
     '<details style="margin-top: 8px;">' +
     '<summary>Technical details</summary>' +
     `<div style="margin-top: 8px;">${escapeHtml(detailsReason)}</div>` +
-    `<div style="margin-top: 8px; font-family: var(--mono); font-size: 0.78rem; color: #51636a;">` +
+    `<div style="margin-top: 8px; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft);">` +
     `checks: dataset=${escapeHtml(datasetSource)} | linked-data=${escapeHtml(subdatasetSource)}` +
     '</div>' +
     '</details>'
