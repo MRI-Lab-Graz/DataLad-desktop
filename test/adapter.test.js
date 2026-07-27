@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
 import { DataLadAdapter, createDataLadAdapter } from '../src/datalad/adapter.js'
 
 class FakeRunner {
@@ -1372,7 +1372,7 @@ test('ensureBidsMarker writes a placeholder dataset_description.json when none e
 
   assert.equal(result.created, true)
   const written = JSON.parse(await readFile(join(root, 'dataset_description.json'), 'utf8'))
-  assert.equal(written.Name, root.split('/').pop())
+  assert.equal(written.Name, basename(root))
   assert.equal(written.BIDSVersion, '1.8.0')
 })
 

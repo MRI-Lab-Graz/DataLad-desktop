@@ -155,6 +155,9 @@ const elements = {
   checkEnvButton: document.getElementById('check-env'),
   detectProjectButton: document.getElementById('detect-project'),
   refreshContractButton: document.getElementById('refresh-contract'),
+  globalBusyOverlay: document.getElementById('global-busy-overlay'),
+  globalBusyText: document.getElementById('global-busy-text'),
+  globalBusyBarFill: document.getElementById('global-busy-bar-fill'),
   environmentOutput: document.getElementById('environment-output'),
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
@@ -425,10 +428,15 @@ async function runCreateNewProject(targetPath) {
   const candidate = state.createProjectBidsCandidate
   const isAdopting = isBidsModeSupported() && Boolean(candidate?.bidsLikely)
 
+  // Skips its own background refresh — detectAndMaybeNestBids's first call is
+  // always detectProjectType, an awaited refresh that fully supersedes it and
+  // would otherwise race the nest loop's own sequential git operations.
   const createResult = await runWorkflowCommand(
     'createProject',
     isAdopting ? { targetPath, procedure: BIDS_PROCEDURE, force: true } : { targetPath },
-    elements.createProjectButton
+    elements.createProjectButton,
+    undefined,
+    { skipBackgroundRefresh: true }
   )
   if (createResult) {
     elements.createProjectOutput.hidden = false
@@ -471,7 +479,15 @@ async function runCreateFromRemote(targetPath) {
     return
   }
 
-  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.createProjectButton)
+  // Same reasoning as runCreateNewProject: detectAndMaybeNestBids's first
+  // call already provides an equivalent, awaited refresh right after.
+  const cloneResult = await runWorkflowCommand(
+    'cloneInstall',
+    { source, targetPath },
+    elements.createProjectButton,
+    undefined,
+    { skipBackgroundRefresh: true }
+  )
   if (cloneResult) {
     elements.createProjectOutput.hidden = false
     elements.createProjectOutput.innerHTML = renderCommandResult(cloneResult)
@@ -487,6 +503,29 @@ async function runCreateFromRemote(targetPath) {
   if (nestResult) {
     elements.createProjectOutput.innerHTML += renderBidsNestSummary(nestResult, true)
   }
+}
+
+// Full-app modal overlay shown for the duration of a multi-step automated
+// git sequence (BIDS nesting): communicates real progress instead of just a
+// changing busy-button label, and its full-viewport pointer-events block
+// doubles as a guard against a stray user action (Save, Update, ...)
+// racing the sequence's own git operations for .git/index.lock.
+function showGlobalBusyOverlay(text) {
+  elements.globalBusyOverlay.hidden = false
+  elements.globalBusyText.textContent = text
+  elements.globalBusyBarFill.style.width = '0%'
+}
+
+function updateGlobalBusyOverlay(text, current, total) {
+  elements.globalBusyText.textContent = text
+  if (typeof current === 'number' && typeof total === 'number' && total > 0) {
+    elements.globalBusyBarFill.style.width = `${Math.min(100, Math.round((current / total) * 100))}%`
+  }
+}
+
+function hideGlobalBusyOverlay() {
+  elements.globalBusyOverlay.hidden = true
+  elements.globalBusyBarFill.style.width = '0%'
 }
 
 // The one shared nesting pipeline, used by Open Project, Create Project
@@ -506,7 +545,21 @@ async function detectAndMaybeNestBids(projectPath, button) {
     return null
   }
 
-  const { steps, succeeded } = await nestBidsCandidates(projectPath, candidates, button)
+  showGlobalBusyOverlay(`Setting up BIDS structure — 0 of ${candidates.length} folder(s)…`)
+  let nested
+  try {
+    nested = await nestBidsCandidates(projectPath, candidates, button, (current, total, label) => {
+      updateGlobalBusyOverlay(
+        current < total ? `Nesting ${label}… (${current + 1} of ${total})` : `Saving project setup (${total}/${total})…`,
+        current,
+        total
+      )
+    })
+  } finally {
+    hideGlobalBusyOverlay()
+  }
+
+  const { steps, succeeded } = nested
   setLastActionState(`Nested ${succeeded.length} of ${candidates.length} BIDS folder(s) into subdatasets.`, 'success')
   await detectProjectType(projectPath)
   await refreshDatasetList(projectPath)
@@ -521,11 +574,13 @@ async function detectAndMaybeNestBids(projectPath, button) {
 // candidate failing doesn't abort the rest — one bad subject folder
 // shouldn't block the other nine; any failure can be retried later via
 // "Convert to subdataset" in the Files browser.
-async function nestBidsCandidates(projectPath, candidatePaths, button) {
+async function nestBidsCandidates(projectPath, candidatePaths, button, onProgress) {
   const steps = []
   const succeeded = []
+  const total = candidatePaths.length
 
-  for (const candidatePath of candidatePaths) {
+  for (const [index, candidatePath] of candidatePaths.entries()) {
+    onProgress?.(index, total, candidatePath)
     try {
       await api.untrackPath(projectPath, candidatePath).catch(() => {})
 
@@ -533,7 +588,8 @@ async function nestBidsCandidates(projectPath, candidatePaths, button) {
         'createSubdataset',
         { projectPath, relativePath: candidatePath, procedure: BIDS_PROCEDURE, force: true },
         button,
-        `Nesting ${candidatePath}…`
+        `Nesting ${candidatePath}…`,
+        { skipBackgroundRefresh: true }
       )
       steps.push({ label: `Create subdataset: ${candidatePath}`, result: createResult })
       if (!createResult?.ok) {
@@ -544,7 +600,8 @@ async function nestBidsCandidates(projectPath, candidatePaths, button) {
         'save',
         { projectPath: `${projectPath}/${candidatePath}`, message: `Add existing ${candidatePath} content` },
         button,
-        `Saving ${candidatePath} contents…`
+        `Saving ${candidatePath} contents…`,
+        { skipBackgroundRefresh: true }
       )
       steps.push({ label: `Save subdataset content: ${candidatePath}`, result: saveResult })
       if (saveResult?.ok) {
@@ -557,12 +614,14 @@ async function nestBidsCandidates(projectPath, candidatePaths, button) {
       steps.push({ label: `Create subdataset: ${candidatePath}`, result: { ok: false, userError: { message: String(error.message) } } })
     }
   }
+  onProgress?.(total, total, null)
 
   const rootSaveResult = await runWorkflowCommand(
     'save',
     { projectPath, message: 'Nest BIDS dataset structure' },
     button,
-    'Saving parent project…'
+    'Saving parent project…',
+    { skipBackgroundRefresh: true }
   )
   steps.push({ label: 'Save project setup', result: rootSaveResult })
 
@@ -1036,34 +1095,45 @@ elements.filesOutput.addEventListener('click', async (event) => {
   }
 
   const procedure = state.rootProjectIsBids ? BIDS_PROCEDURE : undefined
-  const createResult = await runWorkflowCommand(
-    'createSubdataset',
-    { projectPath, relativePath, procedure, force: true },
-    target,
-    `Converting ${relativePath}…`
-  )
-
-  if (!createResult?.ok) {
-    elements.commandOutput.innerHTML = renderCommandResult(
-      createResult ?? { ok: false, commandName: 'createSubdataset' }
+  showGlobalBusyOverlay(`Converting ${relativePath}…`)
+  let createResult, saveSubResult, saveRootResult
+  try {
+    createResult = await runWorkflowCommand(
+      'createSubdataset',
+      { projectPath, relativePath, procedure, force: true },
+      target,
+      `Converting ${relativePath}…`,
+      { skipBackgroundRefresh: true }
     )
-    setLastActionState(`Could not convert ${relativePath}.`, 'error')
-    return
+
+    if (!createResult?.ok) {
+      elements.commandOutput.innerHTML = renderCommandResult(
+        createResult ?? { ok: false, commandName: 'createSubdataset' }
+      )
+      setLastActionState(`Could not convert ${relativePath}.`, 'error')
+      return
+    }
+
+    updateGlobalBusyOverlay(`Saving ${relativePath} contents…`, 1, 3)
+    saveSubResult = await runWorkflowCommand(
+      'save',
+      { projectPath: `${projectPath}/${relativePath}`, message: `Add existing ${relativePath} content` },
+      target,
+      `Saving ${relativePath} contents…`,
+      { skipBackgroundRefresh: true }
+    )
+
+    updateGlobalBusyOverlay('Saving parent project…', 2, 3)
+    saveRootResult = await runWorkflowCommand(
+      'save',
+      { projectPath, message: `Register ${relativePath} as a subdataset` },
+      target,
+      'Saving parent project…',
+      { skipBackgroundRefresh: true }
+    )
+  } finally {
+    hideGlobalBusyOverlay()
   }
-
-  const saveSubResult = await runWorkflowCommand(
-    'save',
-    { projectPath: `${projectPath}/${relativePath}`, message: `Add existing ${relativePath} content` },
-    target,
-    `Saving ${relativePath} contents…`
-  )
-
-  const saveRootResult = await runWorkflowCommand(
-    'save',
-    { projectPath, message: `Register ${relativePath} as a subdataset` },
-    target,
-    'Saving parent project…'
-  )
 
   elements.commandOutput.innerHTML = renderCommandResult(saveRootResult ?? saveSubResult ?? createResult)
   setLastActionState(
@@ -1135,7 +1205,9 @@ function readProjectPath() {
   return path
 }
 
-async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined) {
+async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined, options = {}) {
+  const { skipBackgroundRefresh = false } = options
+
   if (state.pendingCommands.has(commandName)) {
     setLastActionState(`${actionLabel(commandName)} is already running.`, 'warning')
     return null
@@ -1154,18 +1226,26 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     const nextProjectPath = request.projectPath ?? request.targetPath
     let saveSummary = null
     if (result.ok && nextProjectPath) {
-      void refreshLastCommitMeta(nextProjectPath)
-      if (commandName === 'createBranch' || commandName === 'switchBranch') {
-        void refreshBranchList(nextProjectPath)
+      // Multi-step automated sequences (BIDS nesting, batch conversions) call
+      // this back-to-back many times in a row — these fire-and-forget refreshes
+      // spawn their own `git status`/`git log` processes against the same repo,
+      // which can race the NEXT step's git command for .git/index.lock. Callers
+      // doing their own final refresh after the whole sequence pass this to skip
+      // the per-step ones entirely, rather than relying solely on ProcessRunner's
+      // retry-on-lock-contention as the only safety net.
+      if (!skipBackgroundRefresh) {
+        void refreshLastCommitMeta(nextProjectPath)
+        if (commandName === 'createBranch' || commandName === 'switchBranch') {
+          void refreshBranchList(nextProjectPath)
+        }
+        void refreshWorkingTreeStatus(nextProjectPath)
+        void refreshRecentCommits(nextProjectPath)
+        void refreshProjectHealth(nextProjectPath)
       }
 
       if (commandName === 'save') {
         saveSummary = await buildSaveSummary(nextProjectPath, request.paths ?? [])
       }
-
-      void refreshWorkingTreeStatus(nextProjectPath)
-      void refreshRecentCommits(nextProjectPath)
-      void refreshProjectHealth(nextProjectPath)
     }
 
     elements.commandOutput.innerHTML = renderCommandResult(result, saveSummary)
@@ -1174,7 +1254,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
       addLockRecoveryAction(commandName, request, button, nextProjectPath)
     }
 
-    if (!result.ok && nextProjectPath) {
+    if (!result.ok && nextProjectPath && !skipBackgroundRefresh) {
       void refreshWorkingTreeStatus(nextProjectPath)
     }
 

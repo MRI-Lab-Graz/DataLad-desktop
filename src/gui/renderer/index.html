@@ -577,6 +577,17 @@
       </aside>
     </div>
 
+    <div id="global-busy-overlay" class="global-busy-overlay" hidden>
+      <div class="global-busy-card" role="status" aria-live="polite">
+        <div class="global-busy-spinner" aria-hidden="true"></div>
+        <p id="global-busy-text" class="global-busy-text">Working…</p>
+        <div class="global-busy-bar-track" aria-hidden="true">
+          <div id="global-busy-bar-fill" class="global-busy-bar-fill"></div>
+        </div>
+        <p class="global-busy-hint">Please don't close the app while this finishes — it's safe to leave running in the background.</p>
+      </div>
+    </div>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>

@@ -21,6 +21,20 @@ const CURATED_COMMANDS: [&str; 8] = [
     "switchBranch",
 ];
 
+// JS-only extended commands — not implemented by the Rust bridge, but listed
+// here so the interface contract stays byte-for-byte identical to the JS
+// adapter's (see EXTENDED_COMMAND_SCHEMAS in src/datalad/schema.js). Order
+// matters: adapter-parity.test.js asserts array equality, not just set
+// equality.
+const EXTENDED_COMMANDS: [&str; 6] = [
+    "createBranchAt",
+    "restoreFileFromCommit",
+    "discardChanges",
+    "unlock",
+    "createSubdataset",
+    "disconnectRemote",
+];
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CommandSchemaContract {
     pub required: Vec<String>,
@@ -33,6 +47,8 @@ pub struct AdapterInterfaceContract {
     #[serde(rename = "classificationValues")]
     pub classification_values: Vec<String>,
     pub commands: HashMap<String, CommandSchemaContract>,
+    #[serde(rename = "extendedCommands")]
+    pub extended_commands: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -247,6 +263,7 @@ impl<R: CommandRunner> DataLadAdapterCore<R> {
                 "superdataset".to_string(),
             ],
             commands,
+            extended_commands: EXTENDED_COMMANDS.iter().map(|value| value.to_string()).collect(),
         }
     }
 
