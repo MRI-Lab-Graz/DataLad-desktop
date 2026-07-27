@@ -40,16 +40,6 @@ body {
   gap: 18px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.full-span {
-  grid-column: 1 / -1;
-}
-
 .onboarding-group {
   display: grid;
   gap: 18px;
@@ -108,22 +98,8 @@ body {
   }
 }
 
-.setup-zone {
-  background: #ffffff;
-  border: 1px solid var(--line);
-}
-
-.setup-zone-summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--ink-soft);
-  padding: 4px 0;
-}
-
-.setup-zone-body {
-  display: grid;
-  gap: 16px;
-  margin-top: 14px;
+.onboarding-picker.project-nav-picker {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
 .project-health {
@@ -787,22 +763,11 @@ h2 {
   color: #8f431f;
 }
 
-.status-details > summary {
-  cursor: pointer;
-  color: var(--ink-soft);
-  font-weight: 600;
-  font-size: 0.86rem;
-  margin-bottom: 4px;
-}
-
-.status-details[open] > summary {
-  margin-bottom: 12px;
-}
-
-.setup-zone-summary-hint {
+.onboarding-tile-hint {
   font-weight: 500;
   color: var(--ink-soft);
-  font-size: 0.86rem;
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .changed-files-list {
@@ -1744,14 +1709,6 @@ select:disabled {
 
 .reveal-4 {
   animation-delay: 280ms;
-}
-
-.reveal-5 {
-  animation-delay: 350ms;
-}
-
-.reveal-6 {
-  animation-delay: 420ms;
 }
 
 @keyframes reveal {

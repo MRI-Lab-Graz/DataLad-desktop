@@ -51,7 +51,6 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
-  syncSectionAutoOpenPending: false,
   extendedCommands: [],
   rootProjectIsBids: false,
   createProjectBidsCandidate: null
@@ -96,12 +95,13 @@ const elements = {
   currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
-  onboardingTiles: Array.from(document.querySelectorAll('.onboarding-tile')),
+  onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
   projectHealthCard: document.getElementById('project-health-card'),
-  projectSetupZone: document.getElementById('project-setup-zone'),
-  projectWorkspaceGrid: document.getElementById('project-workspace-grid'),
-  technicalDetailsAside: document.getElementById('technical-details-aside'),
+  projectNavGroup: document.getElementById('project-nav-group'),
+  projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
+  projectNavTileSync: document.getElementById('project-nav-tile-sync'),
+  projectNavTileConsole: document.getElementById('project-nav-tile-console'),
   projectHealthOutput: document.getElementById('project-health-output'),
   projectStatusLine: document.getElementById('project-status-line'),
   lastActionState: document.getElementById('last-action-state'),
@@ -135,7 +135,6 @@ const elements = {
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
-  syncDataSection: document.getElementById('sync-data-section'),
   syncDataSummaryHint: document.getElementById('sync-data-summary-hint'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
@@ -166,14 +165,12 @@ const elements = {
   remoteInfo: document.getElementById('remote-info'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
-  powerUserConsole: document.getElementById('power-user-console'),
   consoleHelpText: document.getElementById('console-help-text'),
   consoleProjectPath: document.getElementById('console-project-path'),
   consoleCommand: document.getElementById('console-command'),
   consoleRunButton: document.getElementById('console-run'),
   consoleOutput: document.getElementById('console-output'),
   consoleHistoryOutput: document.getElementById('console-history-output'),
-  timeMachineZone: document.getElementById('time-machine-zone'),
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
   timeMachineDetail: document.getElementById('tm-detail'),
@@ -361,25 +358,38 @@ elements.detectProjectButton.addEventListener('click', async () => {
   }
 })
 
-function selectOnboardingTile(targetId) {
-  for (const tile of elements.onboardingTiles) {
-    const isSelected = tile.dataset.onboardingTarget === targetId
-    tile.setAttribute('aria-selected', String(isSelected))
-    const panel = document.getElementById(tile.dataset.onboardingTarget)
-    if (panel) {
-      panel.hidden = !isSelected
+// Wires a row of `.onboarding-tile` buttons to their target panels: clicking
+// a tile shows only its panel and hides the others, and clicking the already
+// -open tile again closes it, returning to just the tile row. Shared between
+// the landing-page picker (Open/Create Project) and the running-project nav
+// (Save/Sync/Files/...) so both stay on one interaction model.
+function wireTileGroup(tiles, datasetKey) {
+  function select(targetId) {
+    for (const tile of tiles) {
+      const isSelected = tile.dataset[datasetKey] === targetId
+      tile.setAttribute('aria-selected', String(isSelected))
+      const panel = document.getElementById(tile.dataset[datasetKey])
+      if (panel) {
+        panel.hidden = !isSelected
+      }
     }
   }
+
+  for (const tile of tiles) {
+    tile.addEventListener('click', () => {
+      if (tile.hidden) {
+        return
+      }
+      const alreadySelected = tile.getAttribute('aria-selected') === 'true'
+      select(alreadySelected ? null : tile.dataset[datasetKey])
+    })
+  }
+
+  return select
 }
 
-for (const tile of elements.onboardingTiles) {
-  tile.addEventListener('click', () => {
-    // Clicking the already-open tile closes it again so a user can get back
-    // to the plain picker row without switching to a different option.
-    const alreadySelected = tile.getAttribute('aria-selected') === 'true'
-    selectOnboardingTile(alreadySelected ? null : tile.dataset.onboardingTarget)
-  })
-}
+const selectOnboardingTile = wireTileGroup(elements.onboardingTiles, 'onboardingTarget')
+const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget')
 
 function updateGetRemoteMode() {
   const isUrl = elements.getRemoteModeUrlRadio.checked
@@ -870,16 +880,15 @@ elements.createBranchButton.addEventListener('click', async () => {
   await refreshBranchList(projectPath)
 })
 
-elements.timeMachineZone.addEventListener('toggle', async () => {
-  if (!elements.timeMachineZone.open) {
-    return
-  }
-  const projectPath = readProjectPath()
-  if (!projectPath || state.timeMachineCommits.length > 0) {
-    return
-  }
-  await refreshTimeMachineHistory(projectPath)
-})
+elements.projectNavTiles
+  .find((tile) => tile.dataset.navTarget === 'time-machine-zone')
+  ?.addEventListener('click', async () => {
+    const projectPath = readProjectPath()
+    if (!projectPath || state.timeMachineCommits.length > 0) {
+      return
+    }
+    await refreshTimeMachineHistory(projectPath)
+  })
 
 elements.timeMachineLoadMoreButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
@@ -2606,7 +2615,6 @@ function setCurrentProjectHeader(projectPath, classification) {
   // as a side effect and would otherwise repaint the *previous* project's
   // remote/sync chips and button gating until the real fetch resolves.
   state.projectHealthSnapshot = null
-  state.syncSectionAutoOpenPending = true
   renderProjectHealth()
   void refreshProjectHealth(projectPath)
   applyDatasetGatedButtons(classification)
@@ -2639,24 +2647,16 @@ function updateSyncSectionVisibility() {
   const health = state.projectHealthSnapshot
 
   const nowVisible = computeSyncSectionVisible(classification, health)
-  elements.syncDataSection.hidden = !nowVisible
+  elements.projectNavTileSync.hidden = !nowVisible
+  if (!nowVisible && elements.projectNavTileSync.getAttribute('aria-selected') === 'true') {
+    selectProjectTile('save-checkpoint-panel')
+  }
 
   const quietMessage = computeSyncActionsQuietMessage(classification, health)
   elements.syncActionsStrip.hidden = Boolean(quietMessage)
   elements.syncActionsQuiet.hidden = !quietMessage
   elements.syncActionsQuiet.textContent = quietMessage ?? ''
   elements.syncDataSummaryHint.textContent = quietMessage ? '— nothing to do right now' : ''
-
-  // Auto-open/close exactly once per project load: expanded when there's an
-  // actionable button, collapsed (but still discoverable) when there isn't.
-  // After that, leave it alone so we don't fight a user who toggled it.
-  // Wait for health to actually resolve first — before that,
-  // computeSyncActionsQuietMessage always returns null (to avoid a
-  // premature flash), which would otherwise force this open every time.
-  if (nowVisible && state.syncSectionAutoOpenPending && health) {
-    elements.syncDataSection.open = !quietMessage
-    state.syncSectionAutoOpenPending = false
-  }
 }
 
 function setOnboardingExpanded(expanded) {
@@ -2666,21 +2666,19 @@ function setOnboardingExpanded(expanded) {
 
 // Until a project is actually opened, only "Latest Projects" / "Open Project"
 // (the onboarding group) should be visible — every other card reads as
-// confusing noise for a project nobody has chosen yet.
+// confusing noise for a project nobody has chosen yet. Once a project opens,
+// its sections live behind click-to-reveal tiles (see wireTileGroup) rather
+// than all showing at once, and default back to the Save Checkpoint tile —
+// the action used most — each time a project is opened or switched.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
   elements.projectHealthCard.hidden = !visible
-  elements.projectSetupZone.hidden = !visible
-  if (!visible) {
-    elements.projectSetupZone.removeAttribute('open')
-  }
-  elements.projectWorkspaceGrid.hidden = !visible
-  elements.timeMachineZone.hidden = !visible
-  if (!visible) {
-    elements.timeMachineZone.removeAttribute('open')
+  elements.projectNavGroup.hidden = !visible
+  if (visible) {
+    selectProjectTile('save-checkpoint-panel')
+  } else {
     clearTimeMachine()
   }
-  elements.technicalDetailsAside.hidden = !visible
   updatePowerUserConsoleVisibility()
 }
 
@@ -3331,9 +3329,9 @@ function initBidsAutoNestToggle() {
 
 function updatePowerUserConsoleVisibility() {
   const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
-  elements.powerUserConsole.hidden = !visible
-  if (!visible) {
-    elements.powerUserConsole.removeAttribute('open')
+  elements.projectNavTileConsole.hidden = !visible
+  if (!visible && elements.projectNavTileConsole.getAttribute('aria-selected') === 'true') {
+    selectProjectTile('save-checkpoint-panel')
   }
 }
 

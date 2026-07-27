@@ -209,31 +209,50 @@
         <p id="project-status-line" class="status-line status-line-neutral">
           Select a project to see its save, sync, and data status.
         </p>
-
-        <details class="status-details">
-          <summary>Show details</summary>
-
-          <div id="project-health-output" class="panel panel-muted panel-compact">
-            Select a project to see its save, sync, and data status.
-          </div>
-
-          <section class="status-box" aria-labelledby="working-tree-title">
-            <div class="section-head branch-head">
-              <h3 id="working-tree-title">Working Tree</h3>
-            </div>
-            <div id="working-tree-summary" class="panel panel-muted panel-compact">
-              Choose a project to see local changes.
-            </div>
-          </section>
-        </details>
       </section>
 
-      <details id="power-user-console" class="card setup-zone" aria-labelledby="power-user-console-title" hidden>
-        <summary id="power-user-console-title" class="setup-zone-summary">
+      <section id="project-nav-group" class="onboarding-group" hidden>
+        <div class="onboarding-picker project-nav-picker reveal reveal-4" role="tablist" aria-label="Project sections">
+          <button type="button" class="onboarding-tile" data-nav-target="save-checkpoint-panel" role="tab" aria-selected="false" aria-controls="save-checkpoint-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">💾</span>
+            <span class="onboarding-tile-label">Save Checkpoint</span>
+          </button>
+          <button type="button" class="onboarding-tile" id="project-nav-tile-sync" data-nav-target="sync-data-section" role="tab" aria-selected="false" aria-controls="sync-data-section" hidden>
+            <span class="onboarding-tile-icon" aria-hidden="true">🔄</span>
+            <span class="onboarding-tile-label">Get Data &amp; Sync</span>
+            <span id="sync-data-summary-hint" class="onboarding-tile-hint"></span>
+          </button>
+          <button type="button" class="onboarding-tile" data-nav-target="files-panel" role="tab" aria-selected="false" aria-controls="files-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">🗂️</span>
+            <span class="onboarding-tile-label">Files</span>
+          </button>
+          <button type="button" class="onboarding-tile" data-nav-target="project-health-panel" role="tab" aria-selected="false" aria-controls="project-health-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">🩺</span>
+            <span class="onboarding-tile-label">Health Details</span>
+          </button>
+          <button type="button" class="onboarding-tile" data-nav-target="project-setup-zone" role="tab" aria-selected="false" aria-controls="project-setup-zone">
+            <span class="onboarding-tile-icon" aria-hidden="true">⚙️</span>
+            <span class="onboarding-tile-label">Project Setup</span>
+          </button>
+          <button type="button" class="onboarding-tile" data-nav-target="time-machine-zone" role="tab" aria-selected="false" aria-controls="time-machine-zone">
+            <span class="onboarding-tile-icon" aria-hidden="true">⏳</span>
+            <span class="onboarding-tile-label">Time Machine</span>
+          </button>
+          <button type="button" class="onboarding-tile" id="project-nav-tile-console" data-nav-target="power-user-console" role="tab" aria-selected="false" aria-controls="power-user-console" hidden>
+            <span class="onboarding-tile-icon" aria-hidden="true">🖥️</span>
+            <span class="onboarding-tile-label">Power User Console</span>
+          </button>
+          <button type="button" class="onboarding-tile" data-nav-target="technical-details-aside" role="tab" aria-selected="false" aria-controls="technical-details-aside">
+            <span class="onboarding-tile-icon" aria-hidden="true">🔧</span>
+            <span class="onboarding-tile-label">Technical Details</span>
+          </button>
+        </div>
+
+        <section id="power-user-console" class="card reveal" aria-labelledby="power-user-console-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">🖥️</span>
-          Power User Console — Run Any Command
-        </summary>
-        <div class="setup-zone-body">
+          <div class="section-head">
+            <h2 id="power-user-console-title">Power User Console — Run Any Command</h2>
+          </div>
           <p id="console-help-text" class="lede-small">
             Run any command directly against the active project folder, for anything the buttons above don't
             cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
@@ -263,11 +282,9 @@
               No commands run yet this session.
             </div>
           </section>
-        </div>
-      </details>
+        </section>
 
-      <main id="project-workspace-grid" class="grid" hidden>
-        <section class="card save-hero reveal reveal-4 full-span" aria-labelledby="project-actions-title">
+        <section id="save-checkpoint-panel" class="card save-hero reveal" aria-labelledby="project-actions-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">💾</span>
           <div class="section-head">
             <h2 id="project-actions-title">Save a Checkpoint</h2>
@@ -356,57 +373,54 @@
           </section>
         </section>
 
-        <details id="sync-data-section" class="card setup-zone reveal reveal-4 full-span" aria-labelledby="sync-data-title" hidden>
-          <summary id="sync-data-title" class="setup-zone-summary">
-            <span class="card-icon-badge" aria-hidden="true">🔄</span>
-            Get Data &amp; Remote Sync
-            <span id="sync-data-summary-hint" class="setup-zone-summary-hint"></span>
-          </summary>
-          <div class="setup-zone-body">
-            <p class="lede-small">
-              Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
-              this project.
-            </p>
-
-            <div id="sync-actions-strip" class="action-strip">
-              <button id="get-data" class="button button-ghost" type="button">Get Data</button>
-              <span class="sibling-action-group">
-                <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
-                <button
-                  id="unlock-info"
-                  class="info-hint"
-                  type="button"
-                  aria-label="What does Unlock for Editing do?"
-                  title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
-                >
-                  ⓘ
-                </button>
-              </span>
-              <span class="sibling-action-group">
-                <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
-                <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
-                <button id="disconnect-remote" class="button button-ghost" type="button" hidden>Disconnect from Source</button>
-                <button
-                  id="sibling-actions-info"
-                  class="info-hint"
-                  type="button"
-                  aria-label="What are remote/sibling actions?"
-                  title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work. Disconnect from Source removes the remote link entirely — useful for read-only sources (e.g. OpenNeuro) you'll never push to or pull further updates from."
-                >
-                  ⓘ
-                </button>
-              </span>
-            </div>
-            <p class="hint-inline">
-              If a file won't open in another program (it may show up as a link/alias instead of a normal
-              file), select it in Manual File Paths above, then try Unlock for Editing.
-            </p>
-            <p id="sync-actions-quiet" class="lede-small" hidden></p>
-            <p id="remote-info" class="lede-small" hidden></p>
+        <section id="sync-data-section" class="card reveal" aria-labelledby="sync-data-title" role="tabpanel" hidden>
+          <span class="card-icon-badge" aria-hidden="true">🔄</span>
+          <div class="section-head">
+            <h2 id="sync-data-title">Get Data &amp; Remote Sync</h2>
           </div>
-        </details>
+          <p class="lede-small">
+            Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
+            this project.
+          </p>
 
-        <section class="card reveal reveal-5 full-span" aria-labelledby="files-title">
+          <div id="sync-actions-strip" class="action-strip">
+            <button id="get-data" class="button button-ghost" type="button">Get Data</button>
+            <span class="sibling-action-group">
+              <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
+              <button
+                id="unlock-info"
+                class="info-hint"
+                type="button"
+                aria-label="What does Unlock for Editing do?"
+                title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
+              >
+                ⓘ
+              </button>
+            </span>
+            <span class="sibling-action-group">
+              <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
+              <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
+              <button id="disconnect-remote" class="button button-ghost" type="button" hidden>Disconnect from Source</button>
+              <button
+                id="sibling-actions-info"
+                class="info-hint"
+                type="button"
+                aria-label="What are remote/sibling actions?"
+                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work. Disconnect from Source removes the remote link entirely — useful for read-only sources (e.g. OpenNeuro) you'll never push to or pull further updates from."
+              >
+                ⓘ
+              </button>
+            </span>
+          </div>
+          <p class="hint-inline">
+            If a file won't open in another program (it may show up as a link/alias instead of a normal
+            file), select it in Manual File Paths above, then try Unlock for Editing.
+          </p>
+          <p id="sync-actions-quiet" class="lede-small" hidden></p>
+          <p id="remote-info" class="lede-small" hidden></p>
+        </section>
+
+        <section id="files-panel" class="card reveal" aria-labelledby="files-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">🗂️</span>
           <div class="section-head">
             <h2 id="files-title">Files</h2>
@@ -423,14 +437,31 @@
           </label>
           <div id="files-output" class="panel panel-muted">Select or detect a project to load files.</div>
         </section>
-      </main>
 
-      <details id="project-setup-zone" class="card setup-zone" aria-labelledby="setup-zone-title" hidden>
-        <summary id="setup-zone-title" class="setup-zone-summary">
+        <section id="project-health-panel" class="card reveal" aria-labelledby="project-health-panel-title" role="tabpanel" hidden>
+          <span class="card-icon-badge" aria-hidden="true">🩺</span>
+          <div class="section-head">
+            <h2 id="project-health-panel-title">Project Health Details</h2>
+          </div>
+          <div id="project-health-output" class="panel panel-muted panel-compact">
+            Select a project to see its save, sync, and data status.
+          </div>
+
+          <section class="status-box" aria-labelledby="working-tree-title">
+            <div class="section-head branch-head">
+              <h3 id="working-tree-title">Working Tree</h3>
+            </div>
+            <div id="working-tree-summary" class="panel panel-muted panel-compact">
+              Choose a project to see local changes.
+            </div>
+          </section>
+        </section>
+
+        <section id="project-setup-zone" class="card reveal" aria-labelledby="setup-zone-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">⚙️</span>
-          Project Setup — Branches &amp; Ignore Rules
-        </summary>
-        <div class="setup-zone-body">
+          <div class="section-head">
+            <h2 id="setup-zone-title">Project Setup — Branches &amp; Ignore Rules</h2>
+          </div>
           <section class="branch-box" aria-labelledby="branch-management-title">
             <div class="section-head branch-head">
               <h3 id="branch-management-title">Branch</h3>
@@ -507,15 +538,13 @@
               No ignore rules added yet.
             </div>
           </section>
-        </div>
-      </details>
+        </section>
 
-      <details id="time-machine-zone" class="card setup-zone" aria-labelledby="time-machine-title" hidden>
-        <summary id="time-machine-title" class="setup-zone-summary">
+        <section id="time-machine-zone" class="card reveal" aria-labelledby="time-machine-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">⏳</span>
-          Time Machine — Browse &amp; Restore Past Saves
-        </summary>
-        <div class="setup-zone-body">
+          <div class="section-head">
+            <h2 id="time-machine-title">Time Machine — Browse &amp; Restore Past Saves</h2>
+          </div>
           <p class="lede-small">
             Browse the full history of this project, restore individual files from any past save point,
             or branch from one — nothing changes unless you explicitly restore a file.
@@ -560,21 +589,21 @@
 
             <div id="tm-action-output" class="panel panel-muted panel-compact" hidden></div>
           </section>
-        </div>
-      </details>
+        </section>
 
-      <aside id="technical-details-aside" class="card reveal reveal-6" aria-labelledby="contract-title" hidden>
-        <span class="card-icon-badge" aria-hidden="true">🔧</span>
-        <div class="section-head">
-          <h2 id="contract-title">Technical Details (Optional)</h2>
-          <button id="refresh-contract" class="button button-ghost">Refresh</button>
-        </div>
+        <section id="technical-details-aside" class="card reveal" aria-labelledby="contract-title" role="tabpanel" hidden>
+          <span class="card-icon-badge" aria-hidden="true">🔧</span>
+          <div class="section-head">
+            <h2 id="contract-title">Technical Details (Optional)</h2>
+            <button id="refresh-contract" class="button button-ghost">Refresh</button>
+          </div>
 
-        <details>
-          <summary>Adapter contract</summary>
-          <pre id="contract-output" class="panel panel-code">Loading interface contract...</pre>
-        </details>
-      </aside>
+          <details>
+            <summary>Adapter contract</summary>
+            <pre id="contract-output" class="panel panel-code">Loading interface contract...</pre>
+          </details>
+        </section>
+      </section>
     </div>
 
     <div id="global-busy-overlay" class="global-busy-overlay" hidden>
