@@ -26,13 +26,14 @@ const CURATED_COMMANDS: [&str; 8] = [
 // adapter's (see EXTENDED_COMMAND_SCHEMAS in src/datalad/schema.js). Order
 // matters: adapter-parity.test.js asserts array equality, not just set
 // equality.
-const EXTENDED_COMMANDS: [&str; 6] = [
+const EXTENDED_COMMANDS: [&str; 7] = [
     "createBranchAt",
     "restoreFileFromCommit",
     "discardChanges",
     "unlock",
     "createSubdataset",
     "disconnectRemote",
+    "createSibling",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
