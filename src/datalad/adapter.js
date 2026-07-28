@@ -491,6 +491,14 @@ export class DataLadAdapter {
     }
 
     const prefix = repoPrefix.endsWith('/') ? repoPrefix : `${repoPrefix}/`
+    // A repo name gitolite actually created only ever contains what its own
+    // wildcard rule allows in each path segment (letters/digits/._-) plus
+    // "/" between segments — confirmed against a real deployment. A row
+    // whose "name" still contains regex metacharacters (`[`, `]`, `+`, ...)
+    // is the wildcard *rule* itself (e.g. "mri-lab/CREATOR/[a-zA-Z0-9._-]+"),
+    // which `info` lists as one of the repos this key has access to even
+    // though nothing has been created under it yet — not a real study.
+    const REAL_REPO_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/
     const studies = result.stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -502,7 +510,7 @@ export class DataLadAdapter {
       .map((line) => line.split(/\s+/).pop())
       .filter((repoName) => repoName && repoName.startsWith(prefix))
       .map((repoName) => repoName.slice(prefix.length))
-      .filter(Boolean)
+      .filter((repoName) => repoName && REAL_REPO_NAME_PATTERN.test(repoName))
 
     return { ok: true, studies, error: null }
   }

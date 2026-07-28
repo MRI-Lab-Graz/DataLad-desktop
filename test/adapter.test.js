@@ -1999,7 +1999,12 @@ test('listRemoteStudies (gitolite) runs `ssh <host> info` instead of `ls`, filte
       ' R W\tmri-lab/MRI-Lab_Repository\n' +
       ' R  \tmri-lab/alice/study-a\n' +
       ' R W\tmri-lab/bob/study-b\n' +
-      ' R  \tsome-other-team/unrelated-repo\n',
+      ' R  \tsome-other-team/unrelated-repo\n' +
+      // A CREATOR wildcard rule shows up as one of "your" repos even before
+      // anyone has created anything under it — confirmed against a real
+      // gitolite deployment. Must be excluded, not listed as an installable
+      // study.
+      ' R   C\tmri-lab/CREATOR/[a-zA-Z0-9._-]+\n',
     stderr: '',
     failed: false
   })
