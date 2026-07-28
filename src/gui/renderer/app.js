@@ -91,6 +91,11 @@ const elements = {
   settingsCard: document.getElementById('settings-card'),
   settingsStudiesHost: document.getElementById('settings-studies-host'),
   settingsStudiesPath: document.getElementById('settings-studies-path'),
+  settingsStudiesTypeSshDirectory: document.getElementById('settings-studies-type-ssh-directory'),
+  settingsStudiesTypeGitolite: document.getElementById('settings-studies-type-gitolite'),
+  settingsStudiesHostLabel: document.getElementById('settings-studies-host-label'),
+  settingsStudiesPathLabel: document.getElementById('settings-studies-path-label'),
+  settingsStudiesTypeHint: document.getElementById('settings-studies-type-hint'),
   saveSettingsButton: document.getElementById('save-settings'),
   settingsOutput: document.getElementById('settings-output'),
   openSshPasswordButton: document.getElementById('open-ssh-password'),
@@ -454,10 +459,34 @@ async function refreshSshPasswordStatus() {
     : ''
 }
 
+// Gitolite forces every SSH session into its own restricted command
+// dispatcher (see #listRemoteStudiesGitolite in adapter.js) — the "folder"
+// concept doesn't apply, so the field labels/hint switch to match.
+function updateStudiesServerTypeUi() {
+  const isGitolite = elements.settingsStudiesTypeGitolite.checked
+
+  elements.settingsStudiesHost.placeholder = isGitolite ? 'git@myserver.example.org' : 'user@myserver.example.org'
+  elements.settingsStudiesPathLabel.textContent = isGitolite ? 'Repo Name Prefix' : 'Studies Folder Path'
+  elements.settingsStudiesPath.placeholder = isGitolite ? 'mri-lab' : '/data/studies'
+  elements.settingsStudiesTypeHint.innerHTML = isGitolite
+    ? 'Gitolite uses one shared account (e.g. <code>git@myserver.example.org</code>) — access per person is ' +
+      'controlled by which SSH key they registered on the server, not by a username here. "Repo Name Prefix" ' +
+      'is the namespace studies live under (e.g. studies show up as <code>mri-lab/&lt;study&gt;</code>).'
+    : 'If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> ' +
+      '— a username that itself contains "@" (email-style) works too.'
+}
+
+elements.settingsStudiesTypeSshDirectory.addEventListener('change', updateStudiesServerTypeUi)
+elements.settingsStudiesTypeGitolite.addEventListener('change', updateStudiesServerTypeUi)
+
 elements.openSettingsButton.addEventListener('click', async () => {
   const settings = await api.getSettings()
   elements.settingsStudiesHost.value = settings?.studiesServer?.host ?? ''
   elements.settingsStudiesPath.value = settings?.studiesServer?.path ?? ''
+  const isGitolite = settings?.studiesServer?.type === 'gitolite'
+  elements.settingsStudiesTypeGitolite.checked = isGitolite
+  elements.settingsStudiesTypeSshDirectory.checked = !isGitolite
+  updateStudiesServerTypeUi()
   elements.settingsOutput.hidden = true
   elements.settingsCard.hidden = false
   await refreshSshPasswordStatus()
@@ -470,10 +499,11 @@ elements.closeSettingsButton.addEventListener('click', () => {
 elements.saveSettingsButton.addEventListener('click', async () => {
   const host = elements.settingsStudiesHost.value.trim()
   const path = elements.settingsStudiesPath.value.trim()
+  const type = elements.settingsStudiesTypeGitolite.checked ? 'gitolite' : 'ssh-directory'
 
   setButtonBusy(elements.saveSettingsButton, true)
   try {
-    await api.updateSettings({ studiesServer: { host, path } })
+    await api.updateSettings({ studiesServer: { host, path, type } })
     elements.settingsOutput.hidden = false
     elements.settingsOutput.textContent = 'Settings saved.'
     await refreshRemoteStudies()

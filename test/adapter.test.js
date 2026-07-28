@@ -1989,6 +1989,61 @@ test('listRemoteStudies reports REMOTE_LIST_FAILED when ssh fails', async () => 
   assert.match(result.error.message, /Could not resolve hostname/)
 })
 
+test('listRemoteStudies (gitolite) runs `ssh <host> info` instead of `ls`, filters by prefix, and strips it', async () => {
+  const runner = new FakeRunner()
+  runner.set('ssh', ['git@server.example.org', 'info'], {
+    exitCode: 0,
+    stdout:
+      'hello alice, this is git@server.example.org running gitolite3 v3.6.12 on git 2.34.1\n\n' +
+      ' R W\tgitolite-admin\n' +
+      ' R W\tmri-lab/MRI-Lab_Repository\n' +
+      ' R  \tmri-lab/alice/study-a\n' +
+      ' R W\tmri-lab/bob/study-b\n' +
+      ' R  \tsome-other-team/unrelated-repo\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.listRemoteStudies({ host: 'git@server.example.org', path: 'mri-lab', type: 'gitolite' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(new Set(result.studies), new Set(['MRI-Lab_Repository', 'alice/study-a', 'bob/study-b']))
+})
+
+test('listRemoteStudies (gitolite) reports REMOTE_LIST_FAILED when the gitolite info command fails', async () => {
+  const runner = new FakeRunner()
+  runner.set('ssh', ['git@server.example.org', 'info'], {
+    exitCode: 255,
+    stdout: '',
+    stderr: 'ssh: Could not resolve hostname server.example.org\n',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.listRemoteStudies({ host: 'git@server.example.org', path: 'mri-lab', type: 'gitolite' })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.studies.length, 0)
+  assert.equal(result.error.code, 'REMOTE_LIST_FAILED')
+})
+
+test('listRemoteStudies defaults to ssh-directory mode when type is omitted (backward compatible)', async () => {
+  const runner = new FakeRunner()
+  runner.set('ssh', ['user@server.example.org', 'ls', '-1', '--', '/data/studies'], {
+    exitCode: 0,
+    stdout: 'study-a\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.listRemoteStudies({ host: 'user@server.example.org', path: '/data/studies' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.studies, ['study-a'])
+})
+
 test('runCommand routes createSibling through datalad create-sibling', async () => {
   const runner = new FakeRunner()
   runner.set(

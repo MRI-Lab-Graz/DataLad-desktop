@@ -452,11 +452,18 @@ export class DataLadAdapter {
   async listRemoteStudies(serverConfig) {
     const host = serverConfig?.host?.trim()
     const remotePath = serverConfig?.path?.trim()
+    const serverType = serverConfig?.type === 'gitolite' ? 'gitolite' : 'ssh-directory'
 
     if (!host || !remotePath) {
       return { ok: false, studies: [], error: { code: 'SERVER_NOT_CONFIGURED', message: 'Studies server host and path are not configured yet.' } }
     }
 
+    return serverType === 'gitolite'
+      ? this.#listRemoteStudiesGitolite(host, remotePath)
+      : this.#listRemoteStudiesSshDirectory(host, remotePath)
+  }
+
+  async #listRemoteStudiesSshDirectory(host, remotePath) {
     const result = await this.runner.run('ssh', [host, 'ls', '-1', '--', remotePath])
 
     if (result.failed) {
@@ -466,6 +473,35 @@ export class DataLadAdapter {
     const studies = result.stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
+      .filter(Boolean)
+
+    return { ok: true, studies, error: null }
+  }
+
+  // Gitolite forces every SSH session into its own restricted dispatcher —
+  // arbitrary shell commands (like `ls`) are rejected outright. `info` is
+  // gitolite's own command; it lists exactly the repos the connecting SSH
+  // key has access to, which is also strictly more useful than a directory
+  // listing: guests only ever see what they're actually permitted to read.
+  async #listRemoteStudiesGitolite(host, repoPrefix) {
+    const result = await this.runner.run('ssh', [host, 'info'])
+
+    if (result.failed) {
+      return { ok: false, studies: [], error: { code: 'REMOTE_LIST_FAILED', message: result.stderr.trim() || 'Could not list studies on the server.' } }
+    }
+
+    const prefix = repoPrefix.endsWith('/') ? repoPrefix : `${repoPrefix}/`
+    const studies = result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      // Skip the greeting line ("hello <user>, this is git@host running
+      // gitolite..."); every real repo line's last whitespace-separated
+      // token is the repo name, preceded by its access-flag column(s).
+      .filter((line) => !/^hello\b/i.test(line))
+      .map((line) => line.split(/\s+/).pop())
+      .filter((repoName) => repoName && repoName.startsWith(prefix))
+      .map((repoName) => repoName.slice(prefix.length))
       .filter(Boolean)
 
     return { ok: true, studies, error: null }

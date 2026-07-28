@@ -171,6 +171,30 @@ machine/deployment. It only supplies the *default* shown when no settings
 have been saved yet — once someone opens Setup, adds their username, and
 clicks Save, their own value takes over from then on.
 
+#### Studies server type: plain SSH directory vs. Gitolite
+
+**Setup → Studies Server (SSH)** has a "Server Type" choice:
+
+- **Plain SSH directory** (default, unchanged behavior): the "path" is a
+  folder on the server; every subfolder in it is listed as an installable
+  study via a plain `ssh <host> ls`. This means anyone who can SSH in at all
+  can both read *and write* every study in that folder — there's no
+  per-person or per-study permission model.
+- **Gitolite**: for labs running [Gitolite](https://gitolite.com/gitolite/)
+  on their server, where per-person, per-repo (and per-branch) read/write
+  permissions are managed via SSH key, not shared folder access. In this
+  mode the "path" becomes a repo-name prefix (e.g. `mri-lab`) rather than a
+  filesystem folder, studies are listed via Gitolite's own `ssh <host> info`
+  command (which only reveals repos *that specific key* can access — a
+  guest account genuinely can't see or list what it has no permission to
+  read), and `config/studies-server.local.json` / the saved settings need
+  `"type": "gitolite"` alongside a shared service-account host (e.g.
+  `git@myserver.example.org`, not an individual username).
+
+Cloning, pushing, and publishing already work unchanged in Gitolite mode —
+they go through ordinary `ssh://` git URLs, and Gitolite handles those exactly
+like any other git server. Only *listing* studies needed a different command.
+
 ### Recommended: set up an SSH key instead of a password
 
 The Setup panel has a **"Set SSH Password…"** dialog for studies servers that

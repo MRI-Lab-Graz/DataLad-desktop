@@ -71,16 +71,27 @@
           <h3 class="setup-section-title">Studies Server (SSH)</h3>
           <p class="lede-small">Configure the DataLad studies server so studies can be browsed and installed from it.</p>
 
+          <div class="get-remote-mode-row" role="group" aria-label="Studies server type">
+            <label class="get-remote-mode-option">
+              <input type="radio" name="settings-studies-type" id="settings-studies-type-ssh-directory" value="ssh-directory" checked />
+              Plain SSH directory
+            </label>
+            <label class="get-remote-mode-option">
+              <input type="radio" name="settings-studies-type" id="settings-studies-type-gitolite" value="gitolite" />
+              Gitolite
+            </label>
+          </div>
+
           <div class="open-project-controls">
             <label class="field">
-              <span>Server Host (SSH)</span>
+              <span id="settings-studies-host-label">Server Host (SSH)</span>
               <input id="settings-studies-host" type="text" placeholder="user@myserver.example.org" />
             </label>
             <label class="field">
-              <span>Studies Folder Path</span>
+              <span id="settings-studies-path-label">Studies Folder Path</span>
               <input id="settings-studies-path" type="text" placeholder="/data/studies" />
             </label>
-            <p class="hint-inline">If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> — a username that itself contains "@" (email-style) works too.</p>
+            <p id="settings-studies-type-hint" class="hint-inline">If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> — a username that itself contains "@" (email-style) works too.</p>
 
             <div class="row-actions">
               <button id="save-settings" class="button button-primary" type="button">Save Settings</button>
