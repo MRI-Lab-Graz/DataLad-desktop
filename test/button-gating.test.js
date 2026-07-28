@@ -5,7 +5,8 @@ import {
   computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
-  computeSyncActionsQuietMessage
+  computeSyncActionsQuietMessage,
+  isSharedStudiesServerRemote
 } from '../src/gui/renderer/button-gating.js'
 
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
@@ -195,4 +196,34 @@ test('computeSyncActionsQuietMessage uses git-only wording for a plain git proje
   const message = computeSyncActionsQuietMessage('git', { hasUpstream: false })
   assert.match(message, /Nothing to sync right now/)
   assert.doesNotMatch(message, /Get Data/)
+})
+
+test('isSharedStudiesServerRemote matches when the remote URL contains the configured bare hostname', () => {
+  assert.equal(
+    isSharedStudiesServerRemote(
+      'ssh://karl.koschutnig@uni-graz.at@it035016.uni-graz.at/datalad/mri/MRI-Lab_Repository/hgh',
+      'karl.koschutnig@uni-graz.at@it035016.uni-graz.at'
+    ),
+    true
+  )
+})
+
+test('isSharedStudiesServerRemote matches regardless of which username is embedded in either string', () => {
+  assert.equal(
+    isSharedStudiesServerRemote('ssh://someone-else@it035016.uni-graz.at/data/studies/hgh', 'it035016.uni-graz.at'),
+    true
+  )
+})
+
+test('isSharedStudiesServerRemote returns false for an unrelated remote', () => {
+  assert.equal(
+    isSharedStudiesServerRemote('https://github.com/example/other-repo.git', 'it035016.uni-graz.at'),
+    false
+  )
+})
+
+test('isSharedStudiesServerRemote returns false when either input is missing', () => {
+  assert.equal(isSharedStudiesServerRemote(null, 'it035016.uni-graz.at'), false)
+  assert.equal(isSharedStudiesServerRemote('ssh://it035016.uni-graz.at/data/studies/hgh', ''), false)
+  assert.equal(isSharedStudiesServerRemote('ssh://it035016.uni-graz.at/data/studies/hgh', undefined), false)
 })

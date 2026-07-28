@@ -79,3 +79,47 @@ test('ProcessRunner gives up and reports failure after persistent index.lock con
   assert.equal(result.failed, true)
   assert.match(result.stderr, /index\.lock/)
 })
+
+const PRINT_SSH_ENV_SCRIPT =
+  'process.stdout.write(JSON.stringify({' +
+  'askpass: process.env.SSH_ASKPASS ?? null,' +
+  'require: process.env.SSH_ASKPASS_REQUIRE ?? null,' +
+  'password: process.env.DATALAD_DESKTOP_SSH_PASSWORD ?? null' +
+  '}))'
+
+test('ProcessRunner has no SSH password set by default', () => {
+  const runner = new ProcessRunner()
+  assert.equal(runner.hasSshPassword(), false)
+})
+
+test('ProcessRunner injects SSH_ASKPASS env vars into every spawned command once a password is set', async () => {
+  const runner = new ProcessRunner()
+  runner.setSshPassword('s3cret')
+  assert.equal(runner.hasSshPassword(), true)
+
+  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT])
+  const seen = JSON.parse(result.stdout)
+
+  assert.equal(seen.require, 'force')
+  assert.equal(seen.password, 's3cret')
+  assert.match(seen.askpass, /ssh-askpass\.(sh|cmd)$/)
+})
+
+test('ProcessRunner stops injecting SSH_ASKPASS env vars after clearSshPassword', async () => {
+  const runner = new ProcessRunner()
+  runner.setSshPassword('s3cret')
+  runner.clearSshPassword()
+  assert.equal(runner.hasSshPassword(), false)
+
+  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT])
+  const seen = JSON.parse(result.stdout)
+
+  assert.deepEqual(seen, { askpass: null, require: null, password: null })
+})
+
+test('ProcessRunner treats setSshPassword("") the same as clearing it', () => {
+  const runner = new ProcessRunner()
+  runner.setSshPassword('s3cret')
+  runner.setSshPassword('')
+  assert.equal(runner.hasSshPassword(), false)
+})

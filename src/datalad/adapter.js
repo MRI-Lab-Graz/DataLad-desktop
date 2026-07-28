@@ -30,6 +30,8 @@ const CURATED_COMMANDS = new Set([
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const BIDS_MARKER_FILE = 'dataset_description.json'
 const BIDS_SUBJECT_DIR_PATTERN = /^sub-[A-Za-z0-9._-]+$/
+// Top-level BIDS folder names nested/detected alongside sub-* subject dirs.
+const BIDS_TOP_LEVEL_DIR_NAMES = ['rawdata', 'derivatives', 'sourcedata']
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
@@ -154,8 +156,8 @@ export class DataLadAdapter {
     if (names.has(BIDS_MARKER_FILE)) signals.push(BIDS_MARKER_FILE)
     if (names.has('participants.tsv')) signals.push('participants.tsv')
     if (names.has('participants.json')) signals.push('participants.json')
-    if (names.has('rawdata')) signals.push('rawdata/')
-    if (names.has('derivatives')) signals.push('derivatives/')
+    const presentTopLevelDirs = BIDS_TOP_LEVEL_DIR_NAMES.filter((name) => names.has(name))
+    for (const name of presentTopLevelDirs) signals.push(`${name}/`)
 
     const subjectDirs = entries
       .filter((entry) => entry.isDirectory() && BIDS_SUBJECT_DIR_PATTERN.test(entry.name))
@@ -163,11 +165,7 @@ export class DataLadAdapter {
     if (subjectDirs.length > 0) signals.push(`${subjectDirs.length} sub-* folder(s)`)
 
     const confidence = names.has(BIDS_MARKER_FILE) ? 'high' : signals.length > 0 ? 'medium' : 'none'
-    const candidateSubpaths = [
-      ...subjectDirs,
-      ...(names.has('rawdata') ? ['rawdata'] : []),
-      ...(names.has('derivatives') ? ['derivatives'] : [])
-    ]
+    const candidateSubpaths = [...subjectDirs, ...presentTopLevelDirs]
 
     return { folderPath, bidsLikely: confidence !== 'none', confidence, signals, candidateSubpaths }
   }
@@ -209,7 +207,7 @@ export class DataLadAdapter {
 
     return entries
       .filter((entry) => entry.isDirectory() && !registered.has(entry.name))
-      .filter((entry) => BIDS_SUBJECT_DIR_PATTERN.test(entry.name) || entry.name === 'rawdata' || entry.name === 'derivatives')
+      .filter((entry) => BIDS_SUBJECT_DIR_PATTERN.test(entry.name) || BIDS_TOP_LEVEL_DIR_NAMES.includes(entry.name))
       .map((entry) => entry.name)
   }
 
@@ -373,6 +371,21 @@ export class DataLadAdapter {
 
   #resolveDatasetPath(projectPath, relativeDatasetPath) {
     return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
+  }
+
+  // Session-only: kept in ProcessRunner's memory, never persisted. Needed
+  // when the studies server requires password (not key-based) SSH auth —
+  // see ssh-askpass.sh/.cmd for how it reaches the ssh child process.
+  setStudiesServerPassword(password) {
+    this.runner.setSshPassword(password)
+  }
+
+  clearStudiesServerPassword() {
+    this.runner.clearSshPassword()
+  }
+
+  hasStudiesServerPassword() {
+    return this.runner.hasSshPassword()
   }
 
   // Read-only SSH directory listing, not a datalad/git mutation, so it

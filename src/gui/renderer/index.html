@@ -80,16 +80,43 @@
               <span>Studies Folder Path</span>
               <input id="settings-studies-path" type="text" placeholder="/data/studies" />
             </label>
-            <p class="hint-inline">The host can be a bare hostname, user@host, or an alias already defined in your ~/.ssh/config.</p>
+            <p class="hint-inline">If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> — a username that itself contains "@" (email-style) works too.</p>
 
             <div class="row-actions">
               <button id="save-settings" class="button button-primary" type="button">Save Settings</button>
+              <button
+                id="open-ssh-password"
+                class="button button-ghost button-inline"
+                type="button"
+                title="If the server requires a password (not just an SSH key), set it here so studies can be listed and installed."
+              >
+                Set SSH Password…
+              </button>
             </div>
+            <p id="ssh-password-status" class="hint-inline"></p>
           </div>
 
           <div id="settings-output" class="panel panel-muted" hidden></div>
         </div>
       </section>
+
+      <div id="ssh-password-overlay" class="global-busy-overlay" hidden>
+        <div class="global-busy-card ssh-password-card" role="dialog" aria-modal="true" aria-labelledby="ssh-password-title">
+          <h2 id="ssh-password-title">SSH Password</h2>
+          <p class="lede-small">
+            Used for this session only — kept in memory and never saved to disk. Needed when the studies server
+            requires a password instead of (or in addition to) an SSH key.
+          </p>
+          <label class="field">
+            <span>Password</span>
+            <input id="ssh-password-input" type="password" autocomplete="off" />
+          </label>
+          <div class="row-actions">
+            <button id="ssh-password-cancel" class="button button-ghost button-inline" type="button">Cancel</button>
+            <button id="ssh-password-save" class="button button-primary" type="button">Save</button>
+          </div>
+        </div>
+      </div>
 
       <section id="onboarding-group" class="onboarding-group">
         <div class="onboarding-picker reveal reveal-2" role="tablist" aria-label="Choose how to start">
@@ -226,7 +253,7 @@
 
             <p class="hint-inline" id="create-project-path-hint">
               Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset,
-              subject/rawdata/derivatives folders are automatically nested into subdatasets.
+              subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.
             </p>
 
             <div class="row-actions">

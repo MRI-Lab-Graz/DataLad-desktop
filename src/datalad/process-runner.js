@@ -1,4 +1,14 @@
 import { spawn } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+// ssh (and anything shelling out to it, like datalad/git-annex over ssh://)
+// normally refuses password auth entirely when stdin isn't a terminal — this
+// is the standard OpenSSH-supported way to supply one anyway: SSH_ASKPASS
+// is invoked in place of a terminal prompt when SSH_ASKPASS_REQUIRE=force
+// (OpenSSH 8.4+), no tty or X11 DISPLAY needed.
+const SSH_ASKPASS_SCRIPT = join(__dirname, process.platform === 'win32' ? 'ssh-askpass.cmd' : 'ssh-askpass.sh')
 
 // git acquires .git/index.lock atomically before any mutation, so a command
 // that fails to acquire it never partially ran — a retry after a short
@@ -18,6 +28,35 @@ function sleep(ms) {
  * Small shell boundary used by the adapter so UI layers can stay command-agnostic.
  */
 export class ProcessRunner {
+  // In-memory only, for the running session — never written to disk. Set via
+  // the Setup panel's SSH password dialog when the studies server requires
+  // password (not key-based) auth.
+  #sshPassword = null
+
+  setSshPassword(password) {
+    this.#sshPassword = password || null
+  }
+
+  clearSshPassword() {
+    this.#sshPassword = null
+  }
+
+  hasSshPassword() {
+    return this.#sshPassword !== null
+  }
+
+  #envWithSshPassword(baseEnv) {
+    if (!this.#sshPassword) {
+      return baseEnv
+    }
+    return {
+      ...baseEnv,
+      SSH_ASKPASS: SSH_ASKPASS_SCRIPT,
+      SSH_ASKPASS_REQUIRE: 'force',
+      DATALAD_DESKTOP_SSH_PASSWORD: this.#sshPassword
+    }
+  }
+
   async run(command, args = [], options = {}) {
     const startedAt = Date.now()
 
@@ -41,7 +80,7 @@ export class ProcessRunner {
 
       const child = spawn(command, args, {
         cwd: options.cwd,
-        env: { ...process.env, ...(options.env ?? {}) },
+        env: this.#envWithSshPassword({ ...process.env, ...(options.env ?? {}) }),
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: options.shell ?? false
       })

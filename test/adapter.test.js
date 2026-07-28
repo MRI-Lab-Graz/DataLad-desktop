@@ -43,6 +43,18 @@ class FakeRunner {
   #key(command, args) {
     return `${command}::${args.join(' ')}`
   }
+
+  setSshPassword(password) {
+    this.sshPassword = password || null
+  }
+
+  clearSshPassword() {
+    this.sshPassword = null
+  }
+
+  hasSshPassword() {
+    return this.sshPassword != null
+  }
 }
 
 test('checkEnvironment reports missing tools', async () => {
@@ -1345,6 +1357,7 @@ test('inspectBidsCandidate reports medium confidence from folder-name heuristics
   const root = await mkdtemp(join(tmpdir(), 'dlad-bids-heuristic-'))
   await mkdir(join(root, 'rawdata'))
   await mkdir(join(root, 'derivatives'))
+  await mkdir(join(root, 'sourcedata'))
   await mkdir(join(root, 'sub-02'))
 
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
@@ -1352,7 +1365,7 @@ test('inspectBidsCandidate reports medium confidence from folder-name heuristics
 
   assert.equal(result.confidence, 'medium')
   assert.equal(result.bidsLikely, true)
-  assert.deepEqual(new Set(result.candidateSubpaths), new Set(['sub-02', 'rawdata', 'derivatives']))
+  assert.deepEqual(new Set(result.candidateSubpaths), new Set(['sub-02', 'rawdata', 'derivatives', 'sourcedata']))
 })
 
 test('inspectBidsCandidate returns bidsLikely=false for a nonexistent folder without throwing', async () => {
@@ -1388,12 +1401,13 @@ test('ensureBidsMarker does not overwrite an existing dataset_description.json',
   assert.equal(content, '{"Name":"Original"}')
 })
 
-test('findUnnestedBidsCandidates returns un-registered sub-*/rawdata/derivatives folders', async () => {
+test('findUnnestedBidsCandidates returns un-registered sub-*/rawdata/derivatives/sourcedata folders', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-unnested-'))
   await mkdir(join(root, 'sub-01'))
   await mkdir(join(root, 'sub-02'))
   await mkdir(join(root, 'rawdata'))
   await mkdir(join(root, 'derivatives'))
+  await mkdir(join(root, 'sourcedata'))
   await mkdir(join(root, 'code')) // not a BIDS-like name, should be ignored
   await writeFile(
     join(root, '.gitmodules'),
@@ -1403,7 +1417,7 @@ test('findUnnestedBidsCandidates returns un-registered sub-*/rawdata/derivatives
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   const candidates = await adapter.findUnnestedBidsCandidates(root)
 
-  assert.deepEqual(new Set(candidates), new Set(['sub-02', 'rawdata', 'derivatives']))
+  assert.deepEqual(new Set(candidates), new Set(['sub-02', 'rawdata', 'derivatives', 'sourcedata']))
 })
 
 test('findUnnestedBidsCandidates returns an empty array once everything is nested', async () => {
@@ -1814,6 +1828,16 @@ test('runCommand maps unlock failure to content-not-local message when content i
 
   assert.equal(result.ok, false)
   assert.equal(result.userError.code, 'CONTENT_NOT_LOCAL')
+})
+
+test('setStudiesServerPassword/clearStudiesServerPassword delegate to the runner', () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  assert.equal(adapter.hasStudiesServerPassword(), false)
+  adapter.setStudiesServerPassword('s3cret')
+  assert.equal(adapter.hasStudiesServerPassword(), true)
+  adapter.clearStudiesServerPassword()
+  assert.equal(adapter.hasStudiesServerPassword(), false)
 })
 
 test('listRemoteStudies reports SERVER_NOT_CONFIGURED when host or path is missing', async () => {

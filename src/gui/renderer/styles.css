@@ -1866,3 +1866,18 @@ select:disabled {
   font-size: 0.82rem;
   color: var(--ink-soft);
 }
+
+.ssh-password-card {
+  justify-items: stretch;
+  text-align: left;
+  width: min(380px, 88vw);
+}
+
+.ssh-password-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.ssh-password-card .row-actions {
+  justify-content: flex-end;
+}

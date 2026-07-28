@@ -129,6 +129,31 @@ export function computeSyncSectionVisible(classification, health) {
  * } | null | undefined} health
  * @returns {string|null} the quiet message to show, or null to show the normal button strip
  */
+/**
+ * Whether a project's remote is the lab's shared studies server, so callers
+ * can warn before pushing to it — someone who cloned an existing study isn't
+ * necessarily thinking of "Publish" as "overwrite the shared copy everyone
+ * else installs from". Matches on bare hostname only (the part after the
+ * last "@", same convention ssh/OpenSSH itself uses for "user@domain@host"
+ * logins) so it doesn't matter whose username is embedded in either string.
+ *
+ * @param {string|null|undefined} remoteUrl e.g. "ssh://user@host/data/studies/some-study"
+ * @param {string|null|undefined} studiesServerHost the configured Setup → Server Host (SSH) value
+ * @returns {boolean}
+ */
+export function isSharedStudiesServerRemote(remoteUrl, studiesServerHost) {
+  if (!remoteUrl || !studiesServerHost) {
+    return false
+  }
+
+  const hostname = studiesServerHost.trim().split('@').pop()
+  if (!hostname) {
+    return false
+  }
+
+  return remoteUrl.includes(hostname)
+}
+
 export function computeSyncActionsQuietMessage(classification, health) {
   const datasetGating = computeDatasetGating(classification, health)
   const remoteGating = computeRemoteGating(health)

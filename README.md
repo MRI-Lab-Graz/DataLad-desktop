@@ -142,6 +142,75 @@ npm run package:mac     # macOS
 npm run package:win     # Windows
 ```
 
+### Presetting a studies server for your lab
+
+The app's **Setup → Studies Server (SSH)** panel lets anyone type in an SSH
+host and folder path to browse and install studies from. If your lab runs its
+own studies server, you can preset that host/path so it's already filled in
+the first time the app is opened (people just add their own username in front
+of the host).
+
+Since this repo is public, no lab's real server is committed to source.
+Instead, create an untracked local override file:
+
+```bash
+cp config/studies-server.local.example.json config/studies-server.local.json
+```
+
+Edit `config/studies-server.local.json` with your real values:
+
+```json
+{
+  "host": "myserver.example.org",
+  "path": "/data/studies"
+}
+```
+
+`config/studies-server.local.json` is git-ignored, so it never leaves your
+machine/deployment. It only supplies the *default* shown when no settings
+have been saved yet — once someone opens Setup, adds their username, and
+clicks Save, their own value takes over from then on.
+
+### Recommended: set up an SSH key instead of a password
+
+The Setup panel has a **"Set SSH Password…"** dialog for studies servers that
+require password auth. It works (the password is kept in memory for that
+session only, never written to disk), but every password-based SSH login is
+inherently less safe than a key: the password briefly exists in the
+environment of the `ssh`/`datalad`/`git` process making the connection, which
+in principle any other process running as your same OS user could read while
+that connection is active. If this is a password you reuse for other logins
+too, switching to a key removes that risk entirely — and you'll stop being
+asked for a password every session.
+
+**One-time setup, from a terminal (not through the app):**
+
+1. Generate a key if you don't already have one:
+   ```bash
+   ssh-keygen -t ed25519 -C "you@example.org"
+   ```
+   Press Enter through the prompts to accept the default location; add a
+   passphrase if you want the key itself protected (macOS Keychain/`ssh-agent`
+   will remember it after the first unlock).
+
+2. Copy the public key to the studies server — this is the one time you still
+   need the password, typed directly into your terminal:
+   ```bash
+   ssh-copy-id -i ~/.ssh/id_ed25519.pub "yourname@it035016.uni-graz.at"
+   ```
+   (Replace `yourname@it035016.uni-graz.at` with whatever you type into the
+   app's **Server Host (SSH)** field — including the email-style
+   `user@domain@host` form if your login needs one; see the field's hint text.)
+
+3. Confirm it works without a password:
+   ```bash
+   ssh "yourname@it035016.uni-graz.at" echo ok
+   ```
+
+Once step 3 prints `ok` with no password prompt, the app's studies-server
+connections will authenticate via the key automatically — you can leave the
+Setup panel's SSH password unset.
+
 ## Learn more
 
 - [Roadmap](docs/roadmap.md)

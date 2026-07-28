@@ -3,7 +3,8 @@ import {
   computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
-  computeSyncActionsQuietMessage
+  computeSyncActionsQuietMessage,
+  isSharedStudiesServerRemote
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
 import {
@@ -92,6 +93,12 @@ const elements = {
   settingsStudiesPath: document.getElementById('settings-studies-path'),
   saveSettingsButton: document.getElementById('save-settings'),
   settingsOutput: document.getElementById('settings-output'),
+  openSshPasswordButton: document.getElementById('open-ssh-password'),
+  sshPasswordStatus: document.getElementById('ssh-password-status'),
+  sshPasswordOverlay: document.getElementById('ssh-password-overlay'),
+  sshPasswordInput: document.getElementById('ssh-password-input'),
+  sshPasswordSaveButton: document.getElementById('ssh-password-save'),
+  sshPasswordCancelButton: document.getElementById('ssh-password-cancel'),
   refreshRemoteStudiesButton: document.getElementById('refresh-remote-studies'),
   remoteStudiesNotConfigured: document.getElementById('remote-studies-not-configured'),
   remoteStudiesControls: document.getElementById('remote-studies-controls'),
@@ -429,7 +436,7 @@ function updateCreateProjectSourceMode() {
     : isRemote
       ? 'Choose an empty or brand-new folder to clone into.'
       : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
-        'subject/rawdata/derivatives folders are automatically nested into subdatasets.'
+        'subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.'
 
   if (isStudiesServer) {
     void refreshRemoteStudies()
@@ -440,12 +447,20 @@ elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSour
 elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectSourceMode)
 elements.createSourceStudiesServerRadio.addEventListener('change', updateCreateProjectSourceMode)
 
+async function refreshSshPasswordStatus() {
+  const hasPassword = await api.hasSshPassword()
+  elements.sshPasswordStatus.textContent = hasPassword
+    ? 'Password set for this session.'
+    : ''
+}
+
 elements.openSettingsButton.addEventListener('click', async () => {
   const settings = await api.getSettings()
   elements.settingsStudiesHost.value = settings?.studiesServer?.host ?? ''
   elements.settingsStudiesPath.value = settings?.studiesServer?.path ?? ''
   elements.settingsOutput.hidden = true
   elements.settingsCard.hidden = false
+  await refreshSshPasswordStatus()
 })
 
 elements.closeSettingsButton.addEventListener('click', () => {
@@ -465,6 +480,45 @@ elements.saveSettingsButton.addEventListener('click', async () => {
   } finally {
     setButtonBusy(elements.saveSettingsButton, false)
   }
+})
+
+elements.openSshPasswordButton.addEventListener('click', () => {
+  elements.sshPasswordInput.value = ''
+  elements.sshPasswordOverlay.hidden = false
+  elements.sshPasswordInput.focus()
+})
+
+function closeSshPasswordDialog() {
+  elements.sshPasswordInput.value = ''
+  elements.sshPasswordOverlay.hidden = true
+}
+
+elements.sshPasswordCancelButton.addEventListener('click', closeSshPasswordDialog)
+
+elements.sshPasswordOverlay.addEventListener('click', (event) => {
+  if (event.target === elements.sshPasswordOverlay) {
+    closeSshPasswordDialog()
+  }
+})
+
+elements.sshPasswordInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeSshPasswordDialog()
+  } else if (event.key === 'Enter') {
+    elements.sshPasswordSaveButton.click()
+  }
+})
+
+elements.sshPasswordSaveButton.addEventListener('click', async () => {
+  const password = elements.sshPasswordInput.value
+  if (!password) {
+    closeSshPasswordDialog()
+    return
+  }
+
+  await api.setSshPassword(password)
+  closeSshPasswordDialog()
+  await refreshSshPasswordStatus()
 })
 
 async function refreshRemoteStudies() {
@@ -910,6 +964,22 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
+  const remoteUrl = state.projectHealthSnapshot?.remoteUrl
+  const settings = await api.getSettings()
+  if (isSharedStudiesServerRemote(remoteUrl, settings?.studiesServer?.host)) {
+    const confirmed = window.confirm(
+      'This publishes your local changes to the SHARED studies server ' +
+        `(${remoteUrl}) — not a personal backup.\n\n` +
+        'Other researchers who installed this same study may already be using ' +
+        'the copy you are about to overwrite/extend. Anyone with server access ' +
+        'will see your changes immediately after this completes.\n\n' +
+        'Continue and publish to the shared server now?'
+    )
+    if (!confirmed) {
+      return
+    }
+  }
+
   await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
 })
 
@@ -964,6 +1034,17 @@ elements.studiesServerPublishButton.addEventListener('click', async () => {
   }
 
   const sshUrl = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${studyName}`
+
+  const confirmed = window.confirm(
+    `This publishes "${studyName}" to the SHARED studies server (${host}) as a new, ` +
+      'independently installable study.\n\n' +
+      'Anyone with access to that server will be able to see and install it immediately ' +
+      'after this completes — this is not a personal backup or draft area.\n\n' +
+      'Continue and publish to the shared server now?'
+  )
+  if (!confirmed) {
+    return
+  }
 
   const siblingResult = await runWorkflowCommand(
     'createSibling',

@@ -28,6 +28,9 @@ let consoleEnabled = false
 const authorizedRoots = new Set([resolve(process.cwd())])
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
+// macOS Dock icons need transparent padding around a smaller squircle (Apple's
+// grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
+const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
 const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
 
@@ -116,14 +119,16 @@ function createMainWindow() {
 }
 
 function applyAppIcon() {
-  const iconImage = nativeImage.createFromPath(APP_ICON_PATH)
+  if (process.platform !== 'darwin' || !app.dock) {
+    return
+  }
+
+  const iconImage = nativeImage.createFromPath(APP_DOCK_ICON_PATH_DARWIN)
   if (iconImage.isEmpty()) {
     return
   }
 
-  if (process.platform === 'darwin' && app.dock) {
-    app.dock.setIcon(iconImage)
-  }
+  app.dock.setIcon(iconImage)
 }
 
 ipcMain.handle('adapter:checkEnvironment', async () => {
@@ -181,6 +186,20 @@ ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
 ipcMain.handle('adapter:listRemoteStudies', async () => {
   const settings = await settingsStore.get()
   return adapter.listRemoteStudies(settings.studiesServer)
+})
+
+ipcMain.handle('adapter:setSshPassword', (_event, password) => {
+  adapter.setStudiesServerPassword?.(password)
+  return { ok: true }
+})
+
+ipcMain.handle('adapter:clearSshPassword', () => {
+  adapter.clearStudiesServerPassword?.()
+  return { ok: true }
+})
+
+ipcMain.handle('adapter:hasSshPassword', () => {
+  return adapter.hasStudiesServerPassword?.() ?? false
 })
 
 ipcMain.handle('settings:get', async () => {
