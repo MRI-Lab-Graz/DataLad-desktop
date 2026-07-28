@@ -98,10 +98,6 @@
             <span class="onboarding-tile-icon" aria-hidden="true">✨</span>
             <span class="onboarding-tile-label">Create Project</span>
           </button>
-          <button type="button" class="onboarding-tile" id="onboarding-tile-install-from-server" data-onboarding-target="install-from-server-panel" role="tab" aria-selected="false" aria-controls="install-from-server-panel">
-            <span class="onboarding-tile-icon" aria-hidden="true">🗄️</span>
-            <span class="onboarding-tile-label">Install from Studies Server</span>
-          </button>
         </div>
 
         <section id="open-project-panel" class="card reveal reveal-3 open-project-strip onboarding-panel" aria-labelledby="open-project-title" role="tabpanel" hidden>
@@ -145,7 +141,7 @@
             <h2 id="create-project-title">Create Project</h2>
           </div>
 
-          <p class="lede-small">Start a brand-new project, or bring one in from a remote URL or network folder.</p>
+          <p class="lede-small">Start a brand-new project, bring one in from a remote URL or network folder, or install a study from the studies server.</p>
 
           <div class="get-remote-mode-row" role="group" aria-label="Project source">
             <label class="get-remote-mode-option">
@@ -155,6 +151,10 @@
             <label class="get-remote-mode-option">
               <input type="radio" name="create-project-source" id="create-source-remote" value="remote" />
               Based on a remote dataset
+            </label>
+            <label class="get-remote-mode-option">
+              <input type="radio" name="create-project-source" id="create-source-studies-server" value="studies-server" />
+              From studies server
             </label>
           </div>
 
@@ -191,6 +191,26 @@
               </div>
             </div>
 
+            <div id="create-studies-server-panel" hidden>
+              <div class="section-head">
+                <span>Study</span>
+                <button id="refresh-remote-studies" class="button button-ghost button-inline" type="button">Refresh List</button>
+              </div>
+
+              <div id="remote-studies-not-configured" class="panel panel-muted" hidden>
+                No studies server is configured yet. Open <strong>Settings</strong> to add the server host and studies folder path.
+              </div>
+
+              <div id="remote-studies-controls" hidden>
+                <label class="field">
+                  <span>Study</span>
+                  <select id="remote-studies-select"></select>
+                </label>
+              </div>
+
+              <div id="remote-studies-output" class="panel panel-muted" hidden></div>
+            </div>
+
             <label class="field">
               <span id="create-project-path-label">New Project Folder</span>
               <div class="field-row">
@@ -212,41 +232,6 @@
           </div>
 
           <div id="create-project-output" class="panel panel-muted" hidden></div>
-        </section>
-
-        <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="install-from-server-panel" aria-labelledby="install-from-server-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🗄️</span>
-          <div class="section-head">
-            <h2 id="install-from-server-title">Install from Studies Server</h2>
-            <button id="refresh-remote-studies" class="button button-ghost button-inline" type="button">Refresh List</button>
-          </div>
-
-          <p class="lede-small">Browse studies stored on the configured DataLad server and install one as a new project.</p>
-
-          <div id="remote-studies-not-configured" class="panel panel-muted" hidden>
-            No studies server is configured yet. Open <strong>Settings</strong> to add the server host and studies folder path.
-          </div>
-
-          <div id="remote-studies-controls" class="open-project-controls" hidden>
-            <label class="field">
-              <span>Study</span>
-              <select id="remote-studies-select"></select>
-            </label>
-
-            <label class="field">
-              <span>Save Into Folder</span>
-              <div class="field-row">
-                <input id="install-from-server-target" type="text" placeholder="/path/to/save/project" />
-                <button id="pick-install-from-server-target" class="button button-ghost button-inline" type="button">Browse</button>
-              </div>
-            </label>
-
-            <div class="row-actions">
-              <button id="install-from-server" class="button button-primary" type="button">Install Study</button>
-            </div>
-          </div>
-
-          <div id="remote-studies-output" class="panel panel-muted" hidden></div>
         </section>
       </section>
 
@@ -612,6 +597,26 @@
             <div id="ignore-rules-output" class="panel panel-muted panel-compact">
               No ignore rules added yet.
             </div>
+          </section>
+
+          <section class="status-box" aria-labelledby="studies-server-publish-title">
+            <div class="section-head branch-head">
+              <h3 id="studies-server-publish-title">Studies Server</h3>
+            </div>
+            <p class="lede-small">
+              Publish this project to the configured studies server as a new study, so others can install it
+              from there.
+            </p>
+            <label class="field">
+              <span>New Study Name</span>
+              <input id="studies-server-publish-name" type="text" placeholder="my-new-study" />
+            </label>
+            <div class="action-strip">
+              <button id="studies-server-publish-button" class="button button-primary" type="button">
+                Publish to Studies Server
+              </button>
+            </div>
+            <div id="studies-server-publish-output" class="panel panel-muted panel-compact" hidden></div>
           </section>
         </section>
 

@@ -1859,3 +1859,52 @@ test('listRemoteStudies reports REMOTE_LIST_FAILED when ssh fails', async () => 
   assert.equal(result.error.code, 'REMOTE_LIST_FAILED')
   assert.match(result.error.message, /Could not resolve hostname/)
 })
+
+test('runCommand routes createSibling through datalad create-sibling', async () => {
+  const runner = new FakeRunner()
+  runner.set(
+    'datalad',
+    ['-C', '/tmp/project', 'create-sibling', '-s', 'studies-server', '--', 'ssh://server.example.org/data/studies/my-study'],
+    {
+      exitCode: 0,
+      stdout: '.: studies-server(ok) [ssh]\n',
+      stderr: '',
+      failed: false
+    }
+  )
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('createSibling', {
+    projectPath: '/tmp/project',
+    siblingName: 'studies-server',
+    sshUrl: 'ssh://server.example.org/data/studies/my-study'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, [
+    '-C',
+    '/tmp/project',
+    'create-sibling',
+    '-s',
+    'studies-server',
+    '--',
+    'ssh://server.example.org/data/studies/my-study'
+  ])
+  assert.deepEqual(runner.calls[0].options, { cwd: '/tmp/project' })
+})
+
+test('runCommand rejects a createSibling siblingName that looks like a CLI flag', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(
+    adapter.runCommand('createSibling', {
+      projectPath: '/tmp/project',
+      siblingName: '--force',
+      sshUrl: 'ssh://server.example.org/data/studies/my-study'
+    }),
+    /siblingName cannot start with -/
+  )
+
+  assert.equal(runner.calls.length, 0)
+})

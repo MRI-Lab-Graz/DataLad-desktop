@@ -19,6 +19,7 @@ const CURATED_COMMANDS = new Set([
   'update',
   'push',
   'disconnectRemote',
+  'createSibling',
   'createBranch',
   'switchBranch',
   'createBranchAt',
@@ -1080,6 +1081,16 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['siblings', 'remove', '-d', projectPath, '-s', remoteName],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'createSibling': {
+        const projectPath = request.projectPath
+        const siblingName = request.siblingName
+        const sshUrl = request.sshUrl
+        return {
+          command: 'datalad',
+          args: ['-C', projectPath, 'create-sibling', '-s', siblingName, '--', sshUrl],
           options: { cwd: projectPath }
         }
       }

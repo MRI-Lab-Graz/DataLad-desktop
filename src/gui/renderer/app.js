@@ -73,7 +73,9 @@ const elements = {
   clearRecentProjectsButton: document.getElementById('clear-recent-projects'),
   createSourceNewRadio: document.getElementById('create-source-new'),
   createSourceRemoteRadio: document.getElementById('create-source-remote'),
+  createSourceStudiesServerRadio: document.getElementById('create-source-studies-server'),
   createRemoteSourcePanel: document.getElementById('create-remote-source-panel'),
+  createStudiesServerPanel: document.getElementById('create-studies-server-panel'),
   createProjectPathLabel: document.getElementById('create-project-path-label'),
   createProjectPathHint: document.getElementById('create-project-path-hint'),
   getRemoteModeUrlRadio: document.getElementById('get-remote-mode-url'),
@@ -94,10 +96,10 @@ const elements = {
   remoteStudiesNotConfigured: document.getElementById('remote-studies-not-configured'),
   remoteStudiesControls: document.getElementById('remote-studies-controls'),
   remoteStudiesSelect: document.getElementById('remote-studies-select'),
-  installFromServerTarget: document.getElementById('install-from-server-target'),
-  pickInstallFromServerTargetButton: document.getElementById('pick-install-from-server-target'),
-  installFromServerButton: document.getElementById('install-from-server'),
   remoteStudiesOutput: document.getElementById('remote-studies-output'),
+  studiesServerPublishName: document.getElementById('studies-server-publish-name'),
+  studiesServerPublishButton: document.getElementById('studies-server-publish-button'),
+  studiesServerPublishOutput: document.getElementById('studies-server-publish-output'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -228,12 +230,6 @@ wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPat
   title: 'Select or create a new project folder',
   onSelected: checkCreateProjectBidsCandidate
 })
-
-wireFolderPicker(elements.pickInstallFromServerTargetButton, elements.installFromServerTarget, {
-  title: 'Select target folder for the installed study'
-})
-
-await refreshRemoteStudies()
 
 elements.createProjectPath.addEventListener('blur', () => {
   void checkCreateProjectBidsCandidate(elements.createProjectPath.value.trim())
@@ -423,17 +419,26 @@ elements.getRemoteModeNetworkRadio.addEventListener('change', updateGetRemoteMod
 
 function updateCreateProjectSourceMode() {
   const isRemote = elements.createSourceRemoteRadio.checked
+  const isStudiesServer = elements.createSourceStudiesServerRadio.checked
   elements.createRemoteSourcePanel.hidden = !isRemote
-  elements.createProjectPathLabel.textContent = isRemote ? 'Save Into Folder' : 'New Project Folder'
-  elements.createProjectPath.placeholder = isRemote ? '/path/to/save/project' : '/path/to/new-project'
-  elements.createProjectPathHint.textContent = isRemote
-    ? 'Choose an empty or brand-new folder to clone into.'
-    : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
-      'subject/rawdata/derivatives folders are automatically nested into subdatasets.'
+  elements.createStudiesServerPanel.hidden = !isStudiesServer
+  elements.createProjectPathLabel.textContent = isRemote || isStudiesServer ? 'Save Into Folder' : 'New Project Folder'
+  elements.createProjectPath.placeholder = isRemote || isStudiesServer ? '/path/to/save/project' : '/path/to/new-project'
+  elements.createProjectPathHint.textContent = isStudiesServer
+    ? 'Choose an empty or brand-new folder to install the study into.'
+    : isRemote
+      ? 'Choose an empty or brand-new folder to clone into.'
+      : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
+        'subject/rawdata/derivatives folders are automatically nested into subdatasets.'
+
+  if (isStudiesServer) {
+    void refreshRemoteStudies()
+  }
 }
 
 elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSourceMode)
 elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectSourceMode)
+elements.createSourceStudiesServerRadio.addEventListener('change', updateCreateProjectSourceMode)
 
 elements.openSettingsButton.addEventListener('click', async () => {
   const settings = await api.getSettings()
@@ -499,39 +504,6 @@ async function refreshRemoteStudies() {
 
 elements.refreshRemoteStudiesButton.addEventListener('click', refreshRemoteStudies)
 
-elements.installFromServerButton.addEventListener('click', async () => {
-  const study = elements.remoteStudiesSelect.value
-  const targetPath = elements.installFromServerTarget.value.trim()
-
-  if (!study || !targetPath) {
-    elements.remoteStudiesOutput.hidden = false
-    elements.remoteStudiesOutput.textContent = 'Select a study and a target folder.'
-    setLastActionState('Add study and target folder.', 'error')
-    return
-  }
-
-  const settings = await api.getSettings()
-  const host = settings?.studiesServer?.host ?? ''
-  const remotePath = settings?.studiesServer?.path ?? ''
-  const source = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${study}`
-
-  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.installFromServerButton)
-  if (cloneResult) {
-    elements.remoteStudiesOutput.hidden = false
-    elements.remoteStudiesOutput.innerHTML = renderCommandResult(cloneResult)
-  }
-  if (!cloneResult?.ok) {
-    return
-  }
-
-  elements.commandProjectPath.value = targetPath
-  elements.projectPath.value = targetPath
-  setCurrentProjectHeader(targetPath, 'unknown')
-  await detectProjectType(targetPath)
-  await refreshDatasetList(targetPath)
-  await refreshFileBrowser(targetPath)
-})
-
 elements.createProjectButton.addEventListener('click', async () => {
   const targetPath = elements.createProjectPath.value.trim()
 
@@ -542,7 +514,9 @@ elements.createProjectButton.addEventListener('click', async () => {
     return
   }
 
-  if (elements.createSourceRemoteRadio.checked) {
+  if (elements.createSourceStudiesServerRadio.checked) {
+    await runCreateFromStudiesServer(targetPath)
+  } else if (elements.createSourceRemoteRadio.checked) {
     await runCreateFromRemote(targetPath)
   } else {
     await runCreateNewProject(targetPath)
@@ -609,6 +583,47 @@ async function runCreateFromRemote(targetPath) {
 
   // Same reasoning as runCreateNewProject: detectAndMaybeNestBids's first
   // call already provides an equivalent, awaited refresh right after.
+  const cloneResult = await runWorkflowCommand(
+    'cloneInstall',
+    { source, targetPath },
+    elements.createProjectButton,
+    undefined,
+    { skipBackgroundRefresh: true }
+  )
+  if (cloneResult) {
+    elements.createProjectOutput.hidden = false
+    elements.createProjectOutput.innerHTML = renderCommandResult(cloneResult)
+  }
+  if (!cloneResult?.ok) {
+    return
+  }
+
+  elements.commandProjectPath.value = targetPath
+  elements.projectPath.value = targetPath
+  setCurrentProjectHeader(targetPath, 'unknown')
+  const nestResult = await detectAndMaybeNestBids(targetPath, elements.createProjectButton)
+  if (nestResult) {
+    elements.createProjectOutput.innerHTML += renderBidsNestSummary(nestResult, true)
+  }
+}
+
+// Same clone path as runCreateFromRemote, with the source built from the
+// selected study on the configured studies server instead of a typed URL.
+async function runCreateFromStudiesServer(targetPath) {
+  const study = elements.remoteStudiesSelect.value
+
+  if (!study) {
+    elements.createProjectOutput.hidden = false
+    elements.createProjectOutput.textContent = 'Select a study first.'
+    setLastActionState('Select a study first.', 'error')
+    return
+  }
+
+  const settings = await api.getSettings()
+  const host = settings?.studiesServer?.host ?? ''
+  const remotePath = settings?.studiesServer?.path ?? ''
+  const source = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${study}`
+
   const cloneResult = await runWorkflowCommand(
     'cloneInstall',
     { source, targetPath },
@@ -922,6 +937,51 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
 
   await runWorkflowCommand('disconnectRemote', { projectPath, remoteName }, elements.disconnectRemoteButton)
   await refreshProjectHealth(projectPath)
+})
+
+elements.studiesServerPublishButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const studyName = elements.studiesServerPublishName.value.trim()
+  if (!studyName) {
+    elements.studiesServerPublishOutput.hidden = false
+    elements.studiesServerPublishOutput.textContent = 'Add a study name first.'
+    setLastActionState('Add a study name first.', 'error')
+    return
+  }
+
+  const settings = await api.getSettings()
+  const host = settings?.studiesServer?.host ?? ''
+  const remotePath = settings?.studiesServer?.path ?? ''
+  if (!host || !remotePath) {
+    elements.studiesServerPublishOutput.hidden = false
+    elements.studiesServerPublishOutput.textContent = 'Configure the studies server in Settings first.'
+    setLastActionState('Configure the studies server first.', 'error')
+    return
+  }
+
+  const sshUrl = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${studyName}`
+
+  const siblingResult = await runWorkflowCommand(
+    'createSibling',
+    { projectPath, siblingName: 'studies-server', sshUrl },
+    elements.studiesServerPublishButton
+  )
+  if (siblingResult) {
+    elements.studiesServerPublishOutput.hidden = false
+    elements.studiesServerPublishOutput.innerHTML = renderCommandResult(siblingResult)
+  }
+  if (!siblingResult?.ok) {
+    return
+  }
+
+  const pushResult = await runWorkflowCommand('push', { projectPath }, elements.studiesServerPublishButton)
+  if (pushResult) {
+    elements.studiesServerPublishOutput.innerHTML += renderCommandResult(pushResult)
+  }
 })
 
 elements.refreshDatasetsButton.addEventListener('click', async () => {
