@@ -1409,6 +1409,7 @@ elements.filesOutput.addEventListener('click', async (event) => {
     saveRootResult?.ok ? 'success' : 'warning'
   )
 
+  void api.ignoreOsNoiseFiles(projectPath).catch(() => {})
   await refreshDatasetList(projectPath)
   await refreshFileBrowser(projectPath)
   await refreshWorkingTreeStatus(projectPath)
@@ -1443,6 +1444,9 @@ async function detectProjectType(projectPath) {
     setCurrentProjectHeader(projectPath, result.classification)
     rememberRecentProject(projectPath)
     void api.setWatchedProject(projectPath)
+    // Best-effort, fire-and-forget: always exclude OS noise files (.DS_Store
+    // etc.) from every dataset in this project, no user action required.
+    void api.ignoreOsNoiseFiles(projectPath).catch(() => {})
     setLastActionState(`Project check finished: ${friendlyProjectTypeLabel(result.classification)}.`, 'success')
     // refreshDatasetList already refreshes working tree/recent commits for
     // the resolved active path on success — repeating them here would spawn

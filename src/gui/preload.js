@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
+  ignoreOsNoiseFiles: (projectPath) => ipcRenderer.invoke('adapter:ignoreOsNoiseFiles', projectPath),
   readGitignore: (projectPath, relativeDatasetPath) =>
     ipcRenderer.invoke('adapter:readGitignore', { projectPath, relativeDatasetPath }),
   addIgnorePatterns: (projectPath, relativeDatasetPaths, patterns) =>

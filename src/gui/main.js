@@ -183,6 +183,10 @@ ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
   return adapter.listDatasets(projectPath)
 })
 
+ipcMain.handle('adapter:ignoreOsNoiseFiles', async (_event, projectPath) => {
+  return adapter.ignoreOsNoiseFiles(projectPath)
+})
+
 ipcMain.handle('adapter:listRemoteStudies', async () => {
   const settings = await settingsStore.get()
   return adapter.listRemoteStudies(settings.studiesServer)

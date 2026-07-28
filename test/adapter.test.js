@@ -378,6 +378,111 @@ test('listDatasets recurses into subdatasets to find nested-within-nested datase
   assert.equal(datasets[2].path, join(root, 'sub', 'subsub'))
 })
 
+test('ignoreOsNoiseFiles writes OS noise patterns to .git/info/exclude for the root dataset', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-os-noise-'))
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--git-dir'], {
+    exitCode: 0,
+    stdout: '.git\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const results = await adapter.ignoreOsNoiseFiles(root)
+
+  assert.deepEqual(results, [{ datasetPath: root, added: true }])
+  const content = await readFile(join(root, '.git', 'info', 'exclude'), 'utf8')
+  assert.match(content, /^\.DS_Store$/m)
+  assert.match(content, /^\._\*$/m)
+  assert.match(content, /^Thumbs\.db$/m)
+  assert.match(content, /^desktop\.ini$/m)
+})
+
+test('ignoreOsNoiseFiles is idempotent and preserves pre-existing custom exclude entries', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-os-noise-idempotent-'))
+  await mkdir(join(root, '.git', 'info'), { recursive: true })
+  await writeFile(join(root, '.git', 'info', 'exclude'), 'my-custom-pattern\n', 'utf8')
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--git-dir'], {
+    exitCode: 0,
+    stdout: '.git\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const first = await adapter.ignoreOsNoiseFiles(root)
+  assert.deepEqual(first, [{ datasetPath: root, added: true }])
+
+  const second = await adapter.ignoreOsNoiseFiles(root)
+  assert.deepEqual(second, [{ datasetPath: root, added: false }])
+
+  const content = await readFile(join(root, '.git', 'info', 'exclude'), 'utf8')
+  assert.match(content, /^my-custom-pattern$/m)
+  const dsStoreOccurrences = content.split('\n').filter((line) => line.trim() === '.DS_Store').length
+  assert.equal(dsStoreOccurrences, 1)
+})
+
+test('ignoreOsNoiseFiles resolves a submodule dataset whose --git-dir is an absolute path outside its own folder', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-os-noise-submodule-'))
+  await writeFile(join(root, '.gitmodules'), '[submodule "child"]\n\tpath = child\n\turl = ../child.git\n')
+  const childPath = join(root, 'child')
+  await mkdir(childPath, { recursive: true })
+  const realGitDir = join(root, '.git', 'modules', 'child')
+
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], {
+    exitCode: 0,
+    stdout: 'true\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', root, 'rev-parse', '--git-dir'], {
+    exitCode: 0,
+    stdout: '.git\n',
+    stderr: '',
+    failed: false
+  })
+  runner.set('git', ['-C', childPath, 'rev-parse', '--git-dir'], {
+    exitCode: 0,
+    stdout: `${realGitDir}\n`,
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const results = await adapter.ignoreOsNoiseFiles(root)
+
+  assert.deepEqual(results, [
+    { datasetPath: root, added: true },
+    { datasetPath: childPath, added: true }
+  ])
+  const content = await readFile(join(realGitDir, 'info', 'exclude'), 'utf8')
+  assert.match(content, /^\.DS_Store$/m)
+})
+
+test('ignoreOsNoiseFiles returns an empty array for a nonexistent project without throwing', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const results = await adapter.ignoreOsNoiseFiles('/tmp/this-folder-does-not-exist-dlad-test')
+
+  assert.deepEqual(results, [])
+})
+
 test('listBranches returns current branch and local branch names', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-list-branches-'))
   const runner = new FakeRunner()

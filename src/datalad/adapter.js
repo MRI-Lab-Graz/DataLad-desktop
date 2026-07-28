@@ -1,5 +1,5 @@
-import { lstat, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
 import { ProcessRunner } from './process-runner.js'
@@ -32,6 +32,10 @@ const BIDS_MARKER_FILE = 'dataset_description.json'
 const BIDS_SUBJECT_DIR_PATTERN = /^sub-[A-Za-z0-9._-]+$/
 // Top-level BIDS folder names nested/detected alongside sub-* subject dirs.
 const BIDS_TOP_LEVEL_DIR_NAMES = ['rawdata', 'derivatives', 'sourcedata']
+// Written to each dataset's .git/info/exclude (untracked, local-only) rather
+// than the shared .gitignore — these are artifacts of the researcher's own
+// OS, not something to commit and push to collaborators/the studies server.
+const OS_NOISE_PATTERNS = ['.DS_Store', '._*', 'Thumbs.db', 'desktop.ini']
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
@@ -287,6 +291,60 @@ export class DataLadAdapter {
     }
 
     return { ok: true, removed: existed, lockPath }
+  }
+
+  // Best-effort, called on every project open (see detectProjectType in
+  // app.js) so OS noise files are ALWAYS excluded — not something the
+  // researcher has to remember to click. .git/info/exclude rather than
+  // .gitignore: it's untracked/local-only, takes effect immediately with no
+  // Save/commit needed, and doesn't push a macOS-specific rule to
+  // collaborators or the shared studies server via the tracked .gitignore.
+  async ignoreOsNoiseFiles(projectPath) {
+    let datasets
+    try {
+      datasets = await this.listDatasets(projectPath)
+    } catch {
+      return []
+    }
+
+    const results = []
+    for (const dataset of datasets) {
+      results.push(await this.#addOsNoiseExcludes(dataset.path))
+    }
+    return results
+  }
+
+  async #addOsNoiseExcludes(datasetPath) {
+    const gitDirResult = await this.runner.run('git', ['-C', datasetPath, 'rev-parse', '--git-dir'])
+    if (gitDirResult.failed) {
+      return { datasetPath, added: false }
+    }
+
+    // A dataset installed as a real git submodule (gitlink) has its .git as a
+    // file pointing elsewhere (e.g. "../.git/modules/name") — rev-parse
+    // resolves that for us, returning an absolute path in that case and a
+    // relative one (typically ".git") for an ordinary repo.
+    const gitDir = this.#firstLine(gitDirResult.stdout)
+    const excludeDir = isAbsolute(gitDir) ? gitDir : join(datasetPath, gitDir)
+    const excludePath = join(excludeDir, 'info', 'exclude')
+
+    let existingContent = ''
+    try {
+      existingContent = await readFile(excludePath, 'utf8')
+    } catch {
+      // No info/exclude yet — fine, we create one below.
+    }
+
+    const existingLines = new Set(existingContent.split(/\r?\n/).map((line) => line.trim()).filter(Boolean))
+    const addedPatterns = OS_NOISE_PATTERNS.filter((pattern) => !existingLines.has(pattern))
+    if (addedPatterns.length === 0) {
+      return { datasetPath, added: false }
+    }
+
+    const prefix = existingContent.length === 0 || existingContent.endsWith('\n') ? existingContent : `${existingContent}\n`
+    await mkdir(join(excludeDir, 'info'), { recursive: true })
+    await writeFile(excludePath, `${prefix}${addedPatterns.join('\n')}\n`, 'utf8')
+    return { datasetPath, added: true }
   }
 
   async listDatasets(projectPath) {
