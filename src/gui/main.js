@@ -9,12 +9,14 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { buildGitStatusMap } from '../datalad/status.js'
 import { createProjectWatcher } from './fs-watch.js'
+import { createSettingsStore } from './settings.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
+const settingsStore = createSettingsStore(app.getPath('userData'))
 let activeProjectWatcher = null
 // The console executes arbitrary commands, so the renderer's power-user toggle
 // alone must not be the only gate — a compromised renderer could skip it. The
@@ -174,6 +176,19 @@ ipcMain.handle('adapter:getContract', async () => {
 
 ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
   return adapter.listDatasets(projectPath)
+})
+
+ipcMain.handle('adapter:listRemoteStudies', async () => {
+  const settings = await settingsStore.get()
+  return adapter.listRemoteStudies(settings.studiesServer)
+})
+
+ipcMain.handle('settings:get', async () => {
+  return settingsStore.get()
+})
+
+ipcMain.handle('settings:update', async (_event, partial) => {
+  return settingsStore.update(partial)
 })
 
 ipcMain.handle('adapter:readGitignore', async (_event, payload = {}) => {

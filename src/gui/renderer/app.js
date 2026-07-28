@@ -83,6 +83,21 @@ const elements = {
   getRemoteSourceUrl: document.getElementById('get-remote-source-url'),
   getRemoteSourceNetwork: document.getElementById('get-remote-source-network'),
   pickGetRemoteNetworkPathButton: document.getElementById('pick-get-remote-network-path'),
+  openSettingsButton: document.getElementById('open-settings'),
+  closeSettingsButton: document.getElementById('close-settings'),
+  settingsCard: document.getElementById('settings-card'),
+  settingsStudiesHost: document.getElementById('settings-studies-host'),
+  settingsStudiesPath: document.getElementById('settings-studies-path'),
+  saveSettingsButton: document.getElementById('save-settings'),
+  settingsOutput: document.getElementById('settings-output'),
+  refreshRemoteStudiesButton: document.getElementById('refresh-remote-studies'),
+  remoteStudiesNotConfigured: document.getElementById('remote-studies-not-configured'),
+  remoteStudiesControls: document.getElementById('remote-studies-controls'),
+  remoteStudiesSelect: document.getElementById('remote-studies-select'),
+  installFromServerTarget: document.getElementById('install-from-server-target'),
+  pickInstallFromServerTargetButton: document.getElementById('pick-install-from-server-target'),
+  installFromServerButton: document.getElementById('install-from-server'),
+  remoteStudiesOutput: document.getElementById('remote-studies-output'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -213,6 +228,12 @@ wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPat
   title: 'Select or create a new project folder',
   onSelected: checkCreateProjectBidsCandidate
 })
+
+wireFolderPicker(elements.pickInstallFromServerTargetButton, elements.installFromServerTarget, {
+  title: 'Select target folder for the installed study'
+})
+
+await refreshRemoteStudies()
 
 elements.createProjectPath.addEventListener('blur', () => {
   void checkCreateProjectBidsCandidate(elements.createProjectPath.value.trim())
@@ -413,6 +434,103 @@ function updateCreateProjectSourceMode() {
 
 elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSourceMode)
 elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectSourceMode)
+
+elements.openSettingsButton.addEventListener('click', async () => {
+  const settings = await api.getSettings()
+  elements.settingsStudiesHost.value = settings?.studiesServer?.host ?? ''
+  elements.settingsStudiesPath.value = settings?.studiesServer?.path ?? ''
+  elements.settingsOutput.hidden = true
+  elements.settingsCard.hidden = false
+})
+
+elements.closeSettingsButton.addEventListener('click', () => {
+  elements.settingsCard.hidden = true
+})
+
+elements.saveSettingsButton.addEventListener('click', async () => {
+  const host = elements.settingsStudiesHost.value.trim()
+  const path = elements.settingsStudiesPath.value.trim()
+
+  setButtonBusy(elements.saveSettingsButton, true)
+  try {
+    await api.updateSettings({ studiesServer: { host, path } })
+    elements.settingsOutput.hidden = false
+    elements.settingsOutput.textContent = 'Settings saved.'
+    await refreshRemoteStudies()
+  } finally {
+    setButtonBusy(elements.saveSettingsButton, false)
+  }
+})
+
+async function refreshRemoteStudies() {
+  setButtonBusy(elements.refreshRemoteStudiesButton, true)
+  try {
+    const result = await api.listRemoteStudies()
+    elements.remoteStudiesOutput.hidden = true
+
+    if (!result.ok && result.error?.code === 'SERVER_NOT_CONFIGURED') {
+      elements.remoteStudiesNotConfigured.hidden = false
+      elements.remoteStudiesControls.hidden = true
+      return
+    }
+
+    elements.remoteStudiesNotConfigured.hidden = true
+
+    if (!result.ok) {
+      elements.remoteStudiesControls.hidden = true
+      elements.remoteStudiesOutput.hidden = false
+      elements.remoteStudiesOutput.textContent = result.error?.message ?? 'Could not list studies on the server.'
+      return
+    }
+
+    elements.remoteStudiesControls.hidden = false
+    elements.remoteStudiesSelect.innerHTML = result.studies
+      .map((study) => `<option value="${escapeHtml(study)}">${escapeHtml(study)}</option>`)
+      .join('')
+
+    if (result.studies.length === 0) {
+      elements.remoteStudiesOutput.hidden = false
+      elements.remoteStudiesOutput.textContent = 'No studies found on the server yet.'
+    }
+  } finally {
+    setButtonBusy(elements.refreshRemoteStudiesButton, false)
+  }
+}
+
+elements.refreshRemoteStudiesButton.addEventListener('click', refreshRemoteStudies)
+
+elements.installFromServerButton.addEventListener('click', async () => {
+  const study = elements.remoteStudiesSelect.value
+  const targetPath = elements.installFromServerTarget.value.trim()
+
+  if (!study || !targetPath) {
+    elements.remoteStudiesOutput.hidden = false
+    elements.remoteStudiesOutput.textContent = 'Select a study and a target folder.'
+    setLastActionState('Add study and target folder.', 'error')
+    return
+  }
+
+  const settings = await api.getSettings()
+  const host = settings?.studiesServer?.host ?? ''
+  const remotePath = settings?.studiesServer?.path ?? ''
+  const source = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${study}`
+
+  const cloneResult = await runWorkflowCommand('cloneInstall', { source, targetPath }, elements.installFromServerButton)
+  if (cloneResult) {
+    elements.remoteStudiesOutput.hidden = false
+    elements.remoteStudiesOutput.innerHTML = renderCommandResult(cloneResult)
+  }
+  if (!cloneResult?.ok) {
+    return
+  }
+
+  elements.commandProjectPath.value = targetPath
+  elements.projectPath.value = targetPath
+  setCurrentProjectHeader(targetPath, 'unknown')
+  await detectProjectType(targetPath)
+  await refreshDatasetList(targetPath)
+  await refreshFileBrowser(targetPath)
+})
 
 elements.createProjectButton.addEventListener('click', async () => {
   const targetPath = elements.createProjectPath.value.trim()

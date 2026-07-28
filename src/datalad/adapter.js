@@ -374,6 +374,31 @@ export class DataLadAdapter {
     return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
   }
 
+  // Read-only SSH directory listing, not a datalad/git mutation, so it
+  // deliberately bypasses the CURATED_COMMANDS/runCommand allowlist (that gate
+  // exists for commands that mutate a local project path).
+  async listRemoteStudies(serverConfig) {
+    const host = serverConfig?.host?.trim()
+    const remotePath = serverConfig?.path?.trim()
+
+    if (!host || !remotePath) {
+      return { ok: false, studies: [], error: { code: 'SERVER_NOT_CONFIGURED', message: 'Studies server host and path are not configured yet.' } }
+    }
+
+    const result = await this.runner.run('ssh', [host, 'ls', '-1', '--', remotePath])
+
+    if (result.failed) {
+      return { ok: false, studies: [], error: { code: 'REMOTE_LIST_FAILED', message: result.stderr.trim() || 'Could not list studies on the server.' } }
+    }
+
+    const studies = result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    return { ok: true, studies, error: null }
+  }
+
   async listBranches(projectPath) {
     await this.#ensureGitProject(projectPath)
 

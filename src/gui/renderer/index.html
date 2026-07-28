@@ -41,6 +41,14 @@
               >
                 Check Setup
               </button>
+              <button
+                id="open-settings"
+                class="button button-ghost button-inline"
+                type="button"
+                title="Configure the DataLad studies server"
+              >
+                Settings
+              </button>
             </div>
             <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
           </div>
@@ -52,6 +60,34 @@
         <div id="environment-output" class="panel panel-muted panel-compact hero-setup-output" hidden></div>
       </header>
 
+      <section id="settings-card" class="card reveal reveal-1" aria-labelledby="settings-title" hidden>
+        <span class="card-icon-badge" aria-hidden="true">⚙️</span>
+        <div class="section-head">
+          <h2 id="settings-title">Settings</h2>
+          <button id="close-settings" class="button button-ghost button-inline" type="button">Close</button>
+        </div>
+
+        <p class="lede-small">Configure the DataLad studies server so studies can be browsed and installed from it.</p>
+
+        <div class="open-project-controls">
+          <label class="field">
+            <span>Server Host (SSH)</span>
+            <input id="settings-studies-host" type="text" placeholder="user@myserver.example.org" />
+          </label>
+          <label class="field">
+            <span>Studies Folder Path</span>
+            <input id="settings-studies-path" type="text" placeholder="/data/studies" />
+          </label>
+          <p class="hint-inline">The host can be a bare hostname, user@host, or an alias already defined in your ~/.ssh/config.</p>
+
+          <div class="row-actions">
+            <button id="save-settings" class="button button-primary" type="button">Save Settings</button>
+          </div>
+        </div>
+
+        <div id="settings-output" class="panel panel-muted" hidden></div>
+      </section>
+
       <section id="onboarding-group" class="onboarding-group">
         <div class="onboarding-picker reveal reveal-2" role="tablist" aria-label="Choose how to start">
           <button type="button" class="onboarding-tile" id="onboarding-tile-open" data-onboarding-target="open-project-panel" role="tab" aria-selected="false" aria-controls="open-project-panel">
@@ -61,6 +97,10 @@
           <button type="button" class="onboarding-tile" id="onboarding-tile-create" data-onboarding-target="create-project-panel" role="tab" aria-selected="false" aria-controls="create-project-panel">
             <span class="onboarding-tile-icon" aria-hidden="true">✨</span>
             <span class="onboarding-tile-label">Create Project</span>
+          </button>
+          <button type="button" class="onboarding-tile" id="onboarding-tile-install-from-server" data-onboarding-target="install-from-server-panel" role="tab" aria-selected="false" aria-controls="install-from-server-panel">
+            <span class="onboarding-tile-icon" aria-hidden="true">🗄️</span>
+            <span class="onboarding-tile-label">Install from Studies Server</span>
           </button>
         </div>
 
@@ -172,6 +212,41 @@
           </div>
 
           <div id="create-project-output" class="panel panel-muted" hidden></div>
+        </section>
+
+        <section class="card reveal reveal-3 open-project-strip onboarding-panel" id="install-from-server-panel" aria-labelledby="install-from-server-title" role="tabpanel" hidden>
+          <span class="card-icon-badge" aria-hidden="true">🗄️</span>
+          <div class="section-head">
+            <h2 id="install-from-server-title">Install from Studies Server</h2>
+            <button id="refresh-remote-studies" class="button button-ghost button-inline" type="button">Refresh List</button>
+          </div>
+
+          <p class="lede-small">Browse studies stored on the configured DataLad server and install one as a new project.</p>
+
+          <div id="remote-studies-not-configured" class="panel panel-muted" hidden>
+            No studies server is configured yet. Open <strong>Settings</strong> to add the server host and studies folder path.
+          </div>
+
+          <div id="remote-studies-controls" class="open-project-controls" hidden>
+            <label class="field">
+              <span>Study</span>
+              <select id="remote-studies-select"></select>
+            </label>
+
+            <label class="field">
+              <span>Save Into Folder</span>
+              <div class="field-row">
+                <input id="install-from-server-target" type="text" placeholder="/path/to/save/project" />
+                <button id="pick-install-from-server-target" class="button button-ghost button-inline" type="button">Browse</button>
+              </div>
+            </label>
+
+            <div class="row-actions">
+              <button id="install-from-server" class="button button-primary" type="button">Install Study</button>
+            </div>
+          </div>
+
+          <div id="remote-studies-output" class="panel panel-muted" hidden></div>
         </section>
       </section>
 

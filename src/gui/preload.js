@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   addIgnorePatterns: (projectPath, relativeDatasetPaths, patterns) =>
     ipcRenderer.invoke('adapter:addIgnorePatterns', { projectPath, relativeDatasetPaths, patterns }),
   listBranches: (projectPath) => ipcRenderer.invoke('adapter:listBranches', projectPath),
+  listRemoteStudies: () => ipcRenderer.invoke('adapter:listRemoteStudies'),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  updateSettings: (partial) => ipcRenderer.invoke('settings:update', partial),
   getLastCommit: (projectPath) => ipcRenderer.invoke('adapter:getLastCommit', projectPath),
   getWorkingTreeStatus: (projectPath) => ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath),
   listRecentCommits: (projectPath, options) =>

@@ -1815,3 +1815,47 @@ test('runCommand maps unlock failure to content-not-local message when content i
   assert.equal(result.ok, false)
   assert.equal(result.userError.code, 'CONTENT_NOT_LOCAL')
 })
+
+test('listRemoteStudies reports SERVER_NOT_CONFIGURED when host or path is missing', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+
+  const result = await adapter.listRemoteStudies({ host: '', path: '' })
+
+  assert.equal(result.ok, false)
+  assert.deepEqual(result.studies, [])
+  assert.equal(result.error.code, 'SERVER_NOT_CONFIGURED')
+})
+
+test('listRemoteStudies lists non-empty lines from the remote directory listing', async () => {
+  const runner = new FakeRunner()
+  runner.set('ssh', ['user@server.example.org', 'ls', '-1', '--', '/data/studies'], {
+    exitCode: 0,
+    stdout: 'study-a\nstudy-b\n\n',
+    stderr: '',
+    failed: false
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.listRemoteStudies({ host: 'user@server.example.org', path: '/data/studies' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.studies, ['study-a', 'study-b'])
+})
+
+test('listRemoteStudies reports REMOTE_LIST_FAILED when ssh fails', async () => {
+  const runner = new FakeRunner()
+  runner.set('ssh', ['user@server.example.org', 'ls', '-1', '--', '/data/studies'], {
+    exitCode: 255,
+    stdout: '',
+    stderr: 'ssh: Could not resolve hostname server.example.org\n',
+    failed: true
+  })
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.listRemoteStudies({ host: 'user@server.example.org', path: '/data/studies' })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.studies.length, 0)
+  assert.equal(result.error.code, 'REMOTE_LIST_FAILED')
+  assert.match(result.error.message, /Could not resolve hostname/)
+})
