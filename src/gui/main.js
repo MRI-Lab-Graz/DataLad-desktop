@@ -1,6 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { access, readdir, stat } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
@@ -443,8 +442,8 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
     readGitStatusMap(normalizedRoot),
     ...[...repoRoots].map(async (repoRoot) => {
       const [presResult, absResult] = await Promise.all([
-        runCommand('git', ['-C', repoRoot, 'annex', 'find', '--in=here']),
-        runCommand('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here'])
+        consoleRunner.run('git', ['-C', repoRoot, 'annex', 'find', '--in=here']),
+        consoleRunner.run('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here'])
       ])
       if (presResult.failed && absResult.failed) return [repoRoot, null]
       return [
@@ -522,7 +521,7 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
 }
 
 async function readGitStatusMap(rootPath) {
-  const gitResult = await runCommand('git', [
+  const gitResult = await consoleRunner.run('git', [
     '-C',
     rootPath,
     '-c',
@@ -537,42 +536,6 @@ async function readGitStatusMap(rootPath) {
   }
 
   return buildGitStatusMap(gitResult.stdout)
-}
-
-
-async function runCommand(command, args) {
-  return new Promise((resolveCommand) => {
-    const processHandle = spawn(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    processHandle.stdout.on('data', (chunk) => {
-      stdout += String(chunk)
-    })
-
-    processHandle.stderr.on('data', (chunk) => {
-      stderr += String(chunk)
-    })
-
-    processHandle.on('error', () => {
-      resolveCommand({
-        stdout,
-        stderr,
-        failed: true
-      })
-    })
-
-    processHandle.on('close', (exitCode) => {
-      resolveCommand({
-        stdout,
-        stderr,
-        failed: (exitCode ?? 1) !== 0
-      })
-    })
-  })
 }
 
 app.whenReady().then(() => {
