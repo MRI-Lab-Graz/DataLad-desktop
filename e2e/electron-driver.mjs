@@ -27,6 +27,21 @@ export async function launchApp() {
     stdio: ['ignore', 'pipe', 'pipe']
   })
 
+  try {
+    return await connect(child)
+  } catch (err) {
+    // A failure below (e.g. #check-env never appears) leaves the spawned
+    // Electron process and any open CDP socket dangling. Nothing then
+    // references them, so node --test never exits its event loop until CI's
+    // job timeout kills it hours later. Callers whose test.before() throws
+    // never get an `app` to call close() on, so the cleanup has to happen
+    // here, not by the caller.
+    child.kill()
+    throw err
+  }
+}
+
+async function connect(child) {
   const port = await new Promise((resolve, reject) => {
     let buffer = ''
     const onData = (chunk) => {
@@ -57,6 +72,15 @@ export async function launchApp() {
 
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
 
+  try {
+    return await attachToWindow(browser, child)
+  } catch (err) {
+    await browser.close().catch(() => {})
+    throw err
+  }
+}
+
+async function attachToWindow(browser, child) {
   let page = null
   for (let attempt = 0; attempt < 20 && !page; attempt += 1) {
     for (const ctx of browser.contexts()) {
@@ -73,6 +97,10 @@ export async function launchApp() {
   if (!page) {
     throw new Error('Could not find the app window over CDP')
   }
+  // #check-env lives inside the Setup panel, which starts `hidden` until
+  // #open-settings is clicked.
+  await page.waitForSelector('#open-settings', { timeout: 10_000 })
+  await page.evaluate(() => document.getElementById('open-settings').click())
   await page.waitForSelector('#check-env', { timeout: 10_000 })
 
   async function openProject(projectPath) {
