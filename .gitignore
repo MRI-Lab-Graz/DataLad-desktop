@@ -231,3 +231,4 @@ __marimo__/
 
 # Local DataLad test dataset (not part of the app source)
 /ds008055/
+.superpowers/
