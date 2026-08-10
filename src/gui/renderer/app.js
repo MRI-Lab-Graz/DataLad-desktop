@@ -256,7 +256,10 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
   setLastActionState('Switching to recent project...', 'idle')
   elements.projectPath.value = projectPath
   elements.commandProjectPath.value = projectPath
-  setCurrentProjectHeader(projectPath, 'unknown')
+  // Don't set the header before detectProjectType: that call awaits
+  // adapter:detectProject, which is what authorizes projectPath in main.js.
+  // Setting the header first fires refreshLastCommitMeta/refreshProjectHealth
+  // against an as-yet-unauthorized root and races the real authorization.
   await detectProjectType(projectPath)
 })
 
@@ -2252,14 +2255,13 @@ function wireFolderPicker(button, input, options) {
     }
 
     if (options.setAsCurrentProject) {
-      setCurrentProjectHeader(selectedPath, getCurrentBadgeType())
-      rememberRecentProject(selectedPath)
-      await refreshDatasetList(selectedPath)
-      await refreshFileBrowser(selectedPath)
-      await refreshBranchList(selectedPath)
-      await refreshWorkingTreeStatus(selectedPath)
-      await refreshRecentCommits(selectedPath)
-      updateSaveButtonState()
+      // Route through detectProjectType rather than setting the header
+      // directly: it awaits adapter:detectProject first, which is what
+      // authorizes this path in main.js. Any header/refresh calls fired
+      // before that resolves hit unauthorized-root errors (getLastCommit,
+      // getProjectHealth, etc.) since a fresh folder pick was never granted
+      // access yet.
+      await detectProjectType(selectedPath)
     }
 
     if (options.onSelected) {
@@ -3071,22 +3073,6 @@ function classificationForPath(projectPath) {
   }
 
   return state.rootProjectClassification
-}
-
-function getCurrentBadgeType() {
-  if (elements.currentProjectBadge.classList.contains('badge-git')) {
-    return 'git'
-  }
-
-  if (elements.currentProjectBadge.classList.contains('badge-dataset')) {
-    return 'dataset'
-  }
-
-  if (elements.currentProjectBadge.classList.contains('badge-superdataset')) {
-    return 'superdataset'
-  }
-
-  return 'unknown'
 }
 
 function setProjectBadge(classification) {
