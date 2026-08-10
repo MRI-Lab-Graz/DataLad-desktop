@@ -480,11 +480,6 @@ async function listEntries(rootPath, maxDepth, maxEntries) {
         annexPresent = false
         absentRelPaths.add(entry.relativePath)
       }
-    } else {
-      // git annex not available: fall back to heuristic detection
-      annexPresent = detectAnnexPresentSync(entry.absolutePath)
-      if (annexPresent === true) presentRelPaths.add(entry.relativePath)
-      else if (annexPresent === false) absentRelPaths.add(entry.relativePath)
     }
 
     return { ...entry, annexPresent }
@@ -544,12 +539,6 @@ async function readGitStatusMap(rootPath) {
   return buildGitStatusMap(gitResult.stdout)
 }
 
-// Fallback when git-annex is unavailable for a repo.
-// DataLad always requires git-annex, so this is only hit for plain git repos —
-// those have no annex content to mark, so returning null is correct.
-function detectAnnexPresentSync(_absolutePath) {
-  return null
-}
 
 async function runCommand(command, args) {
   return new Promise((resolveCommand) => {
