@@ -84,17 +84,23 @@ crux of the whole concern.
 
 ### 3. Rollout
 
-This can only be fully validated by pushing to CI — there's no Windows
-machine available in this environment to test against locally. Land it,
-watch the Windows job, and fix whatever surfaces as a concrete, specific bug
-rather than a hypothetical one. Once the Windows job is green with real
-git-annex installed, that's the evidence needed to endorse the app for its
-Windows audience.
+A Windows VM is available locally, so this doesn't have to be validated
+blind through CI round-trips. Install DataLad + git-annex on the VM the same
+non-elevated way (no admin rights, no Developer Mode toggle — matching a
+real user's machine), run `npm test` and the new e2e spec there directly,
+and fix whatever surfaces as a concrete, specific bug rather than a
+hypothetical one. Push the CI workflow change once the VM run is clean, so
+CI then keeps re-verifying this on every future change instead of it being
+a one-time manual check.
 
 ## Testing
 
-- CI is the test environment here; there is no meaningful local
-  reproduction of the Windows case.
+- Primary validation is manual, on the local Windows VM: install
+  DataLad + git-annex non-elevated, run `npm test` and
+  `e2e/real-annex-roundtrip.e2e.mjs` there, confirm they pass without
+  requiring admin rights or Developer Mode.
+- CI (once the workflow step lands) then re-runs the same check on every
+  push, so the VM result isn't a one-time fact that can silently rot.
 - The new e2e spec must fail loudly (not silently pass) if `git annex
   whereis` reports no location for the saved file, so a broken save path
   can't slip through.
