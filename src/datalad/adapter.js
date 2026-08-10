@@ -1261,7 +1261,3 @@ function isSafeRelativeSubdatasetPath(relativePath) {
   const segments = relativePath.split(/[\\/]+/)
   return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..')
 }
-
-export function createDataLadAdapter(options) {
-  return new DataLadAdapter(options)
-}

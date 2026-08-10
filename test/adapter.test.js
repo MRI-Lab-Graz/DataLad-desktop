@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
-import { DataLadAdapter, createDataLadAdapter } from '../src/datalad/adapter.js'
+import { DataLadAdapter } from '../src/datalad/adapter.js'
 
 class FakeRunner {
   constructor() {
@@ -1627,13 +1627,6 @@ test('untrackPath rejects a path-traversal relativePath', async () => {
 
   await assert.rejects(adapter.untrackPath('/tmp/proj', '../outside'), /Invalid path/)
   assert.equal(runner.calls.length, 0)
-})
-
-test('createDataLadAdapter builds a usable adapter instance', () => {
-  const adapter = createDataLadAdapter({ runner: new FakeRunner() })
-
-  assert.ok(adapter instanceof DataLadAdapter)
-  assert.equal(adapter.getInterfaceContract().version, '0.5.0')
 })
 
 test('runCommand routes createBranchAt to git checkout -b with a start point', async () => {
