@@ -35,6 +35,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install DataLad + git-annex
+        run: |
+          python -m pip install datalad-installer datalad
+          datalad-installer --sudo ok git-annex -m datalad/packages
+
       - name: Run unit smoke tests
         run: npm test
 
