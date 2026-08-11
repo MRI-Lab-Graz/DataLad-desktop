@@ -6,6 +6,8 @@ import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import electronPath from 'electron'
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,11 +23,24 @@ export async function launchApp() {
   const childEnv = { ...process.env }
   delete childEnv.ELECTRON_RUN_AS_NODE
 
-  const child = spawn(electronPath, [APP_DIR, '--remote-debugging-port=0'], {
-    cwd: APP_DIR,
-    env: childEnv,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  // Without this, the app launches against the real per-machine profile
+  // (localStorage, settings.json), so anything a developer toggled while
+  // manually poking at the app (e.g. Power User Mode) silently leaks into
+  // every later e2e run on that machine and changes button labels/gating
+  // out from under the tests — see the 'Commit' vs 'Save Checkpoint'
+  // mismatch this caused. A fresh --user-data-dir per launch makes every
+  // run hermetic regardless of what's been clicked around locally before.
+  const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
+
+  const child = spawn(
+    electronPath,
+    [APP_DIR, '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`],
+    {
+      cwd: APP_DIR,
+      env: childEnv,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
 
   try {
     return await connect(child)
