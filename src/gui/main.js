@@ -165,7 +165,9 @@ ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
 })
 
 ipcMain.handle('adapter:runCommand', async (_event, payload) => {
+  console.log(`[trace] main ipcMain.handle adapter:runCommand(${payload.commandName}) received`)
   const result = await adapter.runCommand(payload.commandName, payload.request)
+  console.log(`[trace] main ipcMain.handle adapter:runCommand(${payload.commandName}) adapter resolved`)
   if (
     result?.ok &&
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')

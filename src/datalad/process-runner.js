@@ -84,6 +84,7 @@ export class ProcessRunner {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: options.shell ?? false
       })
+      console.log(`[trace] ProcessRunner spawned pid=${child.pid} ${command} ${args.join(' ')}`)
 
       child.stdout.on('data', (chunk) => {
         stdout += String(chunk)
@@ -110,6 +111,7 @@ export class ProcessRunner {
       })
 
       child.on('close', (exitCode) => {
+        console.log(`[trace] ProcessRunner pid=${child.pid} closed, exitCode=${exitCode}`)
         if (settled) {
           return
         }

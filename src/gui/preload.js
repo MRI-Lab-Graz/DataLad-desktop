@@ -10,11 +10,13 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   findUnnestedBidsCandidates: (projectPath) => ipcRenderer.invoke('adapter:findUnnestedBidsCandidates', projectPath),
   untrackPath: (projectPath, relativePath) =>
     ipcRenderer.invoke('adapter:untrackPath', { projectPath, relativePath }),
-  runCommand: (commandName, request) =>
-    ipcRenderer.invoke('adapter:runCommand', {
-      commandName,
-      request
-    }),
+  runCommand: (commandName, request) => {
+    console.log(`[trace] preload runCommand(${commandName}) invoking IPC`)
+    return ipcRenderer.invoke('adapter:runCommand', { commandName, request }).then((r) => {
+      console.log(`[trace] preload runCommand(${commandName}) IPC resolved`)
+      return r
+    })
+  },
   runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
