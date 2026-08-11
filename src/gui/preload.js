@@ -34,7 +34,13 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (partial) => ipcRenderer.invoke('settings:update', partial),
   getLastCommit: (projectPath) => ipcRenderer.invoke('adapter:getLastCommit', projectPath),
-  getWorkingTreeStatus: (projectPath) => ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath),
+  getWorkingTreeStatus: (projectPath) => {
+    console.log('[trace] preload getWorkingTreeStatus invoking IPC')
+    return ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath).then((r) => {
+      console.log('[trace] preload getWorkingTreeStatus IPC resolved')
+      return r
+    })
+  },
   listRecentCommits: (projectPath, options) =>
     ipcRenderer.invoke('adapter:listRecentCommits', {
       projectPath,

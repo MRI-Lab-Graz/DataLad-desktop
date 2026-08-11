@@ -237,8 +237,11 @@ ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
 })
 
 ipcMain.handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
+  console.log('[trace] main ipcMain.handle adapter:getWorkingTreeStatus received')
   requireAuthorizedRoot(projectPath)
-  return adapter.getWorkingTreeStatus(projectPath)
+  const result = await adapter.getWorkingTreeStatus(projectPath)
+  console.log('[trace] main ipcMain.handle adapter:getWorkingTreeStatus resolved')
+  return result
 })
 
 ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
