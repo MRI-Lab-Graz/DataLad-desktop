@@ -167,21 +167,23 @@ async function attachToWindow(browser, child) {
     }, projectPath)
     await page.evaluate(() => document.getElementById('detect-project').click())
     // detectProject spawns real git/datalad subprocesses through the main
-    // process. The first spawn of a given probe on a loaded CI VM (cold
-    // process creation, antivirus scanning on Windows runners, etc.) can
-    // take much longer than on a warm local machine — a 10s budget was
-    // observed timing out in CI on the very first 'dataset' classification
-    // probe while the very next (superdataset) probe finished in well under
-    // a second, so this is CI spawn latency, not an app hang.
+    // process. Per-spawn cost on a loaded CI VM (antivirus scanning each new
+    // process on Windows runners, general VM noise, etc.) varies enough that
+    // any individual spawn — not just the first one warmUpDatalad() above
+    // covers — can occasionally take far longer than on a warm local
+    // machine: a 10s budget was observed timing out on the very first probe,
+    // and even after warming DataLad up front, a later probe elsewhere in
+    // the run has still hit a 30s budget. This is CI spawn latency, not an
+    // app hang.
     await page.waitForFunction(
       (p) => document.getElementById('current-project-path').textContent === p,
       projectPath,
-      { timeout: 30_000 }
+      { timeout: 60_000 }
     )
     await page.waitForFunction(
       () => document.getElementById('project-health-output').innerHTML.includes('project-health-grid'),
       undefined,
-      { timeout: 30_000 }
+      { timeout: 60_000 }
     )
   }
 
