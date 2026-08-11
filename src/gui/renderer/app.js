@@ -902,17 +902,13 @@ elements.saveProjectButton.addEventListener('click', async () => {
   }
 
   setButtonBusy(elements.saveProjectButton, true)
-  console.log('[trace] save click: busy set, awaiting refreshWorkingTreeStatus')
   try {
     const latestStatus = await refreshWorkingTreeStatus(projectPath)
-    console.log(`[trace] save click: refreshWorkingTreeStatus returned latestStatus=${latestStatus ? 'ok' : 'null'}`)
     if (!latestStatus) {
-      console.log('[trace] save click: returning early, latestStatus falsy')
       return
     }
 
     if (latestStatus.conflictCount > 0) {
-      console.log('[trace] save click: returning early, conflicts present')
       elements.commandOutput.textContent =
         'Save is blocked while conflicts are present. Resolve conflicts, then try again.'
       setLastActionState('Resolve conflicts before saving.', 'error')
@@ -921,34 +917,21 @@ elements.saveProjectButton.addEventListener('click', async () => {
     }
 
     const selectedPaths = gatherSavePaths()
-    console.log(`[trace] save click: totalChanged=${latestStatus.totalChanged} selectedPaths=${selectedPaths.length}`)
     if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
-      console.log('[trace] save click: returning early, no paths selected')
       elements.commandOutput.textContent =
         'Select at least one changed file or provide manual paths before saving.'
       setLastActionState('Select files to save first.', 'error')
       return
     }
 
-    console.log('[trace] save click: calling runWorkflowCommand(save)')
     await runWorkflowCommand('save', {
       projectPath,
       message,
       paths: selectedPaths
     }, elements.saveProjectButton)
-    console.log('[trace] save click: runWorkflowCommand(save) returned')
   } finally {
-    console.log('[trace] save click: finally, clearing busy state')
     setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
-    console.log(
-      `[trace] save click: post-finally button state disabled=${elements.saveProjectButton.disabled} text=${JSON.stringify(elements.saveProjectButton.textContent.trim())} classes=${elements.saveProjectButton.className}`
-    )
-    setTimeout(() => {
-      console.log(
-        `[trace] save click: +2s button state disabled=${elements.saveProjectButton.disabled} text=${JSON.stringify(elements.saveProjectButton.textContent.trim())} classes=${elements.saveProjectButton.className}`
-      )
-    }, 2000)
   }
 })
 

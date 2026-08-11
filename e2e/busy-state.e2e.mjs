@@ -15,8 +15,6 @@ let root
 test.before(async () => {
   root = await createTempRoot()
   app = await launchApp()
-  app.page.on('console', (msg) => console.log(`[renderer] ${msg.text()}`))
-  app.page.on('pageerror', (err) => console.log(`[renderer error] ${err}`))
 })
 
 test.after(async () => {

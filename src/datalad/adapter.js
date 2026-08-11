@@ -268,9 +268,7 @@ export class DataLadAdapter {
     assertCommandRequest(commandName, request)
 
     const commandSpec = this.#buildCommand(commandName, request)
-    console.log(`[trace] adapter.runCommand(${commandName}) calling runner.run: ${commandSpec.command} ${commandSpec.args.join(' ')}`)
     let result = await this.runner.run(commandSpec.command, commandSpec.args, commandSpec.options)
-    console.log(`[trace] adapter.runCommand(${commandName}) runner.run resolved, failed=${result.failed}`)
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {

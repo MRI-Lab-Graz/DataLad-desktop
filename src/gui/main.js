@@ -165,9 +165,7 @@ ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
 })
 
 ipcMain.handle('adapter:runCommand', async (_event, payload) => {
-  console.log(`[trace] main ipcMain.handle adapter:runCommand(${payload.commandName}) received`)
   const result = await adapter.runCommand(payload.commandName, payload.request)
-  console.log(`[trace] main ipcMain.handle adapter:runCommand(${payload.commandName}) adapter resolved`)
   if (
     result?.ok &&
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
@@ -237,11 +235,8 @@ ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
 })
 
 ipcMain.handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
-  console.log('[trace] main ipcMain.handle adapter:getWorkingTreeStatus received')
   requireAuthorizedRoot(projectPath)
-  const result = await adapter.getWorkingTreeStatus(projectPath)
-  console.log('[trace] main ipcMain.handle adapter:getWorkingTreeStatus resolved')
-  return result
+  return adapter.getWorkingTreeStatus(projectPath)
 })
 
 ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {

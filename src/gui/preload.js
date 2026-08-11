@@ -10,13 +10,11 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   findUnnestedBidsCandidates: (projectPath) => ipcRenderer.invoke('adapter:findUnnestedBidsCandidates', projectPath),
   untrackPath: (projectPath, relativePath) =>
     ipcRenderer.invoke('adapter:untrackPath', { projectPath, relativePath }),
-  runCommand: (commandName, request) => {
-    console.log(`[trace] preload runCommand(${commandName}) invoking IPC`)
-    return ipcRenderer.invoke('adapter:runCommand', { commandName, request }).then((r) => {
-      console.log(`[trace] preload runCommand(${commandName}) IPC resolved`)
-      return r
-    })
-  },
+  runCommand: (commandName, request) =>
+    ipcRenderer.invoke('adapter:runCommand', {
+      commandName,
+      request
+    }),
   runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getContract: () => ipcRenderer.invoke('adapter:getContract'),
@@ -34,13 +32,7 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (partial) => ipcRenderer.invoke('settings:update', partial),
   getLastCommit: (projectPath) => ipcRenderer.invoke('adapter:getLastCommit', projectPath),
-  getWorkingTreeStatus: (projectPath) => {
-    console.log('[trace] preload getWorkingTreeStatus invoking IPC')
-    return ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath).then((r) => {
-      console.log('[trace] preload getWorkingTreeStatus IPC resolved')
-      return r
-    })
-  },
+  getWorkingTreeStatus: (projectPath) => ipcRenderer.invoke('adapter:getWorkingTreeStatus', projectPath),
   listRecentCommits: (projectPath, options) =>
     ipcRenderer.invoke('adapter:listRecentCommits', {
       projectPath,
