@@ -67,10 +67,10 @@ async function connect(child) {
       // and the child then blocks on write() — silently hanging whatever
       // app command triggered the output. Windows' smaller default pipe
       // buffers made this show up reliably on `Save`, which is the most
-      // output-heavy command; resume() with no 'data' listener discards
-      // instead of buffering.
-      child.stdout.resume()
-      child.stderr.resume()
+      // output-heavy command. Forwarding (not just draining) also surfaces
+      // whatever the app itself logged right as a test hangs or fails.
+      child.stdout.on('data', (chunk) => process.stdout.write(`[app] ${chunk}`))
+      child.stderr.on('data', (chunk) => process.stderr.write(`[app] ${chunk}`))
     }
     child.stdout.on('data', onData)
     child.stderr.on('data', onData)
