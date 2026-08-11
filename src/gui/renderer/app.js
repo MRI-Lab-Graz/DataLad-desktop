@@ -941,6 +941,14 @@ elements.saveProjectButton.addEventListener('click', async () => {
     console.log('[trace] save click: finally, clearing busy state')
     setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
+    console.log(
+      `[trace] save click: post-finally button state disabled=${elements.saveProjectButton.disabled} text=${JSON.stringify(elements.saveProjectButton.textContent.trim())} classes=${elements.saveProjectButton.className}`
+    )
+    setTimeout(() => {
+      console.log(
+        `[trace] save click: +2s button state disabled=${elements.saveProjectButton.disabled} text=${JSON.stringify(elements.saveProjectButton.textContent.trim())} classes=${elements.saveProjectButton.className}`
+      )
+    }, 2000)
   }
 })
 
