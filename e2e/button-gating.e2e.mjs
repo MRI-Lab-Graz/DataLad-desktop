@@ -67,7 +67,7 @@ test('plain git project with a remote: Update/Publish enabled, Get Data still di
   assert.match(remoteInfo.text, /Remote: origin\/main/)
 })
 
-test('DataLad dataset with no remote: Get Data enabled, Update/Publish still disabled', async () => {
+test('DataLad dataset with no remote: nothing to fetch so Get Data is disabled, Update/Publish still disabled', async () => {
   const projectPath = await createDatasetFixture(root)
   await app.openProject(projectPath)
 
@@ -75,18 +75,25 @@ test('DataLad dataset with no remote: Get Data enabled, Update/Publish still dis
   const update = await app.buttonState('update-project')
   const unlock = await app.buttonState('unlock-files')
 
-  assert.equal(getData.disabled, false)
+  // The fixture never had any annexed content, so once a real git-annex
+  // resolves health (it's not installed on most CI runners, but is on a
+  // contributor's machine or the Windows/macOS smoke job), `git annex find
+  // --not --in here` reports nothing missing and Get Data is correctly
+  // disabled as a no-op, not because this isn't a recognized dataset.
+  assert.equal(getData.disabled, true)
+  assert.match(getData.title, /nothing to get/)
   assert.equal(update.disabled, true)
   assert.equal(unlock.disabled, false)
 })
 
-test('DataLad superdataset: Get Data enabled', async () => {
+test('DataLad superdataset: nothing to fetch so Get Data is disabled', async () => {
   const projectPath = await createSuperdatasetFixture(root)
   await app.openProject(projectPath)
 
   const getData = await app.buttonState('get-data')
   const unlock = await app.buttonState('unlock-files')
-  assert.equal(getData.disabled, false)
+  assert.equal(getData.disabled, true)
+  assert.match(getData.title, /nothing to get/)
   assert.equal(unlock.disabled, false)
 })
 
