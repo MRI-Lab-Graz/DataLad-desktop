@@ -34,6 +34,7 @@ test('a new untracked file on disk appears in the file browser without a manual 
 
   await app.page.waitForFunction(
     () => document.getElementById('files-output').textContent.includes('notes.txt'),
+    undefined,
     { timeout: 10_000 }
   )
 })
@@ -48,6 +49,7 @@ test('editing a tracked file on disk updates the working-tree summary without a 
   await app.openProject(projectPath)
   await app.page.waitForFunction(
     () => !document.getElementById('changed-files-output').textContent.includes('README.md'),
+    undefined,
     { timeout: 10_000 }
   )
 
@@ -55,6 +57,7 @@ test('editing a tracked file on disk updates the working-tree summary without a 
 
   await app.page.waitForFunction(
     () => document.getElementById('changed-files-output').textContent.includes('README.md'),
+    undefined,
     { timeout: 10_000 }
   )
 })

@@ -201,8 +201,8 @@ test('computeSyncActionsQuietMessage uses git-only wording for a plain git proje
 test('isSharedStudiesServerRemote matches when the remote URL contains the configured bare hostname', () => {
   assert.equal(
     isSharedStudiesServerRemote(
-      'ssh://karl.koschutnig@uni-graz.at@it035016.uni-graz.at/datalad/mri/MRI-Lab_Repository/hgh',
-      'karl.koschutnig@uni-graz.at@it035016.uni-graz.at'
+      'ssh://someone@studies.example.org@studies.example.org/datalad/mri/MRI-Lab_Repository/hgh',
+      'someone@studies.example.org@studies.example.org'
     ),
     true
   )
@@ -210,20 +210,20 @@ test('isSharedStudiesServerRemote matches when the remote URL contains the confi
 
 test('isSharedStudiesServerRemote matches regardless of which username is embedded in either string', () => {
   assert.equal(
-    isSharedStudiesServerRemote('ssh://someone-else@it035016.uni-graz.at/data/studies/hgh', 'it035016.uni-graz.at'),
+    isSharedStudiesServerRemote('ssh://someone-else@studies.example.org/data/studies/hgh', 'studies.example.org'),
     true
   )
 })
 
 test('isSharedStudiesServerRemote returns false for an unrelated remote', () => {
   assert.equal(
-    isSharedStudiesServerRemote('https://github.com/example/other-repo.git', 'it035016.uni-graz.at'),
+    isSharedStudiesServerRemote('https://github.com/example/other-repo.git', 'studies.example.org'),
     false
   )
 })
 
 test('isSharedStudiesServerRemote returns false when either input is missing', () => {
-  assert.equal(isSharedStudiesServerRemote(null, 'it035016.uni-graz.at'), false)
-  assert.equal(isSharedStudiesServerRemote('ssh://it035016.uni-graz.at/data/studies/hgh', ''), false)
-  assert.equal(isSharedStudiesServerRemote('ssh://it035016.uni-graz.at/data/studies/hgh', undefined), false)
+  assert.equal(isSharedStudiesServerRemote(null, 'studies.example.org'), false)
+  assert.equal(isSharedStudiesServerRemote('ssh://studies.example.org/data/studies/hgh', ''), false)
+  assert.equal(isSharedStudiesServerRemote('ssh://studies.example.org/data/studies/hgh', undefined), false)
 })

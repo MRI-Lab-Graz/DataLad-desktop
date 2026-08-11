@@ -49,6 +49,7 @@ test('Save shows a busy state while the command is in flight, then recovers', as
       const el = document.getElementById('save-project')
       return !el.disabled && el.textContent.trim() === 'Save Checkpoint'
     },
+    undefined,
     { timeout: 15_000 }
   )
   const after = await app.buttonState('save-project')

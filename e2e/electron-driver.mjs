@@ -6,6 +6,8 @@ import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import electronPath from 'electron'
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,12 +23,40 @@ export async function launchApp() {
   const childEnv = { ...process.env }
   delete childEnv.ELECTRON_RUN_AS_NODE
 
-  const child = spawn(electronPath, [APP_DIR, '--remote-debugging-port=0'], {
-    cwd: APP_DIR,
-    env: childEnv,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  // Without this, the app launches against the real per-machine profile
+  // (localStorage, settings.json), so anything a developer toggled while
+  // manually poking at the app (e.g. Power User Mode) silently leaks into
+  // every later e2e run on that machine and changes button labels/gating
+  // out from under the tests — see the 'Commit' vs 'Save Checkpoint'
+  // mismatch this caused. A fresh --user-data-dir per launch makes every
+  // run hermetic regardless of what's been clicked around locally before.
+  const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
 
+  const child = spawn(
+    electronPath,
+    [APP_DIR, '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`],
+    {
+      cwd: APP_DIR,
+      env: childEnv,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )
+
+  try {
+    return await connect(child)
+  } catch (err) {
+    // A failure below (e.g. #check-env never appears) leaves the spawned
+    // Electron process and any open CDP socket dangling. Nothing then
+    // references them, so node --test never exits its event loop until CI's
+    // job timeout kills it hours later. Callers whose test.before() throws
+    // never get an `app` to call close() on, so the cleanup has to happen
+    // here, not by the caller.
+    child.kill()
+    throw err
+  }
+}
+
+async function connect(child) {
   const port = await new Promise((resolve, reject) => {
     let buffer = ''
     const onData = (chunk) => {
@@ -45,6 +75,17 @@ export async function launchApp() {
       child.stdout.off('data', onData)
       child.stderr.off('data', onData)
       child.off('exit', onExit)
+      // Startup detection is done, but the pipes must keep draining for the
+      // rest of the process's life: with stdio: 'pipe' and no reader, the OS
+      // pipe buffer fills up as soon as the app (or a spawned datalad/git
+      // subprocess whose output it forwards) writes enough to stdout/stderr,
+      // and the child then blocks on write() — silently hanging whatever
+      // app command triggered the output. Windows' smaller default pipe
+      // buffers made this show up reliably on `Save`, which is the most
+      // output-heavy command; resume() with no 'data' listener discards
+      // instead of buffering.
+      child.stdout.resume()
+      child.stderr.resume()
     }
     child.stdout.on('data', onData)
     child.stderr.on('data', onData)
@@ -57,6 +98,15 @@ export async function launchApp() {
 
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`)
 
+  try {
+    return await attachToWindow(browser, child)
+  } catch (err) {
+    await browser.close().catch(() => {})
+    throw err
+  }
+}
+
+async function attachToWindow(browser, child) {
   let page = null
   for (let attempt = 0; attempt < 20 && !page; attempt += 1) {
     for (const ctx of browser.contexts()) {
@@ -73,6 +123,10 @@ export async function launchApp() {
   if (!page) {
     throw new Error('Could not find the app window over CDP')
   }
+  // #check-env lives inside the Setup panel, which starts `hidden` until
+  // #open-settings is clicked.
+  await page.waitForSelector('#open-settings', { timeout: 10_000 })
+  await page.evaluate(() => document.getElementById('open-settings').click())
   await page.waitForSelector('#check-env', { timeout: 10_000 })
 
   async function openProject(projectPath) {
@@ -108,6 +162,7 @@ export async function launchApp() {
     )
     await page.waitForFunction(
       () => document.getElementById('project-health-output').innerHTML.includes('project-health-grid'),
+      undefined,
       { timeout: 30_000 }
     )
   }

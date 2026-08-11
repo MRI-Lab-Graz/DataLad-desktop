@@ -1,4 +1,5 @@
 {
   "host": "myserver.example.org",
-  "path": "/data/studies"
+  "path": "/data/studies",
+  "type": "ssh-directory"
 }

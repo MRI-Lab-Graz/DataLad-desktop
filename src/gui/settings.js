@@ -16,9 +16,15 @@ export function loadLocalDefaultOverrides(overridePath = REAL_OVERRIDE_PATH) {
   try {
     const raw = readFileSync(overridePath, 'utf8')
     const parsed = JSON.parse(raw)
-    return { host: parsed.host ?? '', path: parsed.path ?? '' }
+    return {
+      host: parsed.host ?? '',
+      path: parsed.path ?? '',
+      // 'ssh-directory' (default): path is a plain folder, listed via `ls`.
+      // 'gitolite': path is a repo-name prefix, listed via `ssh <host> info`.
+      type: parsed.type === 'gitolite' ? 'gitolite' : 'ssh-directory'
+    }
   } catch {
-    return { host: '', path: '' }
+    return { host: '', path: '', type: 'ssh-directory' }
   }
 }
 
