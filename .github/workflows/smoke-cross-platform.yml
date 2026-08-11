@@ -36,6 +36,7 @@ jobs:
         run: npm ci
 
       - name: Install DataLad + git-annex
+        timeout-minutes: 10
         run: |
           python -m pip install datalad-installer datalad
           datalad-installer --sudo ok -E "${{ runner.temp }}/dl-env.sh" git-annex -m datalad/packages
