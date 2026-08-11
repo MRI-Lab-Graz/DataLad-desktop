@@ -32,6 +32,14 @@ export async function launchApp() {
   // run hermetic regardless of what's been clicked around locally before.
   const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
 
+  // The first `datalad status` probe detectProject runs (see
+  // DataLadAdapter#probeDataLadDataset) pays a one-time cold-start cost —
+  // spawning the Python interpreter and importing the datalad package — that
+  // can exceed openProject's 30s budget on a loaded CI runner if it lands on
+  // the first dataset-fixture test instead of here. Pay it now, in parallel
+  // with the Electron launch, so every later probe in this test file is warm.
+  const warmUp = warmUpDatalad()
+
   const child = spawn(
     electronPath,
     [APP_DIR, '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`],
@@ -43,7 +51,9 @@ export async function launchApp() {
   )
 
   try {
-    return await connect(child)
+    const app = await connect(child)
+    await warmUp
+    return app
   } catch (err) {
     // A failure below (e.g. #check-env never appears) leaves the spawned
     // Electron process and any open CDP socket dangling. Nothing then
@@ -54,6 +64,14 @@ export async function launchApp() {
     child.kill()
     throw err
   }
+}
+
+function warmUpDatalad() {
+  return new Promise((resolve) => {
+    const probe = spawn('datalad', ['--version'], { stdio: 'ignore' })
+    probe.on('error', () => resolve())
+    probe.on('exit', () => resolve())
+  })
 }
 
 async function connect(child) {
