@@ -60,6 +60,17 @@ async function connect(child) {
       child.stdout.off('data', onData)
       child.stderr.off('data', onData)
       child.off('exit', onExit)
+      // Startup detection is done, but the pipes must keep draining for the
+      // rest of the process's life: with stdio: 'pipe' and no reader, the OS
+      // pipe buffer fills up as soon as the app (or a spawned datalad/git
+      // subprocess whose output it forwards) writes enough to stdout/stderr,
+      // and the child then blocks on write() — silently hanging whatever
+      // app command triggered the output. Windows' smaller default pipe
+      // buffers made this show up reliably on `Save`, which is the most
+      // output-heavy command; resume() with no 'data' listener discards
+      // instead of buffering.
+      child.stdout.resume()
+      child.stderr.resume()
     }
     child.stdout.on('data', onData)
     child.stderr.on('data', onData)
@@ -136,6 +147,7 @@ async function attachToWindow(browser, child) {
     )
     await page.waitForFunction(
       () => document.getElementById('project-health-output').innerHTML.includes('project-health-grid'),
+      undefined,
       { timeout: 30_000 }
     )
   }

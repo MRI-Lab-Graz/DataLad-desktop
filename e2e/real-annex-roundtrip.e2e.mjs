@@ -46,6 +46,7 @@ test('Save on a real DataLad dataset hands the file to git-annex', async () => {
       const el = document.getElementById('save-project')
       return !el.disabled && el.textContent.trim() === 'Save Checkpoint'
     },
+    undefined,
     { timeout: 30_000 }
   )
 
