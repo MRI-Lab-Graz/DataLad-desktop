@@ -18,21 +18,18 @@ across nested sub-projects? The app shows you exactly what changed and where.
 
 ## Why use it?
 
-- **See your changes at a glance.** A clear working-tree view shows what's
-  new, modified, or missing — including changes inside nested datasets —
-  without typing a single Git command.
-- **Save checkpoints with confidence.** Pick which files to include, write a
-  short message, and save. The app warns you before anything risky (like
-  saving over a conflict).
-- **Get data on demand.** Large files tracked by git-annex don't have to live
-  on your disk until you need them — fetch them with one click.
-- **Stay in sync with collaborators.** Update from and publish to a shared
+- **See your changes at a glance** — a working-tree view of what's new,
+  modified, or missing, including nested datasets, no Git commands needed.
+- **Save checkpoints with confidence** — pick files, write a message, save.
+  The app warns you before anything risky (like saving over a conflict).
+- **Get data on demand** — large files tracked by git-annex don't have to
+  live on your disk until you need them; fetch with one click.
+- **Stay in sync with collaborators** — update from and publish to a shared
   remote without memorizing remote/branch syntax.
-- **Keep noise out of your project history.** Manage `.gitignore` rules (e.g.
-  ignoring OS files like `.DS_Store`) for your whole project or just specific
-  sub-projects, right from the app.
+- **Keep noise out of your history** — manage `.gitignore` rules per project
+  or sub-project right from the app.
 - **Branch when you need to**, without it getting in the way when you don't —
-  branch management lives in an optional, out-of-the-way "Project Setup" area.
+  branch management lives in an optional "Project Setup" area.
 
 ## Download & Install
 
@@ -61,20 +58,11 @@ started with browsing and saving changes in an existing project.
 
 ### macOS: "app can't be opened" warning
 
-Release builds are not yet signed with an Apple Developer certificate, so the
-first launch on macOS is blocked by Gatekeeper with a message like *"DataLad
-Desktop can't be opened because Apple cannot check it for malicious
-software."* This is expected for unsigned apps — you only need to allow it
-once:
-
-1. **Right-click** (or Control-click) **DataLad Desktop.app** and choose
-   **Open**, then click **Open** in the dialog. On recent macOS versions the
-   dialog may only offer "Done" — in that case open
-   **System Settings → Privacy & Security**, scroll down to the message about
-   DataLad Desktop, and click **Open Anyway**.
-2. After that first launch, the app opens normally like any other app.
-
-If you prefer the terminal, this removes the quarantine flag directly:
+Release builds aren't signed with an Apple Developer certificate yet, so
+Gatekeeper blocks the first launch. **Right-click** (or Control-click)
+**DataLad Desktop.app** → **Open** → **Open** in the dialog (if the dialog only
+offers "Done", use **System Settings → Privacy & Security → Open Anyway**
+instead). Only needed once. Or from a terminal:
 
 ```bash
 xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
@@ -82,15 +70,8 @@ xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
 
 ### Windows: "Windows protected your PC" warning
 
-Release builds are not yet signed with a code-signing certificate, so the
-installer's first run may be blocked by Microsoft Defender SmartScreen with a
-blue screen titled *"Windows protected your PC"*. This is expected for
-unsigned installers — you only need to allow it once:
-
-1. On the SmartScreen screen, click **More info**.
-2. Click **Run anyway**.
-3. The installer proceeds normally, and the installed app opens like any
-   other app afterward.
+Installers aren't code-signed yet, so SmartScreen blocks the first run. Click
+**More info** → **Run anyway**. Only needed once.
 
 ### Advanced: install from source
 
@@ -144,20 +125,14 @@ npm run package:win     # Windows
 
 ### Presetting a studies server for your lab
 
-The app's **Setup → Studies Server (SSH)** panel lets anyone type in an SSH
-host and folder path to browse and install studies from. If your lab runs its
-own studies server, you can preset that host/path so it's already filled in
-the first time the app is opened (people just add their own username in front
-of the host).
-
-Since this repo is public, no lab's real server is committed to source.
-Instead, create an untracked local override file:
+**Setup → Studies Server (SSH)** lets anyone type in an SSH host and folder
+path to browse and install studies from. To preset your lab's own
+host/path as the default shown on first open, create an untracked local
+override (git-ignored, never committed):
 
 ```bash
 cp config/studies-server.local.example.json config/studies-server.local.json
 ```
-
-Edit `config/studies-server.local.json` with your real values:
 
 ```json
 {
@@ -166,74 +141,38 @@ Edit `config/studies-server.local.json` with your real values:
 }
 ```
 
-`config/studies-server.local.json` is git-ignored, so it never leaves your
-machine/deployment. It only supplies the *default* shown when no settings
-have been saved yet — once someone opens Setup, adds their username, and
-clicks Save, their own value takes over from then on.
+This only supplies the *default* — once someone opens Setup, adds their
+username, and clicks Save, their own value takes over.
 
-#### Studies server type: plain SSH directory vs. Gitolite
+**Server Type** — two modes:
 
-**Setup → Studies Server (SSH)** has a "Server Type" choice:
-
-- **Plain SSH directory** (default, unchanged behavior): the "path" is a
-  folder on the server; every subfolder in it is listed as an installable
-  study via a plain `ssh <host> ls`. This means anyone who can SSH in at all
-  can both read *and write* every study in that folder — there's no
-  per-person or per-study permission model.
-- **Gitolite**: for labs running [Gitolite](https://gitolite.com/gitolite/)
-  on their server, where per-person, per-repo (and per-branch) read/write
-  permissions are managed via SSH key, not shared folder access. In this
-  mode the "path" becomes a repo-name prefix (e.g. `mri-lab`) rather than a
-  filesystem folder, studies are listed via Gitolite's own `ssh <host> info`
-  command (which only reveals repos *that specific key* can access — a
-  guest account genuinely can't see or list what it has no permission to
-  read), and `config/studies-server.local.json` / the saved settings need
-  `"type": "gitolite"` alongside a shared service-account host (e.g.
-  `git@myserver.example.org`, not an individual username).
-
-Cloning, pushing, and publishing already work unchanged in Gitolite mode —
-they go through ordinary `ssh://` git URLs, and Gitolite handles those exactly
-like any other git server. Only *listing* studies needed a different command.
+- **Plain SSH directory** (default): "path" is a folder on the server;
+  subfolders are listed via `ssh <host> ls`. Anyone who can SSH in can read
+  *and write* every study in the folder — no per-person permission model.
+- **Gitolite**: for labs running [Gitolite](https://gitolite.com/gitolite/),
+  where per-person, per-repo read/write permissions are managed via SSH key.
+  "path" becomes a repo-name prefix (e.g. `mri-lab`), studies are listed via
+  `ssh <host> info` (only shows repos that key can access), and the config
+  needs `"type": "gitolite"` with a shared service-account host (e.g.
+  `git@myserver.example.org`). Cloning/pushing/publishing work unchanged in
+  both modes — only listing studies differs.
 
 ### Recommended: set up an SSH key instead of a password
 
-The Setup panel has a **"Set SSH Password…"** dialog for studies servers that
-require password auth. It works (the password is kept in memory for that
-session only, never written to disk), but every password-based SSH login is
-inherently less safe than a key: the password briefly exists in the
-environment of the `ssh`/`datalad`/`git` process making the connection, which
-in principle any other process running as your same OS user could read while
-that connection is active. If this is a password you reuse for other logins
-too, switching to a key removes that risk entirely — and you'll stop being
-asked for a password every session.
+The Setup panel's **"Set SSH Password…"** dialog works (kept in memory only,
+never written to disk), but a password briefly exists in the environment of
+the `ssh`/`datalad`/`git` process — a key avoids that and skips the prompt
+every session:
 
-**One-time setup, from a terminal (not through the app):**
+```bash
+ssh-keygen -t ed25519 -C "you@example.org"          # if you don't have one
+ssh-copy-id -i ~/.ssh/id_ed25519.pub "yourname@studies.example.org"
+ssh "yourname@studies.example.org" echo ok          # should print ok, no prompt
+```
 
-1. Generate a key if you don't already have one:
-   ```bash
-   ssh-keygen -t ed25519 -C "you@example.org"
-   ```
-   Press Enter through the prompts to accept the default location; add a
-   passphrase if you want the key itself protected (macOS Keychain/`ssh-agent`
-   will remember it after the first unlock).
-
-2. Copy the public key to the studies server — this is the one time you still
-   need the password, typed directly into your terminal:
-   ```bash
-   ssh-copy-id -i ~/.ssh/id_ed25519.pub "yourname@it035016.uni-graz.at"
-   ```
-   (Replace `yourname@it035016.uni-graz.at` with whatever you type into the
-   app's **Server Host (SSH)** field — including the email-style
-   `user@domain@host` form if your login needs one; see the field's hint text.)
-
-3. Confirm it works without a password:
-   ```bash
-   ssh "yourname@it035016.uni-graz.at" echo ok
-   ```
-
-Once step 3 prints `ok` with no password prompt, the app's studies-server
-connections will authenticate via the key automatically — you can leave the
-Setup panel's SSH password unset.
+Use whatever host you type into the app's **Server Host (SSH)** field
+(including `user@domain@host` if your login needs it). Once `ssh` connects
+without a password, the app authenticates via the key automatically.
 
 ## Learn more
 
