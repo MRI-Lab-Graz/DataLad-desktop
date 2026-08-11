@@ -103,7 +103,7 @@ test('Check Setup shows a busy state while running, then recovers', async () => 
   // 10s even though it's near-instant locally, see electron-driver.mjs.
   await app.page.waitForFunction(() => !document.getElementById('check-env').disabled, { timeout: 20_000 })
   const done = await app.buttonState('check-env')
-  assert.equal(done.text, 'Check Setup')
+  assert.equal(done.text, 'Check Environment')
   assert.doesNotMatch(done.classes, /is-busy/)
 })
 
