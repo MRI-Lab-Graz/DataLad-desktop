@@ -50,11 +50,25 @@ test('Save on a real DataLad dataset hands the file to git-annex', async () => {
     { timeout: 30_000 }
   )
 
+  // The button returns to its idle label on both success and failure (see
+  // runWorkflowCommand's finally block in app.js), so it can't tell us
+  // whether `datalad save` actually ran. #command-output can: it renders the
+  // real error text on failure. Surface it here so a future CI failure shows
+  // *why* save didn't take, instead of just the downstream `whereis` symptom.
+  const commandOutputText = await app.page.evaluate(
+    () => document.getElementById('command-output')?.textContent ?? ''
+  )
+
   // Throws (failing the test) if git-annex never picked up the file, e.g.
   // because Save errored before it reached `datalad save`.
-  const whereis = execFileSync('git', ['annex', 'whereis', 'roundtrip.txt'], {
-    cwd: projectPath,
-    encoding: 'utf8'
-  })
+  let whereis
+  try {
+    whereis = execFileSync('git', ['annex', 'whereis', 'roundtrip.txt'], {
+      cwd: projectPath,
+      encoding: 'utf8'
+    })
+  } catch (error) {
+    throw new Error(`${error.message}\n\nSave command output was:\n${commandOutputText}`)
+  }
   assert.match(whereis, /\(\d+ cop(?:y|ies)\)/)
 })
