@@ -1,0 +1,20 @@
+version: 2
+
+# Important:
+# To make ReadTheDocs build ONLY on releases (not every push), disable
+# automatic VCS/webhook builds in the ReadTheDocs project settings
+# (Admin -> Settings). A release-triggered CI workflow becomes the trigger.
+
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.12"
+
+sphinx:
+  configuration: docs/conf.py
+  # Flip to true once the docs pass a clean build (final QA pass).
+  fail_on_warning: false
+
+python:
+  install:
+    - requirements: docs/requirements.txt
