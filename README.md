@@ -38,23 +38,23 @@ across nested sub-projects? The app shows you exactly what changed and where.
 Most researchers should just download the ready-to-run app:
 
 1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases)
-   and download the installer for your system:
+   and download the build for your system:
    - **macOS:** the `.dmg` file
-   - **Windows:** the `.exe` installer
-2. Open the downloaded file and follow the install prompts.
+   - **Windows:** `DataLad Desktop Setup *.exe` (installer, needs admin rights) or
+     `DataLad Desktop *.exe` (portable, no admin rights or install step — just run it)
+2. Open the downloaded file and follow the install prompts (installer), or just run it (portable).
 3. Launch **DataLad Desktop** like any other app.
 
-That's it — no Git, Python, or DataLad command-line setup needed to get
-started with browsing and saving changes in an existing project.
-
-> **Windows:** the installer also checks for Python 3, DataLad, and git-annex and installs any that
-> are missing (this needs an internet connection during setup). If a download is blocked by your
-> network, install the missing piece manually from [datalad.org](https://www.datalad.org/) — the
-> app's diagnostics screen will tell you exactly what's still missing.
+> **Windows installer:** also checks for Git, Python 3, DataLad, and git-annex and installs any
+> that are missing (this needs an internet connection during setup; every downloaded installer's
+> checksum is verified before it runs). If a download is blocked by your network, install the
+> missing piece manually — the app's diagnostics screen will tell you exactly what's still missing.
 >
-> **macOS/Linux:** to use DataLad-specific actions (Get Data, Update, Publish) on a project, DataLad
-> and git-annex need to be installed on your system. See [datalad.org](https://www.datalad.org/) for
-> installation instructions for your platform.
+> **Windows portable, macOS, and Linux:** these builds don't install anything for you. To use
+> DataLad-specific actions (Get Data, Update, Publish) on a project, Git, DataLad, and git-annex
+> need to be installed on your system first. See [datalad.org](https://www.datalad.org/) for
+> installation instructions for your platform. The app's diagnostics screen tells you what's
+> missing.
 
 ### macOS: "app can't be opened" warning
 

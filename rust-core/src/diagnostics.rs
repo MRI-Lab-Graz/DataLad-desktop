@@ -120,9 +120,9 @@ fn recovery_for_issue(issue_code: &str) -> Option<&'static str> {
         "DATALAD_MISSING" => {
             Some("Install DataLad and confirm the datalad command works in your shell.")
         }
-        "GIT_ANNEX_MISSING" => {
-            Some("Install git-annex and ensure it is available to your Git installation.")
-        }
+        "GIT_ANNEX_MISSING" => Some(
+            "Install git-annex and ensure it is available to your Git installation. On Windows, Git for Windows must be installed first — git-annex plugs into it.",
+        ),
         _ => None,
     }
 }

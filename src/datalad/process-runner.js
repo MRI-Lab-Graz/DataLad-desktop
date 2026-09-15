@@ -8,7 +8,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // is the standard OpenSSH-supported way to supply one anyway: SSH_ASKPASS
 // is invoked in place of a terminal prompt when SSH_ASKPASS_REQUIRE=force
 // (OpenSSH 8.4+), no tty or X11 DISPLAY needed.
-const SSH_ASKPASS_SCRIPT = join(__dirname, process.platform === 'win32' ? 'ssh-askpass.cmd' : 'ssh-askpass.sh')
+// Packaged builds run from inside app.asar, a virtual archive only Electron's
+// own Node can read — ssh.exe is a plain external process and can't open a
+// path through it, so the script has to be pulled out of the archive at
+// build time (see build.asarUnpack in package.json) and referenced there.
+export function outsideAsar(path) {
+  return path.replace(/([\\/]app\.asar)([\\/])/, '$1.unpacked$2')
+}
+
+const SSH_ASKPASS_SCRIPT = outsideAsar(
+  join(__dirname, process.platform === 'win32' ? 'ssh-askpass.cmd' : 'ssh-askpass.sh')
+)
 
 // git acquires .git/index.lock atomically before any mutation, so a command
 // that fails to acquire it never partially ran — a retry after a short

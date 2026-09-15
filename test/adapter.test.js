@@ -2090,3 +2090,12 @@ test('runCommand rejects a createSibling siblingName that looks like a CLI flag'
 
   assert.equal(runner.calls.length, 0)
 })
+
+test('git-annex recovery step tells Windows users Git for Windows is needed too', async () => {
+  const { formatEnvironmentDiagnostics } = await import('../src/datalad/diagnostics.js')
+  const report = formatEnvironmentDiagnostics({
+    python: { available: true }, datalad: { available: true }, gitAnnex: { available: false },
+    supported: false, issues: [{ code: 'GIT_ANNEX_MISSING' }]
+  })
+  assert.match(report.recoverySteps[0], /Git for Windows/)
+})

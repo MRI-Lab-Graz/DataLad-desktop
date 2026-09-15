@@ -118,7 +118,7 @@ jobs:
         shell: bash
         run: |
           signed_exe=$(find dist-signed -name '*.exe' | head -n1)
-          unsigned_exe=$(find dist -name '*.exe' | head -n1)
+          unsigned_exe=$(find dist -name '*Setup*.exe' | head -n1)
           cp "$signed_exe" "$unsigned_exe"
 
       - name: Upload Windows artifacts

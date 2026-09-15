@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ProcessRunner } from '../src/datalad/process-runner.js'
+import { ProcessRunner, outsideAsar } from '../src/datalad/process-runner.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
   const runner = new ProcessRunner()
@@ -122,4 +122,37 @@ test('ProcessRunner treats setSshPassword("") the same as clearing it', () => {
   runner.setSshPassword('s3cret')
   runner.setSshPassword('')
   assert.equal(runner.hasSshPassword(), false)
+})
+
+// ssh.exe / sh are external processes: they cannot read a script packed inside
+// Electron's app.asar archive, only the real copy electron-builder unpacks.
+test('outsideAsar points packaged paths at the app.asar.unpacked copy', () => {
+  assert.equal(
+    outsideAsar('/Applications/X.app/Contents/Resources/app.asar/src/datalad/ssh-askpass.sh'),
+    '/Applications/X.app/Contents/Resources/app.asar.unpacked/src/datalad/ssh-askpass.sh'
+  )
+  assert.equal(
+    outsideAsar('C:\\Program Files\\X\\resources\\app.asar\\src\\datalad\\ssh-askpass.cmd'),
+    'C:\\Program Files\\X\\resources\\app.asar.unpacked\\src\\datalad\\ssh-askpass.cmd'
+  )
+})
+
+test('outsideAsar leaves source-checkout and already-unpacked paths alone', () => {
+  assert.equal(outsideAsar('/repo/src/datalad/ssh-askpass.sh'), '/repo/src/datalad/ssh-askpass.sh')
+  assert.equal(outsideAsar('/r/app.asar.unpacked/ssh-askpass.sh'), '/r/app.asar.unpacked/ssh-askpass.sh')
+})
+
+test('packaging unpacks the askpass scripts out of app.asar', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  const unpack = [pkg.build.asarUnpack].flat().join(' ')
+  assert.match(unpack, /ssh-askpass/)
+})
+
+// Plain `echo %VAR%` lets cmd re-parse the password, so & | < > ^ % break or
+// truncate it. Delayed expansion (!VAR!) substitutes after parsing.
+test('Windows askpass script echoes the password via delayed expansion', async () => {
+  const script = await readFile(new URL('../src/datalad/ssh-askpass.cmd', import.meta.url), 'utf8')
+  assert.match(script, /setlocal\s+EnableDelayedExpansion/i)
+  assert.match(script, /echo\(!DATALAD_DESKTOP_SSH_PASSWORD!/)
+  assert.doesNotMatch(script, /%DATALAD_DESKTOP_SSH_PASSWORD%/)
 })

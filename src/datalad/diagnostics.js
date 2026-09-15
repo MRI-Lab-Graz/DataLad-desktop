@@ -8,7 +8,8 @@ const RECOVERY_BY_ISSUE = {
   PYTHON_MISSING:
     'Install Python 3 and ensure one of these commands is available in PATH: python3, python, or py -3 (Windows).',
   DATALAD_MISSING: 'Install DataLad and confirm the datalad command works in your shell.',
-  GIT_ANNEX_MISSING: 'Install git-annex and ensure it is available to your Git installation.'
+  GIT_ANNEX_MISSING:
+    'Install git-annex and ensure it is available to your Git installation. On Windows, Git for Windows must be installed first — git-annex plugs into it.'
 }
 
 /**
