@@ -121,3 +121,21 @@ test('the Active Project Folder field in Save & Sync stays hidden (superseded by
   })
   assert.equal(hidden, true)
 })
+
+// Regression for the flaky "openProject timed out at current-project-path"
+// failures: the Detect button stays disabled until the previous project's whole
+// detect flow (file browser, commits, ...) finishes, which is after the health
+// card the driver waits on. Clicking it while disabled is a silent no-op.
+test('openProject waits out a still-busy Detect button instead of clicking it while disabled', async () => {
+  const projectPath = await createPlainGitRepo(root)
+  await app.page.evaluate(() => {
+    const button = document.getElementById('detect-project')
+    button.disabled = true
+    setTimeout(() => { button.disabled = false }, 1500)
+  })
+
+  await app.openProject(projectPath)
+
+  const shown = await app.page.evaluate(() => document.getElementById('current-project-path').textContent)
+  assert.equal(shown, projectPath)
+})

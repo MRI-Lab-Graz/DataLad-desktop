@@ -160,6 +160,15 @@ async function attachToWindow(browser, child) {
       document.getElementById('project-health-output').innerHTML = 'e2e-pending'
     })
 
+    // The Detect button stays disabled until the previous project's whole
+    // detect flow finishes (file browser, commits, ... all run after the health
+    // card appears), and click() on a disabled button is a silent no-op — so
+    // without this wait a slow runner makes the next test time out below.
+    await page.waitForFunction(
+      () => !document.getElementById('detect-project').disabled,
+      undefined,
+      { timeout: 60_000 }
+    )
     await page.evaluate((p) => {
       const input = document.getElementById('project-path')
       input.value = p
