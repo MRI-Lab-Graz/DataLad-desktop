@@ -35,25 +35,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install DataLad + git-annex
+      # Windows: datalad-installer's git-annex installer updates the persistent
+      # system PATH itself, so later steps see it.
+      - name: Install DataLad + git-annex (Windows)
+        if: runner.os == 'Windows'
         timeout-minutes: 10
         run: |
           python -m pip install datalad-installer datalad
           datalad-installer --sudo ok -E "${{ runner.temp }}/dl-env.sh" git-annex -m datalad/packages
 
-      # On Windows, git-annex's own installer updates the persistent system
-      # PATH directly, so later steps see it for free. On macOS (and Linux,
-      # if this matrix grows one), datalad-installer just copies
-      # git-annex.app into place and writes the PATH change to a local
-      # shell script instead - each workflow step is a fresh shell, so
-      # without this, `git-annex`/`datalad` are on disk but invisible to
-      # every step after this one.
-      - name: Add git-annex to PATH (macOS/Linux)
-        if: runner.os != 'Windows'
-        shell: bash
+      # macOS runners are Apple silicon. datalad-installer's git-annex there is
+      # an Intel-only dmg that first installs Rosetta, a step that preceded
+      # silent job deaths in CI. Homebrew's arm64 bottle is native and lands on
+      # PATH; --force-bottle fails fast instead of compiling from source.
+      - name: Install DataLad + git-annex (macOS, native)
+        if: runner.os == 'macOS'
+        timeout-minutes: 10
         run: |
-          source "${{ runner.temp }}/dl-env.sh"
-          echo "PATH=$PATH" >> "$GITHUB_ENV"
+          brew install --force-bottle git-annex
+          python -m pip install datalad
 
       - name: Run unit smoke tests
         run: npm test
