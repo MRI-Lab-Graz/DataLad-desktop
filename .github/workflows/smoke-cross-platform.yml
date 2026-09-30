@@ -65,3 +65,17 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run package:dir
+
+      # Launches the unpacked app built above (real asar, real main process)
+      # and drives it over CDP, so packaging-only breakage fails CI.
+      - name: Run packaged app smoke test (Windows)
+        if: runner.os == 'Windows'
+        env:
+          DLAD_APP_EXECUTABLE: dist/win-unpacked/DataLad Desktop.exe
+        run: node --test e2e/packaged.e2e.mjs
+
+      - name: Run packaged app smoke test (macOS)
+        if: runner.os == 'macOS'
+        env:
+          DLAD_APP_EXECUTABLE: dist/mac-arm64/DataLad Desktop.app/Contents/MacOS/DataLad Desktop
+        run: node --test e2e/packaged.e2e.mjs

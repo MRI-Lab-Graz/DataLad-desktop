@@ -5,7 +5,7 @@
 import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import electronPath from 'electron'
@@ -40,9 +40,12 @@ export async function launchApp() {
   // with the Electron launch, so every later probe in this test file is warm.
   const warmUp = warmUpDatalad()
 
+  // DLAD_APP_EXECUTABLE runs a packaged build directly (see packaged.e2e.mjs);
+  // otherwise run the source checkout through the electron devDependency.
+  const packagedExecutable = process.env.DLAD_APP_EXECUTABLE && resolve(process.env.DLAD_APP_EXECUTABLE)
   const child = spawn(
-    electronPath,
-    [APP_DIR, '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`],
+    packagedExecutable || electronPath,
+    [...(packagedExecutable ? [] : [APP_DIR]), '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`],
     {
       cwd: APP_DIR,
       env: childEnv,
