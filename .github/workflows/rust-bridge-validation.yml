@@ -3,11 +3,33 @@ name: Rust Bridge Validation
 on:
   push:
     branches:
-      - '**'
+      - main
+    paths:
+      - 'rust-core/**'
+      - 'native/**'
+      - 'src/datalad/**'
+      - 'test/rust-bridge.test.js'
+      - 'test/adapter-parity.test.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/rust-bridge-validation.yml'
   pull_request:
+    paths:
+      - 'rust-core/**'
+      - 'native/**'
+      - 'src/datalad/**'
+      - 'test/rust-bridge.test.js'
+      - 'test/adapter-parity.test.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/rust-bridge-validation.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
