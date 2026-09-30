@@ -11,14 +11,14 @@ permissions:
 
 jobs:
   macos:
-    name: macOS (x64 + arm64)
+    name: macOS (Apple silicon)
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -51,10 +51,10 @@ jobs:
           echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
           echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
 
-      - name: Build macOS artifacts (Intel + Apple Silicon)
+      - name: Build macOS artifacts (Apple silicon)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
-        run: npm run package:mac:both -- --publish=never
+        run: npm run package:mac:arm64 -- --publish=never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -73,10 +73,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm
@@ -138,10 +138,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '20'
           cache: npm

@@ -24,7 +24,7 @@ build_macos:
     - node --version
     - npm --version
     - npm ci
-    - npm run package:mac:both -- --publish=never
+    - npm run package:mac:arm64 -- --publish=never
   artifacts:
     name: 'datalad-desktop-macos-$CI_COMMIT_REF_SLUG'
     paths:

@@ -111,7 +111,11 @@ test('ProcessRunner stops injecting SSH_ASKPASS env vars after clearSshPassword'
   runner.clearSshPassword()
   assert.equal(runner.hasSshPassword(), false)
 
-  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT])
+  // Hermetic: a developer/CI shell may already export these (even as ''), and
+  // undefined env values are dropped from the child's environment.
+  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT], {
+    env: { SSH_ASKPASS: undefined, SSH_ASKPASS_REQUIRE: undefined, DATALAD_DESKTOP_SSH_PASSWORD: undefined }
+  })
   const seen = JSON.parse(result.stdout)
 
   assert.deepEqual(seen, { askpass: null, require: null, password: null })
