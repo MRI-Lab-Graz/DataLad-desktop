@@ -7,6 +7,7 @@ import {
   isSharedStudiesServerRemote
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
+import { createLatestWins } from './latest-wins.js'
 import {
   computeSaveStatusChip,
   computeSyncStatusChip,
@@ -1963,7 +1964,13 @@ async function refreshBranchList(projectPath) {
   }
 }
 
-async function refreshWorkingTreeStatus(
+const latestWorkingTreeRefresh = createLatestWins()
+
+function refreshWorkingTreeStatus(projectPath, options) {
+  return latestWorkingTreeRefresh(() => loadWorkingTreeStatus(projectPath, options))
+}
+
+async function loadWorkingTreeStatus(
   projectPath,
   { preserveSelection = true, includeCommandOutputOnFailure = true } = {}
 ) {
