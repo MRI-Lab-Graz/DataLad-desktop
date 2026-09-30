@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ProcessRunner, outsideAsar } from '../src/datalad/process-runner.js'
+import { QUIT_ABORT_REASON } from '../src/datalad/kill-tree.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
   const runner = new ProcessRunner()
@@ -182,4 +183,220 @@ test('ProcessRunner leaves a process that finishes within timeoutMs alone', asyn
 
   assert.equal(result.failed, false)
   assert.equal(result.stdout, 'ok')
+})
+
+async function waitFor(check, { timeoutMs = 5000, intervalMs = 25 } = {}) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await check()
+    if (value) {
+      return value
+    }
+    if (Date.now() > deadline) {
+      throw new Error('waitFor timed out')
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
+const readIfExists = (file) => readFile(file, 'utf8').catch(() => '')
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// A child that spawns a long-lived grandchild, records the grandchild's pid,
+// then idles itself - the shape of `datalad` spawning `git`/`git-annex`.
+function childWithGrandchildScript(pidFile) {
+  return (
+    "const { spawn } = require('child_process'); const fs = require('fs');" +
+    "const g = spawn(process.execPath, ['-e', 'setInterval(function () {}, 1000)'], { stdio: 'ignore' });" +
+    `fs.writeFileSync(${JSON.stringify(pidFile)}, String(g.pid)); setInterval(function () {}, 1000)`
+  )
+}
+
+test('ProcessRunner cancel kills the child and its grandchild', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'process-runner-cancel-'))
+  const pidFile = join(dir, 'grandchild.pid')
+  const controller = new AbortController()
+  const running = new ProcessRunner().run(
+    process.execPath,
+    ['-e', childWithGrandchildScript(pidFile)],
+    { signal: controller.signal }
+  )
+
+  const grandchildPid = Number(await waitFor(() => readIfExists(pidFile)))
+  controller.abort()
+  const result = await running
+
+  assert.equal(result.cancelled, true)
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 130)
+  await waitFor(() => !isAlive(grandchildPid))
+})
+
+test('ProcessRunner with an already-aborted signal never spawns', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  const result = await new ProcessRunner().run('definitely-not-a-real-binary-xyz', [], {
+    signal: controller.signal
+  })
+
+  assert.equal(result.cancelled, true)
+  assert.equal(result.exitCode, 130)
+})
+
+test('ProcessRunner timeoutMs also kills the grandchild', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'process-runner-timeout-tree-'))
+  const pidFile = join(dir, 'grandchild.pid')
+  const result = await new ProcessRunner().run(
+    process.execPath,
+    ['-e', childWithGrandchildScript(pidFile)],
+    { timeoutMs: 1500 }
+  )
+
+  assert.equal(result.exitCode, 124)
+  assert.notEqual(result.cancelled, true)
+  const grandchildPid = Number(await readIfExists(pidFile))
+  assert.ok(grandchildPid > 0, 'grandchild should have started')
+  await waitFor(() => !isAlive(grandchildPid))
+})
+
+// POSIX only: Windows has no SIGTERM, so cancel there is an immediate taskkill.
+test(
+  'ProcessRunner cancel sends SIGTERM first so git can remove its own locks',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'process-runner-term-'))
+    const ready = join(dir, 'ready')
+    const marker = join(dir, 'got-sigterm')
+    const script =
+      "const fs = require('fs');" +
+      `process.on('SIGTERM', () => { fs.writeFileSync(${JSON.stringify(marker)}, 'term'); process.exit(0) });` +
+      `fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(function () {}, 1000)`
+    const controller = new AbortController()
+    const running = new ProcessRunner().run(process.execPath, ['-e', script], {
+      signal: controller.signal
+    })
+
+    await waitFor(() => readIfExists(ready))
+    controller.abort()
+    const result = await running
+
+    assert.equal(result.cancelled, true)
+    assert.equal(await readIfExists(marker), 'term')
+  }
+)
+
+test(
+  'ProcessRunner escalates to SIGKILL when the child ignores SIGTERM',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'process-runner-kill-'))
+    const pidFile = join(dir, 'pid')
+    const script =
+      `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));` +
+      'setInterval(function () {}, 1000)'
+    const controller = new AbortController()
+    const running = new ProcessRunner().run(process.execPath, ['-e', script], {
+      signal: controller.signal,
+      killGraceMs: 200
+    })
+
+    const pid = Number(await waitFor(() => readIfExists(pidFile)))
+    controller.abort()
+    const result = await running
+
+    assert.equal(result.cancelled, true)
+    // The runner's failsafe resolves the run either way, so prove the process
+    // itself is really dead: only SIGKILL can kill it.
+    await waitFor(() => !isAlive(pid))
+  }
+)
+
+// Review finding: the SIGKILL fallback used to be cleared as soon as the direct
+// child closed, leaving a grandchild that ignores SIGTERM alive (and outliving
+// the "cancelled" result).
+test(
+  'ProcessRunner still SIGKILLs a SIGTERM-ignoring grandchild after the child has exited',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'process-runner-grandchild-kill-'))
+    const pidFile = join(dir, 'grandchild.pid')
+    // The grandchild writes its own pid only after installing its SIGTERM
+    // handler, so the abort cannot race the handler's installation.
+    const grandchild =
+      `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));` +
+      'setInterval(function () {}, 1000)'
+    const script =
+      "const { spawn } = require('child_process');" +
+      `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setInterval(function () {}, 1000)`
+    const controller = new AbortController()
+    const running = new ProcessRunner().run(process.execPath, ['-e', script], {
+      signal: controller.signal,
+      killGraceMs: 200
+    })
+
+    const grandchildPid = Number(await waitFor(() => readIfExists(pidFile)))
+    controller.abort()
+    await running
+
+    await waitFor(() => !isAlive(grandchildPid))
+  }
+)
+
+// Review focus 5: on quit nobody is left to fire a delayed SIGKILL, so an
+// app-quit abort must SIGKILL at once instead of waiting out the grace period.
+test(
+  'ProcessRunner SIGKILLs immediately when aborted because the app is quitting',
+  { skip: process.platform === 'win32' },
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'process-runner-quit-'))
+    const pidFile = join(dir, 'pid')
+    const script =
+      `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));` +
+      'setInterval(function () {}, 1000)'
+    const controller = new AbortController()
+    const running = new ProcessRunner().run(process.execPath, ['-e', script], {
+      signal: controller.signal,
+      killGraceMs: 60_000
+    })
+
+    const pid = Number(await waitFor(() => readIfExists(pidFile)))
+    controller.abort(QUIT_ABORT_REASON)
+
+    await waitFor(() => !isAlive(pid), { timeoutMs: 3000 })
+    assert.equal((await running).cancelled, true)
+  }
+)
+
+test('ProcessRunner reports the latest line of each output chunk via onOutput', async () => {
+  const lines = []
+  const script =
+    "process.stdout.write('first line\\n');" +
+    "setTimeout(() => process.stdout.write('10%\\r50%\\r75%\\r'), 80);" +
+    "setTimeout(() => process.stderr.write('warning: something\\n'), 160)"
+  const result = await new ProcessRunner().run(process.execPath, ['-e', script], {
+    onOutput: (line) => lines.push(line)
+  })
+
+  assert.equal(result.failed, false)
+  assert.deepEqual(lines, ['first line', '75%', 'warning: something'])
+  // Output is still fully buffered for the final result.
+  assert.match(result.stdout, /first line/)
+  assert.match(result.stderr, /warning: something/)
+})
+
+test('ProcessRunner ignores chunks that contain no visible text', async () => {
+  const lines = []
+  await new ProcessRunner().run(process.execPath, ['-e', "process.stdout.write('\\n\\r  \\n')"], {
+    onOutput: (line) => lines.push(line)
+  })
+
+  assert.deepEqual(lines, [])
 })

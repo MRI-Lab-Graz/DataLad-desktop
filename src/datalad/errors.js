@@ -18,6 +18,15 @@ export function mapCommandError(commandName, runResult) {
   const stdout = runResult.stdout ?? ''
   const details = stderr.trim()
 
+  if (runResult.cancelled) {
+    return {
+      code: 'CANCELLED',
+      title: 'Stopped',
+      message: 'Stopped by you. Nothing was rolled back - check the project status before continuing.',
+      technicalDetails: ''
+    }
+  }
+
   // datalad prints this particular failure as a create(error) result line on
   // stdout, not stderr, so this one check needs to look at both streams.
   // Guarded on --force not being present: BIDS mode intentionally passes

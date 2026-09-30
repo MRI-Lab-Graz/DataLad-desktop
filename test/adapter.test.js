@@ -2122,3 +2122,40 @@ test('detectProject bounds its datalad probes with a timeout so a hung process c
     assert.ok(call.options.timeoutMs > 0, `${call.args.join(' ')} has no timeoutMs`)
   }
 })
+
+test('runCommand hands signal and onOutput to the runner and maps a cancelled run to CANCELLED', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '--message=checkpoint'], {
+    exitCode: 130,
+    failed: true,
+    cancelled: true
+  })
+  const signal = new AbortController().signal
+  const onOutput = () => {}
+
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand(
+    'save',
+    { projectPath: '/tmp/project', message: 'checkpoint' },
+    { signal, onOutput }
+  )
+
+  assert.equal(runner.calls[0].options.signal, signal)
+  assert.equal(runner.calls[0].options.onOutput, onOutput)
+  assert.equal(result.ok, false)
+  assert.equal(result.cancelled, true)
+  assert.equal(result.userError.code, 'CANCELLED')
+})
+
+test('runCommand still works when no runOptions are given', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '--message=checkpoint'], { stdout: 'ok\n' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('save', {
+    projectPath: '/tmp/project',
+    message: 'checkpoint'
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(runner.calls[0].options.signal, undefined)
+})

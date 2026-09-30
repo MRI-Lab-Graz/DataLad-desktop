@@ -264,7 +264,7 @@ export class DataLadAdapter {
     return { removed: true }
   }
 
-  async runCommand(commandName, request = {}) {
+  async runCommand(commandName, request = {}, runOptions = {}) {
     if (!CURATED_COMMANDS.has(commandName)) {
       throw new Error(`Unsupported command: ${commandName}`)
     }
@@ -272,7 +272,10 @@ export class DataLadAdapter {
     assertCommandRequest(commandName, request)
 
     const commandSpec = this.#buildCommand(commandName, request)
-    let result = await this.runner.run(commandSpec.command, commandSpec.args, commandSpec.options)
+    let result = await this.runner.run(commandSpec.command, commandSpec.args, {
+      ...commandSpec.options,
+      ...runOptions
+    })
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {

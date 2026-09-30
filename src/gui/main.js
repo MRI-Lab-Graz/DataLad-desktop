@@ -8,6 +8,7 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { buildGitStatusMap } from '../datalad/status.js'
 import { createProjectWatcher } from './fs-watch.js'
+import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 import { createSettingsStore } from './settings.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -15,6 +16,28 @@ const __dirname = dirname(__filename)
 
 const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
+const runRegistry = createRunRegistry()
+
+// Runs `run({ signal, onOutput })` as a cancellable, observable run when the
+// renderer supplied a runId; otherwise runs it plain, as before.
+async function runWithHandle(event, runId, run) {
+  if (runId === undefined) {
+    return run({})
+  }
+
+  const signal = runRegistry.register(runId)
+  const activity = createLatestLineThrottle((line) => {
+    if (!event.sender.isDestroyed()) {
+      event.sender.send('command:activity', { runId, line })
+    }
+  })
+  try {
+    return await run({ signal, onOutput: activity.push })
+  } finally {
+    activity.stop()
+    runRegistry.finish(runId)
+  }
+}
 const settingsStore = createSettingsStore(app.getPath('userData'))
 let activeProjectWatcher = null
 // The console executes arbitrary commands, so the renderer's power-user toggle
@@ -163,8 +186,10 @@ ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
 })
 
-ipcMain.handle('adapter:runCommand', async (_event, payload) => {
-  const result = await adapter.runCommand(payload.commandName, payload.request)
+ipcMain.handle('adapter:runCommand', async (event, payload) => {
+  const result = await runWithHandle(event, payload.runId, (runOptions) =>
+    adapter.runCommand(payload.commandName, payload.request, runOptions)
+  )
   if (
     result?.ok &&
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
@@ -172,6 +197,10 @@ ipcMain.handle('adapter:runCommand', async (_event, payload) => {
     authorizeRoot(payload.request?.targetPath)
   }
   return result
+})
+
+ipcMain.handle('adapter:cancelCommand', (_event, runId) => {
+  return typeof runId === 'string' ? runRegistry.cancel(runId) : false
 })
 
 ipcMain.handle('adapter:getContract', async () => {
@@ -292,13 +321,15 @@ ipcMain.handle('console:setEnabled', async (_event, enabled) => {
   return consoleEnabled
 })
 
-ipcMain.handle('console:runCommand', async (_event, payload = {}) => {
+ipcMain.handle('console:runCommand', async (event, payload = {}) => {
   if (!consoleEnabled) {
     throw new Error('The command console is disabled. Enable power-user mode first.')
   }
 
   const commandSpec = buildConsoleCommand(payload)
-  return consoleRunner.run(commandSpec.command, commandSpec.args, commandSpec.options)
+  return runWithHandle(event, payload.runId, (runOptions) =>
+    consoleRunner.run(commandSpec.command, commandSpec.args, { ...commandSpec.options, ...runOptions })
+  )
 })
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
@@ -557,6 +588,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  runRegistry.abortAll()
   if (activeProjectWatcher) {
     activeProjectWatcher.stop()
     activeProjectWatcher = null

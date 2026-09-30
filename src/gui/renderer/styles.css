@@ -1881,3 +1881,42 @@ select:disabled {
 .ssh-password-card .row-actions {
   justify-content: flex-end;
 }
+
+.running-commands {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+}
+
+.running-commands[hidden] {
+  display: none;
+}
+
+.running-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.running-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.running-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+}
+
+.result-status-warning .result-status-marker {
+  background: #f5e8cf;
+  border: 1px solid rgba(131, 89, 36, 0.36);
+  color: #835924;
+}

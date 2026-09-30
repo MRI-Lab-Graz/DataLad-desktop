@@ -302,6 +302,8 @@
         </div>
       </section>
 
+      <section id="running-commands" class="card running-commands" role="status" aria-label="Running commands" hidden></section>
+
       <section id="project-health-card" class="card project-health reveal reveal-3" aria-labelledby="project-health-title" hidden>
         <span class="card-icon-badge" aria-hidden="true">🩺</span>
         <div class="section-head">
@@ -735,6 +737,7 @@
           <div id="global-busy-bar-fill" class="global-busy-bar-fill"></div>
         </div>
         <p class="global-busy-hint">Please don't close the app while this finishes — it's safe to leave running in the background.</p>
+        <button id="global-busy-stop" class="button button-ghost button-inline" type="button">Stop</button>
       </div>
     </div>
 

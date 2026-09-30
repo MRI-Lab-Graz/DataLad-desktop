@@ -41,7 +41,7 @@ The near-term roadmap is a single track: stabilize and secure this standalone ap
 - Eliminate stale async responses overwriting the current project view.
 - Add automatic working-tree refresh via filesystem watching, scoped to the active project root, debounced, ignoring `.git`/`.datalad`/`.git/annex` internals and OS noise files, and paused while a command is in flight. This is the proactive counterpart to eliminating stale async responses: instead of only guarding against races, detect real disk changes and refresh without requiring a manual click. No tray/background mode and no scheduled/automatic saves — the app stays a foreground, user-triggered Save tool, just with a live status view.
 - Improve subdataset save semantics so parent and child dataset behavior is unambiguous.
-- Add cancellation and progress reporting for long-running DataLad actions.
+- Cancellation and a live activity line (latest output line) for long-running actions and the console are implemented (see `docs/superpowers/specs/2026-09-30-command-cancellation-design.md`). Parsed progress bars (percent/bytes) remain open.
 
 ### Phase 4: Windows-first hardening
 

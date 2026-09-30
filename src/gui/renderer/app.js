@@ -8,6 +8,7 @@ import {
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
 import { createLatestWins } from './latest-wins.js'
+import { cancelledResult, createRunId, formatActivityLine, renderRunningRows, shouldStopSequence } from './run-activity.js'
 import {
   computeSaveStatusChip,
   computeSyncStatusChip,
@@ -41,6 +42,8 @@ const state = {
   hasExplicitChangedSelection: false,
   recentCommits: [],
   pendingCommands: new Set(),
+  activeRuns: new Map(),
+  sequenceStopRequested: false,
   projectHealthSnapshot: null,
   pendingHealthFetch: null,
   datasets: [],
@@ -186,6 +189,7 @@ const elements = {
   refreshContractButton: document.getElementById('refresh-contract'),
   globalBusyOverlay: document.getElementById('global-busy-overlay'),
   globalBusyText: document.getElementById('global-busy-text'),
+  globalBusyStop: document.getElementById('global-busy-stop'),
   globalBusyBarFill: document.getElementById('global-busy-bar-fill'),
   environmentOutput: document.getElementById('environment-output'),
   classificationOutput: document.getElementById('classification-output'),
@@ -200,6 +204,7 @@ const elements = {
   consoleCommand: document.getElementById('console-command'),
   consoleRunButton: document.getElementById('console-run'),
   consoleOutput: document.getElementById('console-output'),
+  runningCommands: document.getElementById('running-commands'),
   consoleHistoryOutput: document.getElementById('console-history-output'),
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
@@ -742,6 +747,7 @@ async function runCreateFromStudiesServer(targetPath) {
 // doubles as a guard against a stray user action (Save, Update, ...)
 // racing the sequence's own git operations for .git/index.lock.
 function showGlobalBusyOverlay(text) {
+  state.sequenceStopRequested = false
   elements.globalBusyOverlay.hidden = false
   elements.globalBusyText.textContent = text
   elements.globalBusyBarFill.style.width = '0%'
@@ -755,6 +761,7 @@ function updateGlobalBusyOverlay(text, current, total) {
 }
 
 function hideGlobalBusyOverlay() {
+  state.sequenceStopRequested = false
   elements.globalBusyOverlay.hidden = true
   elements.globalBusyBarFill.style.width = '0%'
 }
@@ -790,8 +797,11 @@ async function detectAndMaybeNestBids(projectPath, button) {
     hideGlobalBusyOverlay()
   }
 
-  const { steps, succeeded } = nested
+  const { steps, succeeded, cancelled } = nested
   setLastActionState(`Nested ${succeeded.length} of ${candidates.length} BIDS folder(s) into subdatasets.`, 'success')
+  if (cancelled) {
+    setLastActionState('Stopped.', 'warning')
+  }
   await detectProjectType(projectPath)
   await refreshDatasetList(projectPath)
   await refreshFileBrowser(projectPath)
@@ -808,6 +818,7 @@ async function detectAndMaybeNestBids(projectPath, button) {
 async function nestBidsCandidates(projectPath, candidatePaths, button, onProgress) {
   const steps = []
   const succeeded = []
+  let cancelled = false
   const total = candidatePaths.length
 
   for (const [index, candidatePath] of candidatePaths.entries()) {
@@ -823,6 +834,10 @@ async function nestBidsCandidates(projectPath, candidatePaths, button, onProgres
         { skipBackgroundRefresh: true }
       )
       steps.push({ label: `Create subdataset: ${candidatePath}`, result: createResult })
+      if (shouldStopSequence(createResult)) {
+        cancelled = true
+        break
+      }
       if (!createResult?.ok) {
         continue
       }
@@ -835,6 +850,10 @@ async function nestBidsCandidates(projectPath, candidatePaths, button, onProgres
         { skipBackgroundRefresh: true }
       )
       steps.push({ label: `Save subdataset content: ${candidatePath}`, result: saveResult })
+      if (shouldStopSequence(saveResult)) {
+        cancelled = true
+        break
+      }
       if (saveResult?.ok) {
         succeeded.push(candidatePath)
       }
@@ -846,6 +865,10 @@ async function nestBidsCandidates(projectPath, candidatePaths, button, onProgres
     }
   }
   onProgress?.(total, total, null)
+
+  if (cancelled) {
+    return { steps, succeeded, cancelled: true }
+  }
 
   const rootSaveResult = await runWorkflowCommand(
     'save',
@@ -1408,6 +1431,14 @@ elements.filesOutput.addEventListener('click', async (event) => {
       { skipBackgroundRefresh: true }
     )
 
+    if (shouldStopSequence(createResult)) {
+      elements.commandOutput.innerHTML = renderCommandResult(createResult)
+      setLastActionState('Stopped.', 'warning')
+      void refreshWorkingTreeStatus(projectPath)
+      void refreshFileBrowser(projectPath)
+      return
+    }
+
     if (!createResult?.ok) {
       elements.commandOutput.innerHTML = renderCommandResult(
         createResult ?? { ok: false, commandName: 'createSubdataset' }
@@ -1424,6 +1455,14 @@ elements.filesOutput.addEventListener('click', async (event) => {
       `Saving ${relativePath} contents…`,
       { skipBackgroundRefresh: true }
     )
+
+    if (shouldStopSequence(saveSubResult)) {
+      elements.commandOutput.innerHTML = renderCommandResult(saveSubResult)
+      setLastActionState('Stopped.', 'warning')
+      void refreshWorkingTreeStatus(projectPath)
+      void refreshFileBrowser(projectPath)
+      return
+    }
 
     updateGlobalBusyOverlay('Saving parent project…', 2, 3)
     saveRootResult = await runWorkflowCommand(
@@ -1511,8 +1550,66 @@ function readProjectPath() {
   return path
 }
 
+function renderRunningCommands() {
+  const runs = [...state.activeRuns.values()]
+  elements.runningCommands.hidden = runs.length === 0
+  elements.runningCommands.innerHTML = renderRunningRows(runs)
+}
+
+function trackRun(runId, label) {
+  state.activeRuns.set(runId, { runId, label, line: '', stopping: false })
+  renderRunningCommands()
+}
+
+function untrackRun(runId) {
+  state.activeRuns.delete(runId)
+  renderRunningCommands()
+}
+
+// Activity arrives several times a second: update just the text node so the
+// Cancel button keeps focus instead of being re-rendered under the user.
+api.onCommandActivity(({ runId, line }) => {
+  const run = state.activeRuns.get(runId)
+  if (!run) {
+    return
+  }
+  run.line = formatActivityLine(line)
+  const span = elements.runningCommands.querySelector(`[data-run-row="${CSS.escape(runId)}"] .running-line`)
+  if (span) {
+    span.textContent = run.line
+  }
+})
+
+// The busy overlay covers the whole window, so the strip's Cancel buttons are
+// unreachable under it: Stop cancels every active run and marks the whole
+// multi-step sequence as stopped, so no further step starts.
+elements.globalBusyStop.addEventListener('click', () => {
+  state.sequenceStopRequested = true
+  elements.globalBusyText.textContent = 'Stopping…'
+  for (const run of state.activeRuns.values()) {
+    run.stopping = true
+    void api.cancelCommand(run.runId)
+  }
+  renderRunningCommands()
+})
+
+elements.runningCommands.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-cancel-run]')
+  const run = button && state.activeRuns.get(button.dataset.cancelRun)
+  if (!run || run.stopping) {
+    return
+  }
+  run.stopping = true
+  renderRunningCommands()
+  void api.cancelCommand(run.runId)
+})
+
 async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined, options = {}) {
   const { skipBackgroundRefresh = false } = options
+
+  if (state.sequenceStopRequested) {
+    return cancelledResult(commandName)
+  }
 
   if (state.pendingCommands.has(commandName)) {
     setLastActionState(`${actionLabel(commandName)} is already running.`, 'warning')
@@ -1520,6 +1617,8 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
   }
 
   state.pendingCommands.add(commandName)
+  const runId = createRunId()
+  trackRun(runId, actionLabel(commandName))
   const pathCount = Array.isArray(request.paths) ? request.paths.length : 0
   const busyLabel =
     busyLabelOverride ??
@@ -1527,7 +1626,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
   setButtonBusy(button, true, busyLabel)
 
   try {
-    const result = await api.runCommand(commandName, request)
+    const result = await api.runCommand(commandName, request, runId)
 
     const nextProjectPath = request.projectPath ?? request.targetPath
     let saveSummary = null
@@ -1562,6 +1661,9 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
 
     if (!result.ok && nextProjectPath && !skipBackgroundRefresh) {
       void refreshWorkingTreeStatus(nextProjectPath)
+      if (result.cancelled) {
+        void refreshProjectHealth(nextProjectPath)
+      }
     }
 
     if (result.ok) {
@@ -1571,6 +1673,8 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
           : `${actionLabel(commandName)} completed.`,
         result.warnings?.length ? 'warning' : 'success'
       )
+    } else if (result.cancelled) {
+      setLastActionState('Stopped.', 'warning')
     } else {
       setLastActionState(`${actionLabel(commandName)} failed.`, 'error')
     }
@@ -1581,6 +1685,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     setLastActionState(`${actionLabel(commandName)} failed.`, 'error')
     return null
   } finally {
+    untrackRun(runId)
     state.pendingCommands.delete(commandName)
     setButtonBusy(button, false)
     updateSaveButtonState()
@@ -2664,9 +2769,9 @@ async function buildSaveSummary(projectPath, savedPaths) {
 function renderCommandResult(result, summary = null) {
   const statusLine = buildWorkflowStatusLine(result)
   const warningCount = result.warnings?.length ?? 0
-  const statusToneClass = result.ok ? 'result-status-ok' : 'result-status-error'
-  const statusMarker = result.ok ? 'OK' : 'X'
-  const statusMarkerLabel = result.ok ? 'Success' : 'Error'
+  const statusToneClass = result.cancelled ? 'result-status-warning' : result.ok ? 'result-status-ok' : 'result-status-error'
+  const statusMarker = result.cancelled ? '!' : result.ok ? 'OK' : 'X'
+  const statusMarkerLabel = result.cancelled ? 'Stopped' : result.ok ? 'Success' : 'Error'
 
   let html =
     `<p class="result-status ${statusToneClass}">` +
@@ -2744,6 +2849,10 @@ function buildRawResultPreview(result) {
 }
 
 function buildWorkflowStatusLine(result) {
+  if (result.cancelled) {
+    return 'Stopped by you. Nothing was rolled back - check the project status before continuing.'
+  }
+
   if (!result.ok) {
     return 'Action could not be completed.'
   }
@@ -3636,20 +3745,27 @@ async function runConsoleCommand() {
 
   elements.consoleRunButton.disabled = true
   elements.consoleOutput.textContent = `$ ${commandText}\n\nRunning...`
+  const runId = createRunId()
+  trackRun(runId, 'Console')
 
   try {
-    const result = await api.runConsoleCommand({ commandText, projectPath })
+    const result = await api.runConsoleCommand({ commandText, projectPath, runId })
     elements.consoleOutput.textContent = renderConsoleResult(commandText, result)
     rememberConsoleCommand(commandText)
   } catch (error) {
     elements.consoleOutput.textContent = `$ ${commandText}\n\nFailed to run command: ${error?.message ?? String(error)}`
   } finally {
+    untrackRun(runId)
     elements.consoleRunButton.disabled = false
   }
 }
 
 function renderConsoleResult(commandText, result) {
-  const statusLine = result.failed ? `Failed (exit ${result.exitCode})` : `Succeeded (exit ${result.exitCode})`
+  const statusLine = result.cancelled
+    ? 'Stopped by you'
+    : result.failed
+      ? `Failed (exit ${result.exitCode})`
+      : `Succeeded (exit ${result.exitCode})`
   const sections = [`$ ${commandText}`, '', statusLine]
 
   if (result.stdout) {

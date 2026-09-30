@@ -100,3 +100,11 @@ test('mapCommandError does not misclassify unrelated commands against branch-spe
   const result = mapCommandError('save', { stderr: "fatal: a branch named 'feature' already exists" })
   assert.equal(result.code, 'UNKNOWN')
 })
+
+test('mapCommandError maps a cancelled run to a calm CANCELLED result for any command', () => {
+  for (const commandName of ['save', 'cloneInstall', 'get', 'push']) {
+    const result = mapCommandError(commandName, { cancelled: true, failed: true, stderr: 'fatal: Unable to create index.lock' })
+    assert.equal(result.code, 'CANCELLED')
+    assert.match(result.message, /Stopped by you/)
+  }
+})

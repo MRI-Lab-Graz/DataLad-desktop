@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { killProcessTree, QUIT_ABORT_REASON } from './kill-tree.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // ssh (and anything shelling out to it, like datalad/git-annex over ssh://)
@@ -29,9 +30,22 @@ const SSH_ASKPASS_SCRIPT = outsideAsar(
 const INDEX_LOCK_PATTERN = /unable to create '.*\.lock'.*file exists/i
 const MAX_LOCK_RETRIES = 4
 const LOCK_RETRY_BASE_DELAY_MS = 150
+const CANCELLED_EXIT_CODE = 130
+const DEFAULT_KILL_GRACE_MS = 3000
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// Progress bars redraw with \r, so split on both; only the latest visible line
+// of a chunk matters for the activity display. A line split across two chunks
+// is shown as two partial lines - acceptable for a status hint.
+function latestLine(chunk) {
+  return String(chunk)
+    .split(/[\r\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .at(-1)
 }
 
 /**
@@ -73,7 +87,12 @@ export class ProcessRunner {
     for (let attempt = 0; ; attempt += 1) {
       const result = await this.#runOnce(command, args, options)
 
-      if (result.failed && attempt < MAX_LOCK_RETRIES && INDEX_LOCK_PATTERN.test(result.stderr)) {
+      if (
+        result.failed &&
+        !result.cancelled &&
+        attempt < MAX_LOCK_RETRIES &&
+        INDEX_LOCK_PATTERN.test(result.stderr)
+      ) {
         await sleep(LOCK_RETRY_BASE_DELAY_MS * (attempt + 1))
         continue
       }
@@ -83,54 +102,99 @@ export class ProcessRunner {
   }
 
   async #runOnce(command, args, options) {
+    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput } = options
+
     return new Promise((resolve) => {
       let stdout = ''
       let stderr = ''
       let settled = false
+      let cancelled = false
+      const timers = []
+
+      function finish(result) {
+        if (settled) {
+          return
+        }
+        settled = true
+        timers.forEach(clearTimeout)
+        signal?.removeEventListener('abort', onAbort)
+        resolve(result)
+      }
+
+      const cancelledResult = () => ({
+        command,
+        args,
+        exitCode: CANCELLED_EXIT_CODE,
+        stdout,
+        stderr,
+        failed: true,
+        cancelled: true
+      })
+
+      function onAbort() {
+        if (settled || cancelled) {
+          return
+        }
+        cancelled = true
+        killProcessTree(child, signal?.reason === QUIT_ABORT_REASON ? 0 : killGraceMs)
+        // `close` normally settles us once the tree is dead; this is the
+        // failsafe for a kill that never lands (e.g. taskkill failing).
+        timers.push(setTimeout(() => finish(cancelledResult()), killGraceMs + 1000))
+      }
+
+      if (signal?.aborted) {
+        finish(cancelledResult())
+        return
+      }
 
       const child = spawn(command, args, {
         cwd: options.cwd,
         env: this.#envWithSshPassword({ ...process.env, ...(options.env ?? {}) }),
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: options.shell ?? false
+        shell: options.shell ?? false,
+        // POSIX: lead our own process group so cancel/timeout can signal the whole tree.
+        detached: process.platform !== 'win32'
       })
+
+      signal?.addEventListener('abort', onAbort, { once: true })
 
       // Opt-in: clone/get/push legitimately run for minutes, so only probes
       // that must return promptly pass timeoutMs.
-      // ponytail: kills only the direct child; a shell:true grandchild survives.
-      const timer = options.timeoutMs
-        ? setTimeout(() => {
-            if (settled) {
-              return
-            }
-            settled = true
-            child.kill('SIGKILL')
-            resolve({
+      if (timeoutMs) {
+        timers.push(
+          setTimeout(() => {
+            killProcessTree(child, killGraceMs)
+            finish({
               command,
               args,
               exitCode: 124,
               stdout,
-              stderr: `${stderr}\n${command} timed out after ${options.timeoutMs}ms`.trim(),
+              stderr: `${stderr}\n${command} timed out after ${timeoutMs}ms`.trim(),
               failed: true
             })
-          }, options.timeoutMs)
-        : null
+          }, timeoutMs)
+        )
+      }
+
+      const report = (chunk) => {
+        const line = onOutput ? latestLine(chunk) : undefined
+        if (line) {
+          onOutput(line)
+        }
+      }
 
       child.stdout.on('data', (chunk) => {
         stdout += String(chunk)
+        report(chunk)
       })
 
       child.stderr.on('data', (chunk) => {
         stderr += String(chunk)
+        report(chunk)
       })
 
       child.on('error', (error) => {
-        clearTimeout(timer)
-        if (settled) {
-          return
-        }
-        settled = true
-        resolve({
+        finish({
           command,
           args,
           exitCode: 127,
@@ -142,12 +206,11 @@ export class ProcessRunner {
       })
 
       child.on('close', (exitCode) => {
-        clearTimeout(timer)
-        if (settled) {
+        if (cancelled) {
+          finish(cancelledResult())
           return
         }
-        settled = true
-        resolve({
+        finish({
           command,
           args,
           exitCode: exitCode ?? 1,
