@@ -1,0 +1,76 @@
+name: Installer Smoke (Windows)
+
+# Manual + release tags only: the installer downloads from third-party hosts
+# (git-annex from kitenet, Python, Git), so this must not gate every push.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    name: Installer (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Deliberately NOT installing DataLad or git-annex here: the installer
+      # has to provide them, that is what this job proves.
+      - name: Build NSIS installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Install silently
+        timeout-minutes: 20
+        run: |
+          $installer = Get-ChildItem dist -Filter '*Setup*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'No installer found in dist/' }
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited with code $($p.ExitCode)" }
+          $exe = 'C:\Program Files\DataLad Desktop\DataLad Desktop.exe'
+          if (-not (Test-Path $exe)) { throw "Installed app not found at $exe" }
+
+      # Actions steps keep the PATH they started with, but a researcher opening
+      # the app after setup gets the machine PATH the installers updated.
+      - name: Refresh PATH from the registry
+        run: |
+          $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          "Path=$machine;$user" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Installer left working git, DataLad and git-annex
+        run: |
+          git --version
+          datalad --version
+          git annex version
+
+      - name: Drive the installed app (Check Environment)
+        env:
+          DLAD_APP_EXECUTABLE: C:\Program Files\DataLad Desktop\DataLad Desktop.exe
+        run: node --test e2e/installed-env.e2e.mjs
+
+      # The NSIS uninstaller re-launches itself from a temp copy and returns
+      # immediately, so poll for the folder to disappear.
+      - name: Uninstall silently
+        run: |
+          $dir = 'C:\Program Files\DataLad Desktop'
+          Start-Process -FilePath "$dir\Uninstall DataLad Desktop.exe" -ArgumentList '/S' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path "$dir\DataLad Desktop.exe"); $i++) { Start-Sleep -Seconds 2 }
+          if (Test-Path "$dir\DataLad Desktop.exe") { throw 'Uninstall left the app behind' }
