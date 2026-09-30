@@ -68,7 +68,7 @@
   ${EndIf}
 
   DetailPrint "Installing/updating DataLad via pip..."
-  nsExec::ExecToLog `powershell -NoProfile -Command "py -3 -m pip install --upgrade pip datalad"`
+  nsExec::ExecToLog `powershell -NoProfile -Command "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User'); if (Get-Command py -ErrorAction SilentlyContinue) { py -3 -m pip install --upgrade pip datalad } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m pip install --upgrade pip datalad } else { exit 1 }"`
   Pop $0
   ${If} $0 != 0
     DetailPrint "DataLad pip install failed (exit $0) - it can be installed later from the app's diagnostics screen."
