@@ -24,6 +24,14 @@ test('installer verifies the SHA-256 of every pinned download before running it'
   }
 })
 
+test('DataLad installation works when Python is available without the py launcher', () => {
+  const install = nsh.split('Installing/updating DataLad via pip...')[1]?.split('Checking for git-annex...')[0]
+  assert.ok(install, 'expected a DataLad pip install step')
+  assert.match(install, /Get-Command py/)
+  assert.match(install, /Get-Command python/)
+  assert.match(install, /python -m pip install --upgrade pip datalad/)
+})
+
 test('Windows packaging includes a portable (no-install) target alongside the NSIS installer', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   const targets = pkg.build.win.target.map((t) => t.target)
