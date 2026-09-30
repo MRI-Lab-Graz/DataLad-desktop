@@ -2099,3 +2099,26 @@ test('git-annex recovery step tells Windows users Git for Windows is needed too'
   })
   assert.match(report.recoverySteps[0], /Git for Windows/)
 })
+
+test('detectProject bounds its datalad probes with a timeout so a hung process cannot stall detection', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-timeout-'))
+  await mkdir(join(root, '.datalad'), { recursive: true })
+  await writeFile(join(root, '.datalad', 'config'), '[datalad]\n')
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('datalad', ['-C', root, 'status', '--dataset', '.', '--json'], {
+    exitCode: 124,
+    stderr: 'datalad timed out after 45000ms',
+    failed: true
+  })
+
+  const project = await new DataLadAdapter({ runner }).detectProject(root)
+
+  // A timed-out probe is inconclusive, so the .datalad/config marker decides.
+  assert.equal(project.classification, 'dataset')
+  const probeCalls = runner.calls.filter((call) => call.command === 'datalad')
+  assert.ok(probeCalls.length >= 1)
+  for (const call of probeCalls) {
+    assert.ok(call.options.timeoutMs > 0, `${call.args.join(' ')} has no timeoutMs`)
+  }
+})

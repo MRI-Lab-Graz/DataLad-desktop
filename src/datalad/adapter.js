@@ -29,6 +29,10 @@ const CURATED_COMMANDS = new Set([
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const BIDS_MARKER_FILE = 'dataset_description.json'
+// Detection probes must answer promptly; a hung one falls back to the
+// .datalad/config marker instead of stalling project open. Kept below the e2e
+// driver's 60s openProject wait.
+const PROBE_TIMEOUT_MS = 45_000
 const BIDS_SUBJECT_DIR_PATTERN = /^sub-[A-Za-z0-9._-]+$/
 // Top-level BIDS folder names nested/detected alongside sub-* subject dirs.
 const BIDS_TOP_LEVEL_DIR_NAMES = ['rawdata', 'derivatives', 'sourcedata']
@@ -975,7 +979,11 @@ export class DataLadAdapter {
   }
 
   async #probeDataLadDataset(projectPath) {
-    const result = await this.runner.run('datalad', ['-C', projectPath, 'status', '--dataset', '.', '--json'])
+    const result = await this.runner.run(
+      'datalad',
+      ['-C', projectPath, 'status', '--dataset', '.', '--json'],
+      { timeoutMs: PROBE_TIMEOUT_MS }
+    )
 
     if (!result.failed) {
       return {
@@ -1001,13 +1009,11 @@ export class DataLadAdapter {
   }
 
   async #probeSubdatasets(projectPath) {
-    const result = await this.runner.run('datalad', [
-      '-C',
-      projectPath,
-      'subdatasets',
-      '--result-renderer',
-      'disabled'
-    ])
+    const result = await this.runner.run(
+      'datalad',
+      ['-C', projectPath, 'subdatasets', '--result-renderer', 'disabled'],
+      { timeoutMs: PROBE_TIMEOUT_MS }
+    )
 
     if (result.failed) {
       return {

@@ -156,3 +156,26 @@ test('Windows askpass script echoes the password via delayed expansion', async (
   assert.match(script, /echo\(!DATALAD_DESKTOP_SSH_PASSWORD!/)
   assert.doesNotMatch(script, /%DATALAD_DESKTOP_SSH_PASSWORD%/)
 })
+
+test('ProcessRunner kills a process that outlives timeoutMs and reports it as failed', async () => {
+  const runner = new ProcessRunner()
+  const startedAt = Date.now()
+  const result = await runner.run(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+    timeoutMs: 200
+  })
+
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 124)
+  assert.match(result.stderr, /timed out after 200ms/)
+  assert.ok(Date.now() - startedAt < 5000)
+})
+
+test('ProcessRunner leaves a process that finishes within timeoutMs alone', async () => {
+  const runner = new ProcessRunner()
+  const result = await runner.run(process.execPath, ['-e', "process.stdout.write('ok')"], {
+    timeoutMs: 10_000
+  })
+
+  assert.equal(result.failed, false)
+  assert.equal(result.stdout, 'ok')
+})

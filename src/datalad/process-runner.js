@@ -95,6 +95,27 @@ export class ProcessRunner {
         shell: options.shell ?? false
       })
 
+      // Opt-in: clone/get/push legitimately run for minutes, so only probes
+      // that must return promptly pass timeoutMs.
+      // ponytail: kills only the direct child; a shell:true grandchild survives.
+      const timer = options.timeoutMs
+        ? setTimeout(() => {
+            if (settled) {
+              return
+            }
+            settled = true
+            child.kill('SIGKILL')
+            resolve({
+              command,
+              args,
+              exitCode: 124,
+              stdout,
+              stderr: `${stderr}\n${command} timed out after ${options.timeoutMs}ms`.trim(),
+              failed: true
+            })
+          }, options.timeoutMs)
+        : null
+
       child.stdout.on('data', (chunk) => {
         stdout += String(chunk)
       })
@@ -104,6 +125,7 @@ export class ProcessRunner {
       })
 
       child.on('error', (error) => {
+        clearTimeout(timer)
         if (settled) {
           return
         }
@@ -120,6 +142,7 @@ export class ProcessRunner {
       })
 
       child.on('close', (exitCode) => {
+        clearTimeout(timer)
         if (settled) {
           return
         }
