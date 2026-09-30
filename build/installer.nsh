@@ -72,6 +72,17 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "DataLad pip install failed (exit $0) - it can be installed later from the app's diagnostics screen."
+  ${Else}
+    ; pip puts datalad.exe in the Scripts folder of whichever Python it ran under
+    ; (the `py -3` default can differ from the Python on PATH), and that folder is
+    ; not necessarily on PATH - so DataLad would be installed but the `datalad`
+    ; command, and the app, could not find it. Add it to the machine PATH.
+    DetailPrint "Making the datalad command available on PATH..."
+    nsExec::ExecToLog `powershell -NoProfile -Command "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User'); $$code = 'import sysconfig; print(sysconfig.get_path(''scripts''))'; if (Get-Command py -ErrorAction SilentlyContinue) { $$scripts = py -3 -c $$code } else { $$scripts = python -c $$code }; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
+    Pop $0
+    ${If} $0 != 0
+      DetailPrint "Could not add DataLad's Scripts folder to PATH (exit $0) - add it manually if the datalad command is not found."
+    ${EndIf}
   ${EndIf}
 
   DetailPrint "Checking for git-annex..."

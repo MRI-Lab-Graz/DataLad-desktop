@@ -38,3 +38,14 @@ test('Windows packaging includes a portable (no-install) target alongside the NS
   assert.ok(targets.includes('portable'), `expected 'portable' in ${JSON.stringify(targets)}`)
   assert.ok(targets.includes('nsis'), 'nsis installer should stay available too')
 })
+
+// Regression: on a machine whose `py -3` is a different Python than the one on
+// PATH, pip installed datalad.exe into a Scripts folder that PATH didn't list,
+// so DataLad was installed but the `datalad` command (and the app) couldn't find it.
+test('installer puts the Scripts folder of the Python that installed DataLad on the machine PATH', () => {
+  const install = nsh.split('Installing/updating DataLad via pip...')[1]?.split('Checking for git-annex...')[0]
+  assert.ok(install, 'expected a DataLad pip install step')
+  assert.match(install, /sysconfig/)
+  assert.match(install, /datalad\.exe/)
+  assert.match(install, /SetEnvironmentVariable\('Path'.*'Machine'\)/)
+})
