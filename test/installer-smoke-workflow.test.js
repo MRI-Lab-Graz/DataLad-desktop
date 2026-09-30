@@ -38,3 +38,13 @@ test('builds the NSIS installer, installs it silently, checks the tools, drives 
   assert.deepEqual(order, [...order].sort((a, b) => a - b), 'steps out of order')
   assert.match(workflow, /DLAD_APP_EXECUTABLE: C:\\Program Files\\DataLad Desktop\\DataLad Desktop\.exe/)
 })
+
+// The installer's silent mode prints nothing, so on failure CI must show where
+// Python and DataLad actually ended up.
+test('dumps Python/DataLad diagnostics when a step fails', () => {
+  const step = workflow.split('- name:').find((s) => s.includes('if: failure()'))
+  assert.ok(step, 'expected a step gated on failure()')
+  for (const needle of ['py -0p', 'pip show', 'Get-Command']) {
+    assert.ok(step.includes(needle), `diagnostics step should run: ${needle}`)
+  }
+})

@@ -61,6 +61,19 @@ jobs:
           datalad --version
           git annex version
 
+      # The installer's silent mode prints nothing, so show where Python and
+      # DataLad actually ended up when a check above fails.
+      - name: Diagnostics (on failure)
+        if: failure()
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Command py, python, pip, datalad, git-annex -ErrorAction SilentlyContinue | Format-Table Name, Source
+          py -0p
+          py -3 -c "import sys; print(sys.executable)"
+          py -3 -m pip show -f datalad
+          py -3 -m datalad --version
+          $env:Path -split ';' | Select-String -Pattern 'Python|Scripts|git-annex|Git'
+
       - name: Drive the installed app (Check Environment)
         env:
           DLAD_APP_EXECUTABLE: C:\Program Files\DataLad Desktop\DataLad Desktop.exe
