@@ -4,7 +4,9 @@ import {
   cancelledResult,
   createRunId,
   formatActivityLine,
+  formatDurationLine,
   renderRunningRows,
+  shouldShowUserErrorMessage,
   shouldStopSequence
 } from '../src/gui/renderer/run-activity.js'
 
@@ -77,4 +79,21 @@ test('cancelledResult is a renderable cancelled result that stops sequences', ()
 test('formatActivityLine also strips OSC sequences and control characters', () => {
   assert.equal(formatActivityLine('\u001b]0;window title\u0007hello\u0007\bworld\u001b'), 'helloworld')
   assert.equal(formatActivityLine('keep\ttabs\nand\rwhitespace'), 'keep tabs and whitespace')
+})
+
+// Polish found on a real Windows machine: a stopped command said "Command
+// finished in 2.4s", and its "Stopped by you" sentence was shown twice.
+test('formatDurationLine says "Stopped after" for a cancelled command', () => {
+  assert.equal(formatDurationLine(2444), 'Command finished in 2.4s.')
+  assert.equal(formatDurationLine(12_400), 'Command finished in 12s.')
+  assert.equal(formatDurationLine(2444, true), 'Stopped after 2.4s.')
+  assert.equal(formatDurationLine(12_400, true), 'Stopped after 12s.')
+})
+
+test('shouldShowUserErrorMessage hides the error paragraph for a cancelled result (the headline already says it)', () => {
+  const userError = { code: 'REPO_LOCKED', message: 'locked' }
+  assert.equal(shouldShowUserErrorMessage({ ok: false, userError }), true)
+  assert.equal(shouldShowUserErrorMessage({ ok: false, cancelled: true, userError }), false)
+  assert.equal(shouldShowUserErrorMessage({ ok: true, userError: null }), false)
+  assert.equal(shouldShowUserErrorMessage({ ok: false }), false)
 })

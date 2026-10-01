@@ -8,7 +8,15 @@ import {
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
 import { createLatestWins } from './latest-wins.js'
-import { cancelledResult, createRunId, formatActivityLine, renderRunningRows, shouldStopSequence } from './run-activity.js'
+import {
+  cancelledResult,
+  createRunId,
+  formatActivityLine,
+  formatDurationLine,
+  renderRunningRows,
+  shouldShowUserErrorMessage,
+  shouldStopSequence
+} from './run-activity.js'
 import {
   computeSaveStatusChip,
   computeSyncStatusChip,
@@ -2786,7 +2794,7 @@ function renderCommandResult(result, summary = null) {
 
   if (typeof result.durationMs === 'number') {
     html += `<p class="cmd-duration${result.durationMs >= 5000 ? ' cmd-duration-slow' : ''}">${escapeHtml(
-      formatDurationSeconds(result.durationMs)
+      formatDurationLine(result.durationMs, result.cancelled)
     )}</p>`
   }
 
@@ -2805,7 +2813,7 @@ function renderCommandResult(result, summary = null) {
         .join('')}</ul>`
   }
 
-  if (!result.ok && result.userError) {
+  if (shouldShowUserErrorMessage(result)) {
     html += `<p>${escapeHtml(result.userError.message)}</p>`
   }
 
@@ -4015,11 +4023,6 @@ function buildCroppedCmdLine(command, args) {
   }
 
   return `${fullLine.slice(0, CMD_PREVIEW_CHAR_LIMIT)}…`
-}
-
-function formatDurationSeconds(durationMs) {
-  const seconds = durationMs / 1000
-  return `Command finished in ${seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1)}s.`
 }
 
 function loadingPanelHtml(message) {

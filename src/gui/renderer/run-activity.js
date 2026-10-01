@@ -74,3 +74,15 @@ export function cancelledResult(commandName) {
     }
   }
 }
+
+export function formatDurationLine(durationMs, cancelled = false) {
+  const seconds = durationMs / 1000
+  const text = seconds >= 10 ? Math.round(seconds) : seconds.toFixed(1)
+  return cancelled ? `Stopped after ${text}s.` : `Command finished in ${text}s.`
+}
+
+// A cancelled result's message is already the headline; repeating it as the
+// body paragraph made the panel say the same sentence twice.
+export function shouldShowUserErrorMessage(result) {
+  return !result.ok && Boolean(result.userError) && !result.cancelled
+}

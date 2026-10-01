@@ -1,0 +1,8 @@
+version: 0.3.0
+files:
+  - url: DataLad-Desktop-Setup-0.3.0.exe
+    sha512: vsoNhWmfIBjPVqV6apqsHYYDeRUtmjbfwjgSTs0xMY0FnN2/pZcAklagJfP9vTDoDcgjEIqWw0TLTo0ejo6nVA==
+    size: 105402024
+path: DataLad-Desktop-Setup-0.3.0.exe
+sha512: vsoNhWmfIBjPVqV6apqsHYYDeRUtmjbfwjgSTs0xMY0FnN2/pZcAklagJfP9vTDoDcgjEIqWw0TLTo0ejo6nVA==
+releaseDate: '2026-10-01T04:32:53.263Z'
