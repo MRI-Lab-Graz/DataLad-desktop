@@ -379,8 +379,8 @@ test('ProcessRunner reports the latest line of each output chunk via onOutput', 
   const lines = []
   const script =
     "process.stdout.write('first line\\n');" +
-    "setTimeout(() => process.stdout.write('10%\\r50%\\r75%\\r'), 80);" +
-    "setTimeout(() => process.stderr.write('warning: something\\n'), 160)"
+    "setTimeout(() => process.stdout.write('10%\\r50%\\r75%\\r'), 300);" +
+    "setTimeout(() => process.stderr.write('warning: something\\n'), 600)"
   const result = await new ProcessRunner().run(process.execPath, ['-e', script], {
     onOutput: (line) => lines.push(line)
   })
@@ -399,4 +399,58 @@ test('ProcessRunner ignores chunks that contain no visible text', async () => {
   })
 
   assert.deepEqual(lines, [])
+})
+
+// Review minor #7: a command that already finished (exit 0) while a helper kept
+// its output pipes open must not be reported as "Stopped by you" because the
+// user clicked Cancel in that window - the work completed.
+test('ProcessRunner keeps the real result when cancel arrives after the command already exited', async () => {
+  const script =
+    "const { spawn } = require('child_process');" +
+    "spawn(process.execPath, ['-e', 'setTimeout(function () {}, 1500)'], { stdio: 'inherit' }).unref();" +
+    "process.stdout.write('saved\\n')"
+  const controller = new AbortController()
+  const running = new ProcessRunner().run(process.execPath, ['-e', script], {
+    signal: controller.signal,
+    onOutput: (line) => {
+      if (line === 'saved') {
+        // The child exits right after printing; abort once it has exited but
+        // before its helper releases the pipes (so `close` has not fired yet).
+        setTimeout(() => controller.abort(), 400)
+      }
+    }
+  })
+
+  const result = await running
+
+  assert.notEqual(result.cancelled, true)
+  assert.equal(result.exitCode, 0)
+  assert.equal(result.failed, false)
+})
+
+// Review minor #5: the spec requires that a cancelled run is never lock-retried.
+test('ProcessRunner does not retry a cancelled run that had printed an index.lock error', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'process-runner-cancel-lock-'))
+  const counter = join(dir, 'counter')
+  await writeFile(counter, '0')
+  const script =
+    "const fs = require('fs'); const f = process.argv[1];" +
+    "fs.writeFileSync(f, String(parseInt(fs.readFileSync(f, 'utf8'), 10) + 1));" +
+    "process.stderr.write(\"fatal: Unable to create '/tmp/x/.git/index.lock': File exists.\\n\");" +
+    'setInterval(function () {}, 1000)'
+  const controller = new AbortController()
+  const running = new ProcessRunner().run(process.execPath, ['-e', script, counter], {
+    signal: controller.signal,
+    onOutput: (line) => {
+      if (line.includes('index.lock')) {
+        controller.abort()
+      }
+    }
+  })
+
+  const result = await running
+  await new Promise((resolve) => setTimeout(resolve, 600))
+
+  assert.equal(result.cancelled, true)
+  assert.equal(await readFile(counter, 'utf8'), '1', 'a cancelled run must not be re-spawned by the lock retry')
 })

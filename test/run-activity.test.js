@@ -71,3 +71,10 @@ test('cancelledResult is a renderable cancelled result that stops sequences', ()
   }
   assert.deepEqual(result.warnings, [])
 })
+
+// Review minor #11: OSC titles, BEL, backspace and stray ESC are inert in the
+// DOM but show up as garbage in the activity line.
+test('formatActivityLine also strips OSC sequences and control characters', () => {
+  assert.equal(formatActivityLine('\u001b]0;window title\u0007hello\u0007\bworld\u001b'), 'helloworld')
+  assert.equal(formatActivityLine('keep\ttabs\nand\rwhitespace'), 'keep tabs and whitespace')
+})

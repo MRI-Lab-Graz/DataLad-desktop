@@ -18,6 +18,24 @@ const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
 const runRegistry = createRunRegistry()
 
+const settingsStore = createSettingsStore(app.getPath('userData'))
+let activeProjectWatcher = null
+// The console executes arbitrary commands, so the renderer's power-user toggle
+// alone must not be the only gate — a compromised renderer could skip it. The
+// main process tracks the toggle itself and refuses console runs while off.
+let consoleEnabled = false
+// fs:* handlers only operate inside roots the user has legitimated: the
+// workspace the app started in, folders picked via the native dialog, and
+// paths that passed project detection or were created by clone/create.
+const authorizedRoots = new Set([resolve(process.cwd())])
+const APP_NAME = 'DataLad Desktop'
+const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
+// macOS Dock icons need transparent padding around a smaller squircle (Apple's
+// grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
+const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
+const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
+const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
+
 // Runs `run({ signal, onOutput })` as a cancellable, observable run when the
 // renderer supplied a runId; otherwise runs it plain, as before.
 async function runWithHandle(event, runId, run) {
@@ -38,23 +56,6 @@ async function runWithHandle(event, runId, run) {
     runRegistry.finish(runId)
   }
 }
-const settingsStore = createSettingsStore(app.getPath('userData'))
-let activeProjectWatcher = null
-// The console executes arbitrary commands, so the renderer's power-user toggle
-// alone must not be the only gate — a compromised renderer could skip it. The
-// main process tracks the toggle itself and refuses console runs while off.
-let consoleEnabled = false
-// fs:* handlers only operate inside roots the user has legitimated: the
-// workspace the app started in, folders picked via the native dialog, and
-// paths that passed project detection or were created by clone/create.
-const authorizedRoots = new Set([resolve(process.cwd())])
-const APP_NAME = 'DataLad Desktop'
-const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
-// macOS Dock icons need transparent padding around a smaller squircle (Apple's
-// grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
-const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
-const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
-const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
 
 function createAdapter() {
   const rustAdapterState = tryLoadRustAdapter()

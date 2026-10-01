@@ -135,6 +135,11 @@ export class ProcessRunner {
         if (settled || cancelled) {
           return
         }
+        // The command already finished (only a helper still holds its output pipes
+        // open): its real result stands, there is nothing left to cancel.
+        if (child.exitCode !== null || child.signalCode !== null) {
+          return
+        }
         cancelled = true
         killProcessTree(child, signal?.reason === QUIT_ABORT_REASON ? 0 : killGraceMs)
         // `close` normally settles us once the tree is dead; this is the
