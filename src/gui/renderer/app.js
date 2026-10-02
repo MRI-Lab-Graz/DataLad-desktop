@@ -30,6 +30,8 @@ const state = {
   rootProjectClassification: 'unknown',
   currentProjectClassification: 'unknown',
   fileListing: null,
+  fileBrowserProject: null,
+  fileOpenDirs: new Set(),
   commitMetaRequestToken: 0,
   requestTokens: {
     datasets: 0,
@@ -1710,6 +1712,28 @@ function renderIgnoreRulesResult(results) {
   return `<ul class="history-list">${rows}</ul>`
 }
 
+const parentOf = (relativePath) => relativePath.slice(0, Math.max(relativePath.lastIndexOf('/'), 0))
+
+// Folders are read one level at a time, only when expanded; `entries` accumulates
+// every folder loaded so far and the existing tree builder lays them out.
+async function loadFileDirectory(projectPath, relativeDir, requestToken) {
+  const absoluteDir = relativeDir ? `${projectPath}/${relativeDir}` : projectPath
+  const result = await api.listFileEntries(projectPath, { dirPath: absoluteDir })
+  if (!isLatestRequestToken('files', requestToken)) {
+    return false
+  }
+
+  const listing = state.fileListing ?? { rootPath: result.rootPath, entries: [], loadedDirs: new Set(), truncatedDirs: new Set() }
+  listing.entries = listing.entries
+    .filter((entry) => parentOf(entry.relativePath) !== relativeDir)
+    .concat(result.entries)
+  listing.loadedDirs.add(relativeDir)
+  result.truncated ? listing.truncatedDirs.add(relativeDir) : listing.truncatedDirs.delete(relativeDir)
+  listing.truncated = listing.truncatedDirs.size > 0
+  state.fileListing = listing
+  return true
+}
+
 async function refreshFileBrowser(projectPath) {
   if (!projectPath) {
     return
@@ -1718,12 +1742,18 @@ async function refreshFileBrowser(projectPath) {
   const requestToken = nextRequestToken('files')
 
   try {
-    const listing = await api.listFileEntries(projectPath, { maxDepth: 4, maxEntries: 500 })
-    if (!isLatestRequestToken('files', requestToken)) {
-      return
+    if (state.fileBrowserProject !== projectPath) {
+      state.fileBrowserProject = projectPath
+      state.fileListing = null
+      state.fileOpenDirs = new Set()
     }
 
-    state.fileListing = listing
+    // Parents come before children (a folder can only be opened once visible).
+    for (const relativeDir of ['', ...state.fileOpenDirs]) {
+      if (!(await loadFileDirectory(projectPath, relativeDir, requestToken))) {
+        return
+      }
+    }
     renderCurrentFileBrowser()
   } catch (error) {
     if (!isLatestRequestToken('files', requestToken)) {
@@ -1734,6 +1764,37 @@ async function refreshFileBrowser(projectPath) {
     elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
   }
 }
+
+// `toggle` doesn't bubble, so listen in the capture phase.
+elements.filesOutput.addEventListener(
+  'toggle',
+  async (event) => {
+    const relativeDir = event.target.getAttribute?.('data-dir-path')
+    if (relativeDir === null || relativeDir === undefined) {
+      return
+    }
+
+    if (!event.target.open) {
+      state.fileOpenDirs.delete(relativeDir)
+      return
+    }
+
+    state.fileOpenDirs.add(relativeDir)
+    if (state.fileListing?.loadedDirs.has(relativeDir) || !state.fileBrowserProject) {
+      return
+    }
+
+    try {
+      const requestToken = nextRequestToken('files')
+      if (await loadFileDirectory(state.fileBrowserProject, relativeDir, requestToken)) {
+        renderCurrentFileBrowser()
+      }
+    } catch (error) {
+      elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
+    }
+  },
+  true
+)
 
 async function refreshBranchList(projectPath) {
   if (!projectPath) {
@@ -3546,10 +3607,10 @@ function renderFileListing(listing, query) {
   const finderHeader =
     '<div class="finder-header"><span>Item</span><span class="finder-header-action">Reveal</span></div>'
   const truncatedNote = listing.truncated
-    ? '<p class="hint">Listing truncated. Narrow project scope or increase listing limits.</p>'
+    ? '<p class="hint">Some folders have more items than can be shown here. Use Open to browse them in your file manager.</p>'
     : ''
 
-  return `<p class="hint">Finder-style view: expand folders, click Open to reveal in file manager, and watch status badges for changed items.</p>${finderHeader}${treeHtml}${truncatedNote}`
+  return `<p class="hint">Finder-style view: expand folders to load them, click Open to reveal in file manager, and watch status badges for changed items. Search covers folders you have expanded.</p>${finderHeader}${treeHtml}${truncatedNote}`
 }
 
 function buildFileTree(rootPath, entries) {
@@ -3596,6 +3657,7 @@ function buildFileTree(rootPath, entries) {
 
         currentNode.children.set(segment, {
           name: segment,
+          relativePath: currentRelativePath,
           type: isLeaf ? entry.type : 'directory',
           absolutePath: pathMetadata.absolutePath,
           gitStatus: pathMetadata.gitStatus,
@@ -3655,7 +3717,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
         `<span class="file-name">${escapeHtml(node.name)}</span>${statusBadge}${annexBadge}</span>`
 
       if (node.type === 'directory') {
-        const openAttribute = expandAll || depth === 0 ? ' open' : ''
+        const openAttribute = expandAll || state.fileOpenDirs.has(node.relativePath) ? ' open' : ''
         // A brand-new untracked top-level folder shows up as gitStatus
         // 'changed' at the directory level (git only reports a status line
         // per file, not per folder — 'untracked' only appears on the files
@@ -3668,7 +3730,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
             : ''
         return (
           '<li class="file-node folder-node">' +
-          `<details${openAttribute}>` +
+          `<details data-dir-path="${escapeHtml(node.relativePath)}"${openAttribute}>` +
           '<summary class="finder-row finder-row-folder">' +
           label +
           `<span class="finder-action-cell">${convertButton}${openButton}</span>` +

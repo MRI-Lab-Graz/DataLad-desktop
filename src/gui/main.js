@@ -1,13 +1,13 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
-import { access, readdir, stat } from 'node:fs/promises'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { access, stat } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
-import { buildGitStatusMap } from '../datalad/status.js'
 import { createProjectWatcher } from './fs-watch.js'
+import { listDirectory } from './list-directory.js'
 import { isWithinRoots } from './path-confinement.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
@@ -33,8 +33,6 @@ const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 // grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
 const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
-const IGNORED_FOLDERS = new Set(['.git', '.datalad', '.github', 'node_modules'])
-
 // Runs `run({ signal, onOutput })` as a cancellable, observable run when the
 // renderer supplied a runId; otherwise runs it plain, as before.
 async function runWithHandle(event, runId, run) {
@@ -330,19 +328,18 @@ ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
 })
 
 ipcMain.handle('fs:listEntries', async (_event, payload = {}) => {
-  const rootPath = payload.rootPath
-  const maxDepth = Number.isInteger(payload.maxDepth) ? payload.maxDepth : 2
-  const maxEntries = Number.isInteger(payload.maxEntries) ? payload.maxEntries : 300
+  const { rootPath, dirPath = rootPath } = payload
 
-  if (!rootPath || typeof rootPath !== 'string') {
-    throw new Error('rootPath is required for file listing')
+  for (const path of [rootPath, dirPath]) {
+    if (!path || typeof path !== 'string') {
+      throw new Error('rootPath is required for file listing')
+    }
+    if (!isWithinAuthorizedRoot(path)) {
+      throw new Error('This folder is not part of an opened project.')
+    }
   }
 
-  if (!isWithinAuthorizedRoot(rootPath)) {
-    throw new Error('This folder is not part of an opened project.')
-  }
-
-  return listEntries(rootPath, maxDepth, maxEntries)
+  return listDirectory({ rootPath, dirPath, run: (command, args) => consoleRunner.run(command, args) })
 })
 
 ipcMain.handle('fs:revealPath', async (_event, targetPath) => {
@@ -384,164 +381,6 @@ async function resolveDialogDefaultPath(requestedPath) {
   } catch {
     return fallbackPath
   }
-}
-
-async function listEntries(rootPath, maxDepth, maxEntries) {
-  const normalizedRoot = resolve(rootPath)
-  await access(normalizedRoot)
-
-  const entries = []
-  let truncated = false
-  // repoRoot (absolute) → relative path within that repo for each file entry
-  const fileRepoRoot = new Map()
-  const repoRoots = new Set([normalizedRoot])
-
-  async function walk(currentPath, depth, currentRepoRoot) {
-    if (entries.length >= maxEntries) {
-      truncated = true
-      return
-    }
-
-    const children = await readdir(currentPath, { withFileTypes: true })
-    children.sort((left, right) => left.name.localeCompare(right.name))
-
-    for (const child of children) {
-      if (entries.length >= maxEntries) {
-        truncated = true
-        return
-      }
-
-      if (child.isDirectory() && IGNORED_FOLDERS.has(child.name)) {
-        continue
-      }
-
-      const absolutePath = join(currentPath, child.name)
-      const relativePath = relative(normalizedRoot, absolutePath).split(sep).join('/')
-      const depthLevel = relativePath.split('/').length - 1
-
-      entries.push({
-        name: child.name,
-        absolutePath,
-        relativePath,
-        type: child.isDirectory() ? 'directory' : 'file',
-        depth: depthLevel
-      })
-
-      if (child.isDirectory() && depth < maxDepth) {
-        let childRepoRoot = currentRepoRoot
-        try {
-          await access(join(absolutePath, '.git'))
-          childRepoRoot = absolutePath
-          repoRoots.add(absolutePath)
-        } catch {}
-        await walk(absolutePath, depth + 1, childRepoRoot)
-      } else if (!child.isDirectory()) {
-        fileRepoRoot.set(relativePath, currentRepoRoot)
-      }
-    }
-  }
-
-  await walk(normalizedRoot, 0, normalizedRoot)
-
-  // Run git annex find for all discovered repos in parallel, plus git status
-  const [gitStatusByPath, ...annexResultPairs] = await Promise.all([
-    readGitStatusMap(normalizedRoot),
-    ...[...repoRoots].map(async (repoRoot) => {
-      const [presResult, absResult] = await Promise.all([
-        consoleRunner.run('git', ['-C', repoRoot, 'annex', 'find', '--in=here']),
-        consoleRunner.run('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here'])
-      ])
-      if (presResult.failed && absResult.failed) return [repoRoot, null]
-      return [
-        repoRoot,
-        {
-          present: new Set((presResult.stdout ?? '').split(/\r?\n/).filter(Boolean)),
-          absent: new Set((absResult.stdout ?? '').split(/\r?\n/).filter(Boolean))
-        }
-      ]
-    })
-  ])
-
-  const annexByRepo = new Map(annexResultPairs)
-  const changedPaths = [...gitStatusByPath.keys()]
-
-  // Annotate file entries with annexPresent, collect sets for directory rollup
-  const presentRelPaths = new Set()
-  const absentRelPaths = new Set()
-
-  const annotatedEntries = entries.map((entry) => {
-    if (entry.type !== 'file') return entry
-
-    const repoRoot = fileRepoRoot.get(entry.relativePath)
-    const annexInfo = repoRoot ? annexByRepo.get(repoRoot) : null
-    let annexPresent = null
-
-    if (annexInfo) {
-      const relToRepo = relative(repoRoot, entry.absolutePath).split(sep).join('/')
-      if (annexInfo.present.has(relToRepo)) {
-        annexPresent = true
-        presentRelPaths.add(entry.relativePath)
-      } else if (annexInfo.absent.has(relToRepo)) {
-        annexPresent = false
-        absentRelPaths.add(entry.relativePath)
-      }
-    }
-
-    return { ...entry, annexPresent }
-  })
-
-  const entriesWithStatus = annotatedEntries.map((entry) => {
-    const prefix = `${entry.relativePath}/`
-
-    if (entry.type === 'file') {
-      return {
-        ...entry,
-        gitStatus: gitStatusByPath.get(entry.relativePath) ?? null
-      }
-    }
-
-    const hasChangedDescendant = changedPaths.some(
-      (p) => p === entry.relativePath || p.startsWith(prefix)
-    )
-
-    const hasPresentChild = [...presentRelPaths].some((p) => p.startsWith(prefix))
-    const hasAbsentChild = [...absentRelPaths].some((p) => p.startsWith(prefix))
-    let annexPresent = null
-    if (hasPresentChild && !hasAbsentChild) annexPresent = true
-    else if (hasPresentChild) annexPresent = 'partial'
-    else if (hasAbsentChild) annexPresent = false
-
-    return {
-      ...entry,
-      gitStatus: hasChangedDescendant ? 'changed' : null,
-      annexPresent
-    }
-  })
-
-  return {
-    rootPath: normalizedRoot,
-    maxDepth,
-    truncated,
-    entries: entriesWithStatus
-  }
-}
-
-async function readGitStatusMap(rootPath) {
-  const gitResult = await consoleRunner.run('git', [
-    '-C',
-    rootPath,
-    '-c',
-    'core.quotePath=false',
-    'status',
-    '--porcelain',
-    '--untracked-files=all'
-  ])
-
-  if (gitResult.failed) {
-    return new Map()
-  }
-
-  return buildGitStatusMap(gitResult.stdout)
 }
 
 app.whenReady().then(() => {
