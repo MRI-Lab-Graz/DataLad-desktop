@@ -5,6 +5,7 @@ import {
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
 } from './button-gating.js'
+import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -1765,6 +1766,27 @@ async function refreshFileBrowser(projectPath) {
   }
 }
 
+// Fills just the folder that was opened. Re-rendering the whole list would
+// replace every row (losing scroll anchor, focus and hover), so only fall back
+// to that when a search filter is active.
+function fillOpenedFolder(details, relativeDir) {
+  if (elements.filesSearchInput.value.trim() || state.fileListing.truncated || !details.isConnected) {
+    renderCurrentFileBrowser()
+    return
+  }
+
+  const segments = relativeDir.split('/')
+  let node = buildFileTree(state.fileListing.rootPath, state.fileListing.entries)
+  for (const segment of segments) {
+    node = node?.children.get(segment)
+  }
+
+  details.querySelector(':scope > ul')?.remove()
+  if (node?.children.size) {
+    details.insertAdjacentHTML('beforeend', renderFileTreeNodes(node.children, false, segments.length))
+  }
+}
+
 // `toggle` doesn't bubble, so listen in the capture phase.
 elements.filesOutput.addEventListener(
   'toggle',
@@ -1787,7 +1809,7 @@ elements.filesOutput.addEventListener(
     try {
       const requestToken = nextRequestToken('files')
       if (await loadFileDirectory(state.fileBrowserProject, relativeDir, requestToken)) {
-        renderCurrentFileBrowser()
+        fillOpenedFolder(event.target, relativeDir)
       }
     } catch (error) {
       elements.filesOutput.textContent = `Could not load files: ${String(error.message)}`
@@ -3770,16 +3792,6 @@ function renderGitStatusBadge(gitStatus) {
 
   const label = labels[gitStatus] ?? 'Changed'
   return `<span class="file-status file-status-${escapeHtml(gitStatus)}">${escapeHtml(label)}</span>`
-}
-
-function renderAnnexBadge(annexPresent) {
-  if (annexPresent === true) {
-    return '<span class="file-status file-status-local">Local</span>'
-  }
-  if (annexPresent === 'partial') {
-    return '<span class="file-status file-status-partial">Partial</span>'
-  }
-  return ''
 }
 
 const CMD_PREVIEW_PATH_ARG_LIMIT = 8

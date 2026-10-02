@@ -35,7 +35,7 @@ function childNames(paths, prefix) {
 /**
  * One level of a project folder with git / git-annex status, so huge or deeply
  * nested datasets load instantly and folders are read only when expanded.
- * ponytail: a folder's Local/Partial badge only reflects files in the repo that
+ * ponytail: a folder's Partial/Not-downloaded badge only reflects files in the repo that
  * owns it; nested datasets get theirs once expanded.
  */
 export async function listDirectory({ rootPath, dirPath = rootPath, run, maxEntries = DEFAULT_MAX_ENTRIES }) {

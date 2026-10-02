@@ -1573,12 +1573,6 @@ select:disabled {
   color: #5f1423;
 }
 
-.file-status-local {
-  background: rgba(239, 214, 219, 0.95);
-  border-color: rgba(130, 42, 60, 0.36);
-  color: #6a1e2d;
-}
-
 .file-status-partial {
   background: rgba(253, 243, 215, 0.95);
   border-color: rgba(180, 140, 40, 0.36);
