@@ -97,3 +97,28 @@ test('listDirectory refuses a folder outside the project root', async () => {
   const root = await project()
   await assert.rejects(listDirectory({ rootPath: root, dirPath: join(root, '..'), run }), /outside/i)
 })
+
+test('listDirectory never initializes git-annex in a repo that does not use it', async () => {
+  const root = await project()
+  await listDirectory({ rootPath: root, run })
+
+  const result = await run('git', ['-C', root, 'config', '--get', 'annex.uuid'])
+  assert.equal(result.failed, true, 'browsing files must not turn a plain git repo into an annex')
+})
+
+const hasAnnex = (await run('git', ['annex', 'version', '--raw'])).failed === false
+
+test('listDirectory reports annexed content as present or missing', { skip: !hasAnnex && 'git-annex not installed' }, async () => {
+  const root = await project()
+  git(root, 'annex', 'init')
+  await writeFile(join(root, 'data.bin'), 'payload')
+  await writeFile(join(root, 'gone.bin'), 'other')
+  git(root, 'annex', 'add', 'data.bin', 'gone.bin')
+  git(root, 'commit', '-q', '-m', 'annexed')
+  git(root, 'annex', 'drop', '--force', 'gone.bin')
+
+  const entries = byName(await listDirectory({ rootPath: root, run }))
+  assert.equal(entries['data.bin'].annexPresent, true)
+  assert.equal(entries['gone.bin'].annexPresent, false)
+  assert.equal(entries.code.annexPresent, null)
+})

@@ -56,11 +56,18 @@ export async function listDirectory({ rootPath, dirPath = rootPath, run, maxEntr
   const pathspec = dirInRepo || '.'
   const prefix = dirInRepo ? `${dirInRepo}/` : ''
 
-  const [status, present, absent] = await Promise.all([
+  // `git annex find` initializes git-annex in any repo it runs in, so only ask a
+  // repo that already uses it (annex.uuid is set); browsing must not change it.
+  const [status, annexUuid] = await Promise.all([
     run('git', ['-C', repoRoot, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all', '--', pathspec]),
-    run('git', ['-C', repoRoot, 'annex', 'find', '--in=here', '--', pathspec]),
-    run('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here', '--', pathspec])
+    run('git', ['-C', repoRoot, 'config', '--get', 'annex.uuid'])
   ])
+  const [present, absent] = annexUuid.failed
+    ? [{ failed: true }, { failed: true }]
+    : await Promise.all([
+        run('git', ['-C', repoRoot, 'annex', 'find', '--in=here', '--', pathspec]),
+        run('git', ['-C', repoRoot, 'annex', 'find', '--not', '--in=here', '--', pathspec])
+      ])
 
   const statusByPath = status.failed ? new Map() : buildGitStatusMap(status.stdout)
   const changedChildren = childNames(statusByPath.keys(), prefix)
