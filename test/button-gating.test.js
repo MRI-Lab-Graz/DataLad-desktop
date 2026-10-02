@@ -5,8 +5,7 @@ import {
   computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
-  computeSyncActionsQuietMessage,
-  isSharedStudiesServerRemote
+  computeSyncActionsQuietMessage
 } from '../src/gui/renderer/button-gating.js'
 
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
@@ -198,32 +197,3 @@ test('computeSyncActionsQuietMessage uses git-only wording for a plain git proje
   assert.doesNotMatch(message, /Get Data/)
 })
 
-test('isSharedStudiesServerRemote matches when the remote URL contains the configured bare hostname', () => {
-  assert.equal(
-    isSharedStudiesServerRemote(
-      'ssh://someone@studies.example.org@studies.example.org/datalad/mri/MRI-Lab_Repository/hgh',
-      'someone@studies.example.org@studies.example.org'
-    ),
-    true
-  )
-})
-
-test('isSharedStudiesServerRemote matches regardless of which username is embedded in either string', () => {
-  assert.equal(
-    isSharedStudiesServerRemote('ssh://someone-else@studies.example.org/data/studies/hgh', 'studies.example.org'),
-    true
-  )
-})
-
-test('isSharedStudiesServerRemote returns false for an unrelated remote', () => {
-  assert.equal(
-    isSharedStudiesServerRemote('https://github.com/example/other-repo.git', 'studies.example.org'),
-    false
-  )
-})
-
-test('isSharedStudiesServerRemote returns false when either input is missing', () => {
-  assert.equal(isSharedStudiesServerRemote(null, 'studies.example.org'), false)
-  assert.equal(isSharedStudiesServerRemote('ssh://studies.example.org/data/studies/hgh', ''), false)
-  assert.equal(isSharedStudiesServerRemote('ssh://studies.example.org/data/studies/hgh', undefined), false)
-})

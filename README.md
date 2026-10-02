@@ -123,56 +123,12 @@ npm run package:mac     # macOS
 npm run package:win     # Windows
 ```
 
-### Presetting a studies server for your lab
+### Working with a network share
 
-**Setup → Studies Server (SSH)** lets anyone type in an SSH host and folder
-path to browse and install studies from. To preset your lab's own
-host/path as the default shown on first open, create an untracked local
-override (git-ignored, never committed):
-
-```bash
-cp config/studies-server.local.example.json config/studies-server.local.json
-```
-
-```json
-{
-  "host": "myserver.example.org",
-  "path": "/data/studies"
-}
-```
-
-This only supplies the *default* — once someone opens Setup, adds their
-username, and clicks Save, their own value takes over.
-
-**Server Type** — two modes:
-
-- **Plain SSH directory** (default): "path" is a folder on the server;
-  subfolders are listed via `ssh <host> ls`. Anyone who can SSH in can read
-  *and write* every study in the folder — no per-person permission model.
-- **Gitolite**: for labs running [Gitolite](https://gitolite.com/gitolite/),
-  where per-person, per-repo read/write permissions are managed via SSH key.
-  "path" becomes a repo-name prefix (e.g. `mri-lab`), studies are listed via
-  `ssh <host> info` (only shows repos that key can access), and the config
-  needs `"type": "gitolite"` with a shared service-account host (e.g.
-  `git@myserver.example.org`). Cloning/pushing/publishing work unchanged in
-  both modes — only listing studies differs.
-
-### Recommended: set up an SSH key instead of a password
-
-The Setup panel's **"Set SSH Password…"** dialog works (kept in memory only,
-never written to disk), but a password briefly exists in the environment of
-the `ssh`/`datalad`/`git` process — a key avoids that and skips the prompt
-every session:
-
-```bash
-ssh-keygen -t ed25519 -C "you@example.org"          # if you don't have one
-ssh-copy-id -i ~/.ssh/id_ed25519.pub "yourname@studies.example.org"
-ssh "yourname@studies.example.org" echo ok          # should print ok, no prompt
-```
-
-Use whatever host you type into the app's **Server Host (SSH)** field
-(including `user@domain@host` if your login needs it). Once `ssh` connects
-without a password, the app authenticates via the key automatically.
+Department network shares can be used like any other folder: choose
+**Create Project → Based on a remote dataset → Network Folder** and enter a
+UNC path (`\\server\share\dataset`), an `smb://` URL, or a mounted share.
+No SSH or server setup is involved.
 
 ## Learn more
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ProcessRunner, outsideAsar } from '../src/datalad/process-runner.js'
+import { ProcessRunner } from '../src/datalad/process-runner.js'
 import { QUIT_ABORT_REASON } from '../src/datalad/kill-tree.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
@@ -79,87 +79,6 @@ test('ProcessRunner gives up and reports failure after persistent index.lock con
 
   assert.equal(result.failed, true)
   assert.match(result.stderr, /index\.lock/)
-})
-
-const PRINT_SSH_ENV_SCRIPT =
-  'process.stdout.write(JSON.stringify({' +
-  'askpass: process.env.SSH_ASKPASS ?? null,' +
-  'require: process.env.SSH_ASKPASS_REQUIRE ?? null,' +
-  'password: process.env.DATALAD_DESKTOP_SSH_PASSWORD ?? null' +
-  '}))'
-
-test('ProcessRunner has no SSH password set by default', () => {
-  const runner = new ProcessRunner()
-  assert.equal(runner.hasSshPassword(), false)
-})
-
-test('ProcessRunner injects SSH_ASKPASS env vars into every spawned command once a password is set', async () => {
-  const runner = new ProcessRunner()
-  runner.setSshPassword('s3cret')
-  assert.equal(runner.hasSshPassword(), true)
-
-  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT])
-  const seen = JSON.parse(result.stdout)
-
-  assert.equal(seen.require, 'force')
-  assert.equal(seen.password, 's3cret')
-  assert.match(seen.askpass, /ssh-askpass\.(sh|cmd)$/)
-})
-
-test('ProcessRunner stops injecting SSH_ASKPASS env vars after clearSshPassword', async () => {
-  const runner = new ProcessRunner()
-  runner.setSshPassword('s3cret')
-  runner.clearSshPassword()
-  assert.equal(runner.hasSshPassword(), false)
-
-  // Hermetic: a developer/CI shell may already export these (even as ''), and
-  // undefined env values are dropped from the child's environment.
-  const result = await runner.run(process.execPath, ['-e', PRINT_SSH_ENV_SCRIPT], {
-    env: { SSH_ASKPASS: undefined, SSH_ASKPASS_REQUIRE: undefined, DATALAD_DESKTOP_SSH_PASSWORD: undefined }
-  })
-  const seen = JSON.parse(result.stdout)
-
-  assert.deepEqual(seen, { askpass: null, require: null, password: null })
-})
-
-test('ProcessRunner treats setSshPassword("") the same as clearing it', () => {
-  const runner = new ProcessRunner()
-  runner.setSshPassword('s3cret')
-  runner.setSshPassword('')
-  assert.equal(runner.hasSshPassword(), false)
-})
-
-// ssh.exe / sh are external processes: they cannot read a script packed inside
-// Electron's app.asar archive, only the real copy electron-builder unpacks.
-test('outsideAsar points packaged paths at the app.asar.unpacked copy', () => {
-  assert.equal(
-    outsideAsar('/Applications/X.app/Contents/Resources/app.asar/src/datalad/ssh-askpass.sh'),
-    '/Applications/X.app/Contents/Resources/app.asar.unpacked/src/datalad/ssh-askpass.sh'
-  )
-  assert.equal(
-    outsideAsar('C:\\Program Files\\X\\resources\\app.asar\\src\\datalad\\ssh-askpass.cmd'),
-    'C:\\Program Files\\X\\resources\\app.asar.unpacked\\src\\datalad\\ssh-askpass.cmd'
-  )
-})
-
-test('outsideAsar leaves source-checkout and already-unpacked paths alone', () => {
-  assert.equal(outsideAsar('/repo/src/datalad/ssh-askpass.sh'), '/repo/src/datalad/ssh-askpass.sh')
-  assert.equal(outsideAsar('/r/app.asar.unpacked/ssh-askpass.sh'), '/r/app.asar.unpacked/ssh-askpass.sh')
-})
-
-test('packaging unpacks the askpass scripts out of app.asar', async () => {
-  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
-  const unpack = [pkg.build.asarUnpack].flat().join(' ')
-  assert.match(unpack, /ssh-askpass/)
-})
-
-// Plain `echo %VAR%` lets cmd re-parse the password, so & | < > ^ % break or
-// truncate it. Delayed expansion (!VAR!) substitutes after parsing.
-test('Windows askpass script echoes the password via delayed expansion', async () => {
-  const script = await readFile(new URL('../src/datalad/ssh-askpass.cmd', import.meta.url), 'utf8')
-  assert.match(script, /setlocal\s+EnableDelayedExpansion/i)
-  assert.match(script, /echo\(!DATALAD_DESKTOP_SSH_PASSWORD!/)
-  assert.doesNotMatch(script, /%DATALAD_DESKTOP_SSH_PASSWORD%/)
 })
 
 test('ProcessRunner kills a process that outlives timeoutMs and reports it as failed', async () => {

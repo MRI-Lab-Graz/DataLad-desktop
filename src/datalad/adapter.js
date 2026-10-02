@@ -19,7 +19,6 @@ const CURATED_COMMANDS = new Set([
   'update',
   'push',
   'disconnectRemote',
-  'createSibling',
   'createBranch',
   'switchBranch',
   'createBranchAt',
@@ -436,90 +435,6 @@ export class DataLadAdapter {
 
   #resolveDatasetPath(projectPath, relativeDatasetPath) {
     return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
-  }
-
-  // Session-only: kept in ProcessRunner's memory, never persisted. Needed
-  // when the studies server requires password (not key-based) SSH auth —
-  // see ssh-askpass.sh/.cmd for how it reaches the ssh child process.
-  setStudiesServerPassword(password) {
-    this.runner.setSshPassword(password)
-  }
-
-  clearStudiesServerPassword() {
-    this.runner.clearSshPassword()
-  }
-
-  hasStudiesServerPassword() {
-    return this.runner.hasSshPassword()
-  }
-
-  // Read-only SSH directory listing, not a datalad/git mutation, so it
-  // deliberately bypasses the CURATED_COMMANDS/runCommand allowlist (that gate
-  // exists for commands that mutate a local project path).
-  async listRemoteStudies(serverConfig) {
-    const host = serverConfig?.host?.trim()
-    const remotePath = serverConfig?.path?.trim()
-    const serverType = serverConfig?.type === 'gitolite' ? 'gitolite' : 'ssh-directory'
-
-    if (!host || !remotePath) {
-      return { ok: false, studies: [], error: { code: 'SERVER_NOT_CONFIGURED', message: 'Studies server host and path are not configured yet.' } }
-    }
-
-    return serverType === 'gitolite'
-      ? this.#listRemoteStudiesGitolite(host, remotePath)
-      : this.#listRemoteStudiesSshDirectory(host, remotePath)
-  }
-
-  async #listRemoteStudiesSshDirectory(host, remotePath) {
-    const result = await this.runner.run('ssh', [host, 'ls', '-1', '--', remotePath])
-
-    if (result.failed) {
-      return { ok: false, studies: [], error: { code: 'REMOTE_LIST_FAILED', message: result.stderr.trim() || 'Could not list studies on the server.' } }
-    }
-
-    const studies = result.stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-
-    return { ok: true, studies, error: null }
-  }
-
-  // Gitolite forces every SSH session into its own restricted dispatcher —
-  // arbitrary shell commands (like `ls`) are rejected outright. `info` is
-  // gitolite's own command; it lists exactly the repos the connecting SSH
-  // key has access to, which is also strictly more useful than a directory
-  // listing: guests only ever see what they're actually permitted to read.
-  async #listRemoteStudiesGitolite(host, repoPrefix) {
-    const result = await this.runner.run('ssh', [host, 'info'])
-
-    if (result.failed) {
-      return { ok: false, studies: [], error: { code: 'REMOTE_LIST_FAILED', message: result.stderr.trim() || 'Could not list studies on the server.' } }
-    }
-
-    const prefix = repoPrefix.endsWith('/') ? repoPrefix : `${repoPrefix}/`
-    // A repo name gitolite actually created only ever contains what its own
-    // wildcard rule allows in each path segment (letters/digits/._-) plus
-    // "/" between segments — confirmed against a real deployment. A row
-    // whose "name" still contains regex metacharacters (`[`, `]`, `+`, ...)
-    // is the wildcard *rule* itself (e.g. "mri-lab/CREATOR/[a-zA-Z0-9._-]+"),
-    // which `info` lists as one of the repos this key has access to even
-    // though nothing has been created under it yet — not a real study.
-    const REAL_REPO_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/
-    const studies = result.stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      // Skip the greeting line ("hello <user>, this is git@host running
-      // gitolite..."); every real repo line's last whitespace-separated
-      // token is the repo name, preceded by its access-flag column(s).
-      .filter((line) => !/^hello\b/i.test(line))
-      .map((line) => line.split(/\s+/).pop())
-      .filter((repoName) => repoName && repoName.startsWith(prefix))
-      .map((repoName) => repoName.slice(prefix.length))
-      .filter((repoName) => repoName && REAL_REPO_NAME_PATTERN.test(repoName))
-
-    return { ok: true, studies, error: null }
   }
 
   async listBranches(projectPath) {
@@ -1205,16 +1120,6 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['siblings', 'remove', '-d', projectPath, '-s', remoteName],
-          options: { cwd: projectPath }
-        }
-      }
-      case 'createSibling': {
-        const projectPath = request.projectPath
-        const siblingName = request.siblingName
-        const sshUrl = request.sshUrl
-        return {
-          command: 'datalad',
-          args: ['-C', projectPath, 'create-sibling', '-s', siblingName, '--', sshUrl],
           options: { cwd: projectPath }
         }
       }

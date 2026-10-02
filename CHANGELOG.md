@@ -4,13 +4,14 @@ Summarized from git history. Tags: v0.2.1, v0.3.0.
 
 ## Unreleased
 
+- Removed the SSH / studies-server integration (server settings, studies listing, SSH password dialog, `createSibling`, studies-server publish). Network shares are used as plain folders instead.
 - Security: bumped transitive dev dependencies to clear high-severity `npm audit` findings.
 - Refactor: removed dead code (`src/index.js` barrel, unused stubs, duplicate spawn wrapper).
 - Project header is set only after project type detection, avoiding spurious "unauthorized" errors.
 
 ## 0.2.x – 0.3.0
 
-- Studies-server integration: remote studies listing, `createSibling`, SSH password management, publish confirmation for the shared server.
+- Studies-server integration (since removed): remote studies listing, `createSibling`, SSH password management.
 - Disconnect remote, unlock, BIDS auto-nesting, global busy overlay, repository lock recovery.
 - Time Machine: per-file restore and discard of unsaved changes.
 - OS noise files (e.g. `.DS_Store`) excluded from datasets.

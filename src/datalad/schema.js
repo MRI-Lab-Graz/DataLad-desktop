@@ -69,10 +69,6 @@ const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   disconnectRemote: {
     required: ['projectPath', 'remoteName'],
     optional: []
-  },
-  createSibling: {
-    required: ['projectPath', 'siblingName', 'sshUrl'],
-    optional: []
   }
 })
 
@@ -85,8 +81,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
   createBranchAt: ['branchName', 'startPoint'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
-  disconnectRemote: ['remoteName'],
-  createSibling: ['siblingName', 'sshUrl']
+  disconnectRemote: ['remoteName']
 })
 
 /**

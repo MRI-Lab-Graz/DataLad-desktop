@@ -37,7 +37,7 @@
                 id="open-settings"
                 class="button button-ghost button-inline"
                 type="button"
-                title="Check your local setup and configure the DataLad studies server"
+                title="Check that Git, git-annex and DataLad are installed"
               >
                 Setup
               </button>
@@ -67,67 +67,7 @@
           <div id="environment-output" class="panel panel-muted panel-compact" hidden></div>
         </div>
 
-        <div class="setup-section">
-          <h3 class="setup-section-title">Studies Server (SSH)</h3>
-          <p class="lede-small">Configure the DataLad studies server so studies can be browsed and installed from it.</p>
-
-          <div class="get-remote-mode-row" role="group" aria-label="Studies server type">
-            <label class="get-remote-mode-option">
-              <input type="radio" name="settings-studies-type" id="settings-studies-type-ssh-directory" value="ssh-directory" checked />
-              Plain SSH directory
-            </label>
-            <label class="get-remote-mode-option">
-              <input type="radio" name="settings-studies-type" id="settings-studies-type-gitolite" value="gitolite" />
-              Gitolite
-            </label>
-          </div>
-
-          <div class="open-project-controls">
-            <label class="field">
-              <span id="settings-studies-host-label">Server Host (SSH)</span>
-              <input id="settings-studies-host" type="text" placeholder="user@myserver.example.org" />
-            </label>
-            <label class="field">
-              <span id="settings-studies-path-label">Studies Folder Path</span>
-              <input id="settings-studies-path" type="text" placeholder="/data/studies" />
-            </label>
-            <p id="settings-studies-type-hint" class="hint-inline">If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> — a username that itself contains "@" (email-style) works too.</p>
-
-            <div class="row-actions">
-              <button id="save-settings" class="button button-primary" type="button">Save Settings</button>
-              <button
-                id="open-ssh-password"
-                class="button button-ghost button-inline"
-                type="button"
-                title="If the server requires a password (not just an SSH key), set it here so studies can be listed and installed."
-              >
-                Set SSH Password…
-              </button>
-            </div>
-            <p id="ssh-password-status" class="hint-inline"></p>
-          </div>
-
-          <div id="settings-output" class="panel panel-muted" hidden></div>
-        </div>
       </section>
-
-      <div id="ssh-password-overlay" class="global-busy-overlay" hidden>
-        <div class="global-busy-card ssh-password-card" role="dialog" aria-modal="true" aria-labelledby="ssh-password-title">
-          <h2 id="ssh-password-title">SSH Password</h2>
-          <p class="lede-small">
-            Used for this session only — kept in memory and never saved to disk. Needed when the studies server
-            requires a password instead of (or in addition to) an SSH key.
-          </p>
-          <label class="field">
-            <span>Password</span>
-            <input id="ssh-password-input" type="password" autocomplete="off" />
-          </label>
-          <div class="row-actions">
-            <button id="ssh-password-cancel" class="button button-ghost button-inline" type="button">Cancel</button>
-            <button id="ssh-password-save" class="button button-primary" type="button">Save</button>
-          </div>
-        </div>
-      </div>
 
       <section id="onboarding-group" class="onboarding-group">
         <div class="onboarding-picker reveal reveal-2" role="tablist" aria-label="Choose how to start">
@@ -182,7 +122,7 @@
             <h2 id="create-project-title">Create Project</h2>
           </div>
 
-          <p class="lede-small">Start a brand-new project, bring one in from a remote URL or network folder, or install a study from the studies server.</p>
+          <p class="lede-small">Start a brand-new project, or bring one in from a remote URL or network folder.</p>
 
           <div class="get-remote-mode-row" role="group" aria-label="Project source">
             <label class="get-remote-mode-option">
@@ -192,10 +132,6 @@
             <label class="get-remote-mode-option">
               <input type="radio" name="create-project-source" id="create-source-remote" value="remote" />
               Based on a remote dataset
-            </label>
-            <label class="get-remote-mode-option">
-              <input type="radio" name="create-project-source" id="create-source-studies-server" value="studies-server" />
-              From studies server
             </label>
           </div>
 
@@ -215,9 +151,9 @@
               <div id="get-remote-url-panel">
                 <label class="field">
                   <span>Remote URL</span>
-                  <input id="get-remote-source-url" type="text" placeholder="https://…  or  ria+ssh://server/dataset" />
+                  <input id="get-remote-source-url" type="text" placeholder="https://…" />
                 </label>
-                <p class="hint-inline">Accepts https://, ssh://, ria+ssh://, or gin: URLs.</p>
+                <p class="hint-inline">Accepts an https:// or gin: URL.</p>
               </div>
 
               <div id="get-remote-network-panel" hidden>
@@ -232,25 +168,6 @@
               </div>
             </div>
 
-            <div id="create-studies-server-panel" hidden>
-              <div class="section-head">
-                <span>Study</span>
-                <button id="refresh-remote-studies" class="button button-ghost button-inline" type="button">Refresh List</button>
-              </div>
-
-              <div id="remote-studies-not-configured" class="panel panel-muted" hidden>
-                No studies server is configured yet. Open <strong>Settings</strong> to add the server host and studies folder path.
-              </div>
-
-              <div id="remote-studies-controls" hidden>
-                <label class="field">
-                  <span>Study</span>
-                  <select id="remote-studies-select"></select>
-                </label>
-              </div>
-
-              <div id="remote-studies-output" class="panel panel-muted" hidden></div>
-            </div>
 
             <label class="field">
               <span id="create-project-path-label">New Project Folder</span>
@@ -642,25 +559,6 @@
             </div>
           </section>
 
-          <section class="status-box" aria-labelledby="studies-server-publish-title">
-            <div class="section-head branch-head">
-              <h3 id="studies-server-publish-title">Studies Server</h3>
-            </div>
-            <p class="lede-small">
-              Publish this project to the configured studies server as a new study, so others can install it
-              from there.
-            </p>
-            <label class="field">
-              <span>New Study Name</span>
-              <input id="studies-server-publish-name" type="text" placeholder="my-new-study" />
-            </label>
-            <div class="action-strip">
-              <button id="studies-server-publish-button" class="button button-primary" type="button">
-                Publish to Studies Server
-              </button>
-            </div>
-            <div id="studies-server-publish-output" class="panel panel-muted panel-compact" hidden></div>
-          </section>
         </section>
 
         <section id="time-machine-zone" class="card reveal" aria-labelledby="time-machine-title" role="tabpanel" hidden>

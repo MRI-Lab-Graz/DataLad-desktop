@@ -32,10 +32,6 @@
     "directories": {
       "output": "dist"
     },
-    "asarUnpack": [
-      "src/datalad/ssh-askpass.sh",
-      "src/datalad/ssh-askpass.cmd"
-    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "src/gui/assets/icons/datalad_desktop.icns",

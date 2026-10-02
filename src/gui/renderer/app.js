@@ -3,8 +3,7 @@ import {
   computeUnlockGating,
   computeRemoteGating,
   computeSyncSectionVisible,
-  computeSyncActionsQuietMessage,
-  isSharedStudiesServerRemote
+  computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { computeSaveGating } from './save-gating.js'
 import { createLatestWins } from './latest-wins.js'
@@ -86,9 +85,7 @@ const elements = {
   clearRecentProjectsButton: document.getElementById('clear-recent-projects'),
   createSourceNewRadio: document.getElementById('create-source-new'),
   createSourceRemoteRadio: document.getElementById('create-source-remote'),
-  createSourceStudiesServerRadio: document.getElementById('create-source-studies-server'),
   createRemoteSourcePanel: document.getElementById('create-remote-source-panel'),
-  createStudiesServerPanel: document.getElementById('create-studies-server-panel'),
   createProjectPathLabel: document.getElementById('create-project-path-label'),
   createProjectPathHint: document.getElementById('create-project-path-hint'),
   getRemoteModeUrlRadio: document.getElementById('get-remote-mode-url'),
@@ -101,29 +98,6 @@ const elements = {
   openSettingsButton: document.getElementById('open-settings'),
   closeSettingsButton: document.getElementById('close-settings'),
   settingsCard: document.getElementById('settings-card'),
-  settingsStudiesHost: document.getElementById('settings-studies-host'),
-  settingsStudiesPath: document.getElementById('settings-studies-path'),
-  settingsStudiesTypeSshDirectory: document.getElementById('settings-studies-type-ssh-directory'),
-  settingsStudiesTypeGitolite: document.getElementById('settings-studies-type-gitolite'),
-  settingsStudiesHostLabel: document.getElementById('settings-studies-host-label'),
-  settingsStudiesPathLabel: document.getElementById('settings-studies-path-label'),
-  settingsStudiesTypeHint: document.getElementById('settings-studies-type-hint'),
-  saveSettingsButton: document.getElementById('save-settings'),
-  settingsOutput: document.getElementById('settings-output'),
-  openSshPasswordButton: document.getElementById('open-ssh-password'),
-  sshPasswordStatus: document.getElementById('ssh-password-status'),
-  sshPasswordOverlay: document.getElementById('ssh-password-overlay'),
-  sshPasswordInput: document.getElementById('ssh-password-input'),
-  sshPasswordSaveButton: document.getElementById('ssh-password-save'),
-  sshPasswordCancelButton: document.getElementById('ssh-password-cancel'),
-  refreshRemoteStudiesButton: document.getElementById('refresh-remote-studies'),
-  remoteStudiesNotConfigured: document.getElementById('remote-studies-not-configured'),
-  remoteStudiesControls: document.getElementById('remote-studies-controls'),
-  remoteStudiesSelect: document.getElementById('remote-studies-select'),
-  remoteStudiesOutput: document.getElementById('remote-studies-output'),
-  studiesServerPublishName: document.getElementById('studies-server-publish-name'),
-  studiesServerPublishButton: document.getElementById('studies-server-publish-button'),
-  studiesServerPublishOutput: document.getElementById('studies-server-publish-output'),
   projectPath: document.getElementById('project-path'),
   pickProjectPathButton: document.getElementById('pick-project-path'),
   commandProjectPath: document.getElementById('command-project-path'),
@@ -448,162 +422,25 @@ elements.getRemoteModeNetworkRadio.addEventListener('change', updateGetRemoteMod
 
 function updateCreateProjectSourceMode() {
   const isRemote = elements.createSourceRemoteRadio.checked
-  const isStudiesServer = elements.createSourceStudiesServerRadio.checked
   elements.createRemoteSourcePanel.hidden = !isRemote
-  elements.createStudiesServerPanel.hidden = !isStudiesServer
-  elements.createProjectPathLabel.textContent = isRemote || isStudiesServer ? 'Save Into Folder' : 'New Project Folder'
-  elements.createProjectPath.placeholder = isRemote || isStudiesServer ? '/path/to/save/project' : '/path/to/new-project'
-  elements.createProjectPathHint.textContent = isStudiesServer
-    ? 'Choose an empty or brand-new folder to install the study into.'
-    : isRemote
-      ? 'Choose an empty or brand-new folder to clone into.'
-      : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
-        'subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.'
-
-  if (isStudiesServer) {
-    void refreshRemoteStudies()
-  }
+  elements.createProjectPathLabel.textContent = isRemote ? 'Save Into Folder' : 'New Project Folder'
+  elements.createProjectPath.placeholder = isRemote ? '/path/to/save/project' : '/path/to/new-project'
+  elements.createProjectPathHint.textContent = isRemote
+    ? 'Choose an empty or brand-new folder to clone into.'
+    : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
+      'subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.'
 }
 
 elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSourceMode)
 elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectSourceMode)
-elements.createSourceStudiesServerRadio.addEventListener('change', updateCreateProjectSourceMode)
 
-async function refreshSshPasswordStatus() {
-  const hasPassword = await api.hasSshPassword()
-  elements.sshPasswordStatus.textContent = hasPassword
-    ? 'Password set for this session.'
-    : ''
-}
-
-// Gitolite forces every SSH session into its own restricted command
-// dispatcher (see #listRemoteStudiesGitolite in adapter.js) — the "folder"
-// concept doesn't apply, so the field labels/hint switch to match.
-function updateStudiesServerTypeUi() {
-  const isGitolite = elements.settingsStudiesTypeGitolite.checked
-
-  elements.settingsStudiesHost.placeholder = isGitolite ? 'git@myserver.example.org' : 'user@myserver.example.org'
-  elements.settingsStudiesPathLabel.textContent = isGitolite ? 'Repo Name Prefix' : 'Studies Folder Path'
-  elements.settingsStudiesPath.placeholder = isGitolite ? 'mri-lab' : '/data/studies'
-  elements.settingsStudiesTypeHint.innerHTML = isGitolite
-    ? 'Gitolite uses one shared account (e.g. <code>git@myserver.example.org</code>) — access per person is ' +
-      'controlled by which SSH key they registered on the server, not by a username here. "Repo Name Prefix" ' +
-      'is the namespace studies live under (e.g. studies show up as <code>mri-lab/&lt;study&gt;</code>).'
-    : 'If the host is preset, prepend your own SSH username to it, e.g. <code>yourname@myserver.example.org</code> ' +
-      '— a username that itself contains "@" (email-style) works too.'
-}
-
-elements.settingsStudiesTypeSshDirectory.addEventListener('change', updateStudiesServerTypeUi)
-elements.settingsStudiesTypeGitolite.addEventListener('change', updateStudiesServerTypeUi)
-
-elements.openSettingsButton.addEventListener('click', async () => {
-  const settings = await api.getSettings()
-  elements.settingsStudiesHost.value = settings?.studiesServer?.host ?? ''
-  elements.settingsStudiesPath.value = settings?.studiesServer?.path ?? ''
-  const isGitolite = settings?.studiesServer?.type === 'gitolite'
-  elements.settingsStudiesTypeGitolite.checked = isGitolite
-  elements.settingsStudiesTypeSshDirectory.checked = !isGitolite
-  updateStudiesServerTypeUi()
-  elements.settingsOutput.hidden = true
+elements.openSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = false
-  await refreshSshPasswordStatus()
 })
 
 elements.closeSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = true
 })
-
-elements.saveSettingsButton.addEventListener('click', async () => {
-  const host = elements.settingsStudiesHost.value.trim()
-  const path = elements.settingsStudiesPath.value.trim()
-  const type = elements.settingsStudiesTypeGitolite.checked ? 'gitolite' : 'ssh-directory'
-
-  setButtonBusy(elements.saveSettingsButton, true)
-  try {
-    await api.updateSettings({ studiesServer: { host, path, type } })
-    elements.settingsOutput.hidden = false
-    elements.settingsOutput.textContent = 'Settings saved.'
-    await refreshRemoteStudies()
-  } finally {
-    setButtonBusy(elements.saveSettingsButton, false)
-  }
-})
-
-elements.openSshPasswordButton.addEventListener('click', () => {
-  elements.sshPasswordInput.value = ''
-  elements.sshPasswordOverlay.hidden = false
-  elements.sshPasswordInput.focus()
-})
-
-function closeSshPasswordDialog() {
-  elements.sshPasswordInput.value = ''
-  elements.sshPasswordOverlay.hidden = true
-}
-
-elements.sshPasswordCancelButton.addEventListener('click', closeSshPasswordDialog)
-
-elements.sshPasswordOverlay.addEventListener('click', (event) => {
-  if (event.target === elements.sshPasswordOverlay) {
-    closeSshPasswordDialog()
-  }
-})
-
-elements.sshPasswordInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    closeSshPasswordDialog()
-  } else if (event.key === 'Enter') {
-    elements.sshPasswordSaveButton.click()
-  }
-})
-
-elements.sshPasswordSaveButton.addEventListener('click', async () => {
-  const password = elements.sshPasswordInput.value
-  if (!password) {
-    closeSshPasswordDialog()
-    return
-  }
-
-  await api.setSshPassword(password)
-  closeSshPasswordDialog()
-  await refreshSshPasswordStatus()
-})
-
-async function refreshRemoteStudies() {
-  setButtonBusy(elements.refreshRemoteStudiesButton, true)
-  try {
-    const result = await api.listRemoteStudies()
-    elements.remoteStudiesOutput.hidden = true
-
-    if (!result.ok && result.error?.code === 'SERVER_NOT_CONFIGURED') {
-      elements.remoteStudiesNotConfigured.hidden = false
-      elements.remoteStudiesControls.hidden = true
-      return
-    }
-
-    elements.remoteStudiesNotConfigured.hidden = true
-
-    if (!result.ok) {
-      elements.remoteStudiesControls.hidden = true
-      elements.remoteStudiesOutput.hidden = false
-      elements.remoteStudiesOutput.textContent = result.error?.message ?? 'Could not list studies on the server.'
-      return
-    }
-
-    elements.remoteStudiesControls.hidden = false
-    elements.remoteStudiesSelect.innerHTML = result.studies
-      .map((study) => `<option value="${escapeHtml(study)}">${escapeHtml(study)}</option>`)
-      .join('')
-
-    if (result.studies.length === 0) {
-      elements.remoteStudiesOutput.hidden = false
-      elements.remoteStudiesOutput.textContent = 'No studies found on the server yet.'
-    }
-  } finally {
-    setButtonBusy(elements.refreshRemoteStudiesButton, false)
-  }
-}
-
-elements.refreshRemoteStudiesButton.addEventListener('click', refreshRemoteStudies)
 
 elements.createProjectButton.addEventListener('click', async () => {
   const targetPath = elements.createProjectPath.value.trim()
@@ -615,9 +452,7 @@ elements.createProjectButton.addEventListener('click', async () => {
     return
   }
 
-  if (elements.createSourceStudiesServerRadio.checked) {
-    await runCreateFromStudiesServer(targetPath)
-  } else if (elements.createSourceRemoteRadio.checked) {
+  if (elements.createSourceRemoteRadio.checked) {
     await runCreateFromRemote(targetPath)
   } else {
     await runCreateNewProject(targetPath)
@@ -684,47 +519,6 @@ async function runCreateFromRemote(targetPath) {
 
   // Same reasoning as runCreateNewProject: detectAndMaybeNestBids's first
   // call already provides an equivalent, awaited refresh right after.
-  const cloneResult = await runWorkflowCommand(
-    'cloneInstall',
-    { source, targetPath },
-    elements.createProjectButton,
-    undefined,
-    { skipBackgroundRefresh: true }
-  )
-  if (cloneResult) {
-    elements.createProjectOutput.hidden = false
-    elements.createProjectOutput.innerHTML = renderCommandResult(cloneResult)
-  }
-  if (!cloneResult?.ok) {
-    return
-  }
-
-  elements.commandProjectPath.value = targetPath
-  elements.projectPath.value = targetPath
-  setCurrentProjectHeader(targetPath, 'unknown')
-  const nestResult = await detectAndMaybeNestBids(targetPath, elements.createProjectButton)
-  if (nestResult) {
-    elements.createProjectOutput.innerHTML += renderBidsNestSummary(nestResult, true)
-  }
-}
-
-// Same clone path as runCreateFromRemote, with the source built from the
-// selected study on the configured studies server instead of a typed URL.
-async function runCreateFromStudiesServer(targetPath) {
-  const study = elements.remoteStudiesSelect.value
-
-  if (!study) {
-    elements.createProjectOutput.hidden = false
-    elements.createProjectOutput.textContent = 'Select a study first.'
-    setLastActionState('Select a study first.', 'error')
-    return
-  }
-
-  const settings = await api.getSettings()
-  const host = settings?.studiesServer?.host ?? ''
-  const remotePath = settings?.studiesServer?.path ?? ''
-  const source = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${study}`
-
   const cloneResult = await runWorkflowCommand(
     'cloneInstall',
     { source, targetPath },
@@ -1029,22 +823,6 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
-  const remoteUrl = state.projectHealthSnapshot?.remoteUrl
-  const settings = await api.getSettings()
-  if (isSharedStudiesServerRemote(remoteUrl, settings?.studiesServer?.host)) {
-    const confirmed = window.confirm(
-      'This publishes your local changes to the SHARED studies server ' +
-        `(${remoteUrl}) — not a personal backup.\n\n` +
-        'Other researchers who installed this same study may already be using ' +
-        'the copy you are about to overwrite/extend. Anyone with server access ' +
-        'will see your changes immediately after this completes.\n\n' +
-        'Continue and publish to the shared server now?'
-    )
-    if (!confirmed) {
-      return
-    }
-  }
-
   await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
 })
 
@@ -1072,62 +850,6 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
 
   await runWorkflowCommand('disconnectRemote', { projectPath, remoteName }, elements.disconnectRemoteButton)
   await refreshProjectHealth(projectPath)
-})
-
-elements.studiesServerPublishButton.addEventListener('click', async () => {
-  const projectPath = readProjectPath()
-  if (!projectPath) {
-    return
-  }
-
-  const studyName = elements.studiesServerPublishName.value.trim()
-  if (!studyName) {
-    elements.studiesServerPublishOutput.hidden = false
-    elements.studiesServerPublishOutput.textContent = 'Add a study name first.'
-    setLastActionState('Add a study name first.', 'error')
-    return
-  }
-
-  const settings = await api.getSettings()
-  const host = settings?.studiesServer?.host ?? ''
-  const remotePath = settings?.studiesServer?.path ?? ''
-  if (!host || !remotePath) {
-    elements.studiesServerPublishOutput.hidden = false
-    elements.studiesServerPublishOutput.textContent = 'Configure the studies server in Settings first.'
-    setLastActionState('Configure the studies server first.', 'error')
-    return
-  }
-
-  const sshUrl = `ssh://${host}${remotePath.startsWith('/') ? '' : '/'}${remotePath}/${studyName}`
-
-  const confirmed = window.confirm(
-    `This publishes "${studyName}" to the SHARED studies server (${host}) as a new, ` +
-      'independently installable study.\n\n' +
-      'Anyone with access to that server will be able to see and install it immediately ' +
-      'after this completes — this is not a personal backup or draft area.\n\n' +
-      'Continue and publish to the shared server now?'
-  )
-  if (!confirmed) {
-    return
-  }
-
-  const siblingResult = await runWorkflowCommand(
-    'createSibling',
-    { projectPath, siblingName: 'studies-server', sshUrl },
-    elements.studiesServerPublishButton
-  )
-  if (siblingResult) {
-    elements.studiesServerPublishOutput.hidden = false
-    elements.studiesServerPublishOutput.innerHTML = renderCommandResult(siblingResult)
-  }
-  if (!siblingResult?.ok) {
-    return
-  }
-
-  const pushResult = await runWorkflowCommand('push', { projectPath }, elements.studiesServerPublishButton)
-  if (pushResult) {
-    elements.studiesServerPublishOutput.innerHTML += renderCommandResult(pushResult)
-  }
 })
 
 elements.refreshDatasetsButton.addEventListener('click', async () => {
