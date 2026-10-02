@@ -110,12 +110,13 @@
 ; Runs when the user uninstalls DataLad Desktop. Offers to also remove what the
 ; installer added for DataLad: the pip package and its Scripts folder on PATH.
 ; Python, Git and git-annex are shared tools other software may rely on, so they
-; are never removed. Silent uninstalls keep DataLad (/SD IDNO).
+; are never removed. The Scripts folder leaves PATH only if pip left it empty.
+; Silent uninstalls keep DataLad (/SD IDNO).
 !macro customUnInstall
   ${ifNot} ${isUpdated}
   MessageBox MB_YESNO "Also remove DataLad (the pip package) and its PATH entry?$\r$\n$\r$\nPython, Git and git-annex will be left installed." /SD IDNO IDNO skip_datalad_removal
     DetailPrint "Removing DataLad..."
-    nsExec::ExecToLog `powershell -NoProfile -Command "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User'); $$code = 'import sysconfig; print(sysconfig.get_path(''scripts''))'; if (Get-Command py -ErrorAction SilentlyContinue) { $$scripts = py -3 -c $$code; py -3 -m pip uninstall -y datalad; $$pipExit = $$LASTEXITCODE } elseif (Get-Command python -ErrorAction SilentlyContinue) { $$scripts = python -c $$code; python -m pip uninstall -y datalad; $$pipExit = $$LASTEXITCODE } else { exit 1 }; if ($$scripts -and -not (Test-Path (Join-Path $$scripts 'datalad.exe'))) { $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); [Environment]::SetEnvironmentVariable('Path', (($$machine -split ';' | Where-Object { $$_ -and $$_ -ne $$scripts }) -join ';'), 'Machine') }; exit $$pipExit"`
+    nsExec::ExecToLog `powershell -NoProfile -Command "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User'); $$code = 'import sysconfig; print(sysconfig.get_path(''scripts''))'; if (Get-Command py -ErrorAction SilentlyContinue) { $$scripts = py -3 -c $$code; py -3 -m pip uninstall -y datalad; $$pipExit = $$LASTEXITCODE } elseif (Get-Command python -ErrorAction SilentlyContinue) { $$scripts = python -c $$code; python -m pip uninstall -y datalad; $$pipExit = $$LASTEXITCODE } else { exit 1 }; if ($$scripts -and -not (Get-ChildItem $$scripts -ErrorAction SilentlyContinue | Select-Object -First 1)) { $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); [Environment]::SetEnvironmentVariable('Path', (($$machine -split ';' | Where-Object { $$_ -and $$_ -ne $$scripts }) -join ';'), 'Machine') }; exit $$pipExit"`
     Pop $0
     ${If} $0 != 0
       DetailPrint "Could not fully remove DataLad (exit $0) - run 'python -m pip uninstall datalad' manually."

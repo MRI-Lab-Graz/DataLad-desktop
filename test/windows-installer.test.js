@@ -76,3 +76,11 @@ test('uninstaller does not prompt during an update', () => {
   const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
   assert.match(un, /\$\{ifNot\} \$\{isUpdated\}/i)
 })
+
+// After a successful pip uninstall datalad.exe is always gone, so that check alone
+// would drop a Scripts folder still holding pip.exe and other tools from PATH.
+test('uninstaller only drops the Scripts folder from PATH when it is empty', () => {
+  const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
+  assert.match(un, /Get-ChildItem \$\$scripts/)
+  assert.doesNotMatch(un, /-not \(Test-Path \(Join-Path \$\$scripts 'datalad\.exe'\)\)/)
+})
