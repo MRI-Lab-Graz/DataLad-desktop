@@ -108,3 +108,12 @@ test('mapCommandError maps a cancelled run to a calm CANCELLED result for any co
     assert.match(result.message, /Stopped by you/)
   }
 })
+
+test('get errors do not tell users to type datalad CLI commands', () => {
+  const forbidden = mapCommandError('get', { stdout: 'get(error): file (forbidden)', stderr: '' })
+  const unavailable = mapCommandError('get', { stdout: 'get(error): file (not available)', stderr: '' })
+  assert.equal(forbidden.code, 'GET_FORBIDDEN')
+  assert.equal(unavailable.code, 'CONTENT_UNAVAILABLE')
+  assert.doesNotMatch(forbidden.message, /datalad siblings/)
+  assert.doesNotMatch(unavailable.message, /datalad siblings/)
+})

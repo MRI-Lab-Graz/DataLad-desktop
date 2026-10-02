@@ -208,7 +208,7 @@ export function mapCommandError(commandName, runResult) {
       code: 'GET_FORBIDDEN',
       title: 'Download access denied',
       message:
-        'The data source rejected the download. The dataset may require authentication or a data sibling may need to be enabled first (e.g. run "datalad siblings enable -s <name>" in the Console).',
+        'The data source rejected the download. The dataset may require authentication, or its data source may not be set up on this computer yet. Check your credentials and server access, or ask whoever shared the dataset to confirm you have access to the data.',
       technicalDetails: stdout.trim()
     }
   }
@@ -218,7 +218,7 @@ export function mapCommandError(commandName, runResult) {
       code: 'CONTENT_UNAVAILABLE',
       title: 'Content could not be downloaded',
       message:
-        'No configured remote could provide the requested file content. A data sibling may need to be enabled first — use the Console to run "datalad siblings" to list available siblings.',
+        'No configured remote could provide the requested file content. The data source may not be set up on this computer yet, or you may not have access to it. Ask whoever shared the dataset to confirm the data is available to you.',
       technicalDetails: stdout.trim()
     }
   }
