@@ -6,13 +6,14 @@ import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import electronPath from 'electron'
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-export async function launchApp() {
+// `identity: false` launches against an empty global git config, like a fresh Windows machine.
+export async function launchApp({ identity = true } = {}) {
   // Setting this to '' (rather than deleting it) does NOT reliably clear it
   // on Windows: empty-string env vars get dropped when child_process builds
   // the Windows environment block, so the parent's truthy value (if any)
@@ -31,6 +32,13 @@ export async function launchApp() {
   // mismatch this caused. A fresh --user-data-dir per launch makes every
   // run hermetic regardless of what's been clicked around locally before.
   const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
+
+  // Same idea for git: never read or write the developer's real ~/.gitconfig (the
+  // app now manages user.name/user.email there). CI runners have no identity, so by
+  // default this one has one; the identity e2e launches without it.
+  const gitConfigGlobal = join(userDataDir, 'gitconfig')
+  await writeFile(gitConfigGlobal, identity ? '[user]\n\tname = E2E Test\n\temail = e2e@example.org\n' : '')
+  childEnv.GIT_CONFIG_GLOBAL = gitConfigGlobal
 
   // The first `datalad status` probe detectProject runs (see
   // DataLadAdapter#probeDataLadDataset) pays a one-time cold-start cost —
@@ -56,7 +64,7 @@ export async function launchApp() {
   try {
     const app = await connect(child)
     await warmUp
-    return app
+    return { ...app, gitConfigGlobal }
   } catch (err) {
     // A failure below (e.g. #check-env never appears) leaves the spawned
     // Electron process and any open CDP socket dangling. Nothing then

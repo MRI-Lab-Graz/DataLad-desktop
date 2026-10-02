@@ -59,3 +59,17 @@ test('messageLabel lets callers swap in git terminology for power users', () => 
   })
   assert.equal(gating.guidance.text, 'Add a commit message, or Save will ask you for one.')
 })
+
+test('missing git identity shows a warning hint but keeps Save clickable', () => {
+  const gating = computeSaveGating({
+    hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true, hasIdentity: false
+  })
+  assert.equal(gating.disabled, false)
+  assert.equal(gating.guidance.text, 'Set your name and email in Setup before saving.')
+  assert.equal(gating.guidance.warning, true)
+})
+
+test('hasIdentity defaults to true so existing callers are unchanged', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true })
+  assert.equal(gating.guidance.text, 'Ready to save selected changes.')
+})

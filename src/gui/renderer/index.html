@@ -59,6 +59,15 @@
         </div>
 
         <div class="setup-section">
+          <h3 class="setup-section-title">Your Name and Email</h3>
+          <p class="lede-small">Saved checkpoints are labelled with who made them.</p>
+          <p id="identity-summary" class="lede-small"></p>
+          <div class="row-actions">
+            <button id="identity-open" class="button button-ghost button-inline" type="button">Set…</button>
+          </div>
+        </div>
+
+        <div class="setup-section">
           <h3 class="setup-section-title">Local Environment</h3>
           <p class="lede-small">Check whether Python 3, DataLad, and git-annex are installed and working on this computer.</p>
           <div class="row-actions">
@@ -625,6 +634,26 @@
           </details>
         </section>
       </section>
+    </div>
+
+    <div id="identity-overlay" class="global-busy-overlay" hidden>
+      <form id="identity-form" class="global-busy-card identity-card" role="dialog" aria-modal="true" aria-labelledby="identity-title">
+        <h2 id="identity-title">Who is saving?</h2>
+        <p class="lede-small">Your name and email are stored with every checkpoint you save. You only need to enter them once, and you can change them any time in Setup.</p>
+        <label class="field">
+          <span>Name</span>
+          <input id="identity-name" type="text" autocomplete="name" placeholder="Jane Doe" />
+        </label>
+        <label class="field">
+          <span>Email</span>
+          <input id="identity-email" type="text" autocomplete="email" placeholder="jane@lab.org" />
+        </label>
+        <p id="identity-error" class="hint-inline-warning" role="alert" aria-live="polite"></p>
+        <div class="row-actions">
+          <button id="identity-later" class="button button-ghost button-inline" type="button">Later</button>
+          <button id="identity-save" class="button button-inline" type="submit">Save</button>
+        </div>
+      </form>
     </div>
 
     <div id="global-busy-overlay" class="global-busy-overlay" hidden>

@@ -7,6 +7,7 @@ import {
 } from './button-gating.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
+import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
   cancelledResult,
@@ -27,6 +28,7 @@ import {
 const api = window.dataladDesktop
 
 const state = {
+  gitIdentity: null,
   rootProjectPath: null,
   rootProjectClassification: 'unknown',
   currentProjectClassification: 'unknown',
@@ -170,6 +172,14 @@ const elements = {
   saveGuidance: document.getElementById('save-guidance'),
   paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
+  identityOverlay: document.getElementById('identity-overlay'),
+  identityForm: document.getElementById('identity-form'),
+  identityName: document.getElementById('identity-name'),
+  identityEmail: document.getElementById('identity-email'),
+  identityError: document.getElementById('identity-error'),
+  identityLaterButton: document.getElementById('identity-later'),
+  identitySummary: document.getElementById('identity-summary'),
+  identityOpenButton: document.getElementById('identity-open'),
   detectProjectButton: document.getElementById('detect-project'),
   refreshContractButton: document.getElementById('refresh-contract'),
   globalBusyOverlay: document.getElementById('global-busy-overlay'),
@@ -213,6 +223,10 @@ setCurrentProjectHeader('', 'unknown')
 updateSaveButtonState()
 initPowerUserConsole()
 initBidsAutoNestToggle()
+await refreshGitIdentity()
+if (state.gitIdentity.available && !state.gitIdentity.complete) {
+  openIdentityDialog()
+}
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -439,6 +453,52 @@ elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectS
 
 elements.openSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = false
+  void refreshGitIdentity()
+})
+
+async function refreshGitIdentity() {
+  state.gitIdentity = await api.getGitIdentity()
+  const { available, name, email, complete } = state.gitIdentity
+  elements.identitySummary.textContent = !available
+    ? 'Git was not found - see Check Environment below.'
+    : complete
+      ? `${name} <${email}>`
+      : 'Not set - Save is blocked until you set it.'
+  elements.identityOpenButton.textContent = complete ? 'Change…' : 'Set…'
+  updateSaveButtonState()
+}
+
+function openIdentityDialog() {
+  if (!elements.identityOverlay.hidden) {
+    return
+  }
+  elements.identityName.value = state.gitIdentity?.name ?? ''
+  elements.identityEmail.value = state.gitIdentity?.email ?? ''
+  elements.identityError.textContent = ''
+  elements.identityOverlay.hidden = false
+  ;(elements.identityName.value ? elements.identityEmail : elements.identityName).focus()
+}
+
+function closeIdentityDialog() {
+  elements.identityOverlay.hidden = true
+}
+
+elements.identityOpenButton.addEventListener('click', openIdentityDialog)
+elements.identityLaterButton.addEventListener('click', closeIdentityDialog)
+elements.identityOverlay.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeIdentityDialog()
+  }
+})
+elements.identityForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const result = await api.setGitIdentity({ name: elements.identityName.value, email: elements.identityEmail.value })
+  if (!result.ok) {
+    elements.identityError.textContent = result.error
+    return
+  }
+  closeIdentityDialog()
+  await refreshGitIdentity()
 })
 
 elements.closeSettingsButton.addEventListener('click', () => {
@@ -1342,6 +1402,17 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
 
   if (state.sequenceStopRequested) {
     return cancelledResult(commandName)
+  }
+
+  if (shouldBlockForIdentity(commandName, state.gitIdentity)) {
+    // Re-read once: the identity may have been fixed in a terminal since launch.
+    await refreshGitIdentity()
+    if (shouldBlockForIdentity(commandName, state.gitIdentity)) {
+      const blocked = identityMissingResult(commandName)
+      elements.commandOutput.innerHTML = renderCommandResult(blocked)
+      openIdentityDialog()
+      return blocked
+    }
   }
 
   if (state.pendingCommands.has(commandName)) {
@@ -2497,6 +2568,7 @@ function updateSaveButtonState() {
     hasSelection: gatherSavePaths().length > 0,
     hasConflicts: Boolean(snapshot?.conflictCount),
     hasChanges: Boolean(snapshot && !snapshot.clean),
+    hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
     messageLabel: getMessageTermLabel()
   })
 

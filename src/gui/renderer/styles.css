@@ -1827,6 +1827,15 @@ select:disabled {
   animation: global-busy-spin 800ms linear infinite;
 }
 
+.identity-card {
+  justify-items: stretch;
+  text-align: left;
+}
+
+.identity-card .row-actions {
+  justify-content: flex-end;
+}
+
 @keyframes global-busy-spin {
   to {
     transform: rotate(360deg);

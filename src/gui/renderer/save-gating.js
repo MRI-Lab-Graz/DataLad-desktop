@@ -10,6 +10,7 @@
  * disabled button with no explanation reads as broken.
  *
  * @param {{
+ *   hasIdentity?: boolean (git name+email set; defaults to true),
  *   hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean,
  *   messageLabel?: string
  * }} input messageLabel lets callers swap in git terminology ("commit message") for power users
@@ -21,6 +22,7 @@ export function computeSaveGating({
   hasSelection,
   hasConflicts,
   hasChanges,
+  hasIdentity = true,
   messageLabel = 'checkpoint message'
 }) {
   const disabled = hasConflicts || (hasChanges && !hasSelection)
@@ -36,6 +38,13 @@ export function computeSaveGating({
     return {
       disabled,
       guidance: { text: 'Select changed files or add manual paths before saving.', warning: true }
+    }
+  }
+
+  if (!hasIdentity) {
+    return {
+      disabled,
+      guidance: { text: 'Set your name and email in Setup before saving.', warning: true }
     }
   }
 

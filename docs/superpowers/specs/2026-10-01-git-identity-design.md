@@ -1,6 +1,6 @@
 ---
 title: Git identity (name + email) setup with a commit guard
-status: approved-in-chat, not yet reviewed as a file
+status: implemented 2026-10-02
 date: 2026-10-01
 ---
 

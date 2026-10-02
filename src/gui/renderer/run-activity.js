@@ -49,9 +49,11 @@ export function renderRunningRows(runs) {
     .join('')
 }
 
-// Multi-step flows (BIDS nesting) must stop at the first cancelled step.
+// Multi-step flows (BIDS nesting) must stop at the first cancelled step, or at a
+// missing git identity (every later step would fail the same way).
 export function shouldStopSequence(result) {
-  return Boolean(result?.cancelled) || result?.userError?.code === 'CANCELLED'
+  const code = result?.userError?.code
+  return Boolean(result?.cancelled) || code === 'CANCELLED' || code === 'IDENTITY_MISSING'
 }
 
 // Returned instead of starting another step once a sequence has been stopped.

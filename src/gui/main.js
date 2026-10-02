@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
+import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
@@ -304,6 +305,12 @@ ipcMain.handle('console:runCommand', async (event, payload = {}) => {
     consoleRunner.run(commandSpec.command, commandSpec.args, { ...commandSpec.options, ...runOptions })
   )
 })
+
+// Global git config only (user.name/user.email); setGitIdentity validates its input.
+ipcMain.handle('identity:get', () => getGitIdentity((command, args) => consoleRunner.run(command, args)))
+ipcMain.handle('identity:set', (_event, identity) =>
+  setGitIdentity((command, args) => consoleRunner.run(command, args), identity)
+)
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
   return process.cwd()
