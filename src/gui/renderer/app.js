@@ -223,10 +223,6 @@ setCurrentProjectHeader('', 'unknown')
 updateSaveButtonState()
 initPowerUserConsole()
 initBidsAutoNestToggle()
-await refreshGitIdentity()
-if (state.gitIdentity.available && !state.gitIdentity.complete) {
-  openIdentityDialog()
-}
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -3917,3 +3913,11 @@ function nextRequestToken(key) {
 function isLatestRequestToken(key, token) {
   return state.requestTokens[key] === token
 }
+
+// Last, and not awaited: a top-level await here would hold back every
+// listener registered above until git answers (slow on Windows).
+void refreshGitIdentity().then(() => {
+  if (state.gitIdentity.available && !state.gitIdentity.complete) {
+    openIdentityDialog()
+  }
+})
