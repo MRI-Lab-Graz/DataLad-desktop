@@ -61,3 +61,18 @@ test('uninstaller offers to remove DataLad and its PATH entry, and leaves Python
   assert.match(un, /SetEnvironmentVariable\('Path'.*'Machine'\)/)
   assert.doesNotMatch(un, /git-installer|python-installer|git-annex-installer|uninstall -y (git|python)/i)
 })
+
+// powershell -Command exits with the last statement's status, so a failed pip
+// uninstall would be reported as success unless pip's exit code is passed on.
+test('uninstaller reports a failed pip uninstall through the PowerShell exit code', () => {
+  const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
+  assert.match(un, /\$\$pipExit = \$\$LASTEXITCODE/)
+  assert.match(un, /exit \$\$pipExit/)
+})
+
+// electron-builder runs the old uninstaller during an update; that must never
+// offer to remove DataLad.
+test('uninstaller does not prompt during an update', () => {
+  const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
+  assert.match(un, /\$\{ifNot\} \$\{isUpdated\}/i)
+})
