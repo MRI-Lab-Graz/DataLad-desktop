@@ -28,6 +28,10 @@ Beginner
    - study purpose sentence
    - owner or team name
 
+3. On first launch the app asks for your **name and email**. Enter them once; they
+   label every checkpoint you save, and you can change them later under
+   **Setup → Your Name and Email**. Save stays blocked until they are set.
+
 ## Why the empty-folder rule matters
 
 DataLad project creation initializes version-control structure in the target

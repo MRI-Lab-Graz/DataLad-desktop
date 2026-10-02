@@ -56,6 +56,13 @@ Most researchers should just download the ready-to-run app:
 > installation instructions for your platform. The app's diagnostics screen tells you what's
 > missing.
 
+### First launch: your name and email
+
+The first time you start the app it asks for your **name and email**. They are
+stored with every checkpoint you save, so teammates can see who made which change.
+You enter them once; you can change them any time under **Setup → Your Name and Email**.
+Until they are set, Save is blocked (choose **Later** to look around first).
+
 ### macOS: "app can't be opened" warning
 
 Release builds aren't signed with an Apple Developer certificate yet, so
