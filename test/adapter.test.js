@@ -1984,3 +1984,38 @@ test('runCommand still works when no runOptions are given', async () => {
   assert.equal(result.ok, true)
   assert.equal(runner.calls[0].options.signal, undefined)
 })
+
+test('checkEnvironment flags a datalad launcher pointing at an uninstalled Python', async () => {
+  const runner = new FakeRunner()
+  runner.set('python3', ['--version'], { exitCode: 0, stdout: 'Python 3.13.1\n', stderr: '', failed: false })
+  runner.set('datalad', ['--version'], {
+    exitCode: 1,
+    stdout: '',
+    stderr: 'Fatal error in launcher: Unable to create process using \'"C:\\Py314\\python.exe" datalad.exe\': The system cannot find the file specified.',
+    failed: true
+  })
+  runner.set('git', ['annex', 'version'], { exitCode: 0, stdout: 'git-annex version: 10\n', stderr: '', failed: false })
+
+  const diagnostics = await new DataLadAdapter({ runner }).checkEnvironment()
+
+  assert.deepEqual(diagnostics.issues.map((i) => i.code), ['DATALAD_BROKEN_LAUNCHER'])
+  assert.deepEqual(diagnostics.report.recoverySteps, [
+    'DataLad was installed with a Python that no longer exists. Reinstall it with: python3 -m pip install --force-reinstall --no-deps datalad'
+  ])
+})
+
+test('checkEnvironment treats a macOS bad-interpreter failure as a broken launcher', async () => {
+  const runner = new FakeRunner()
+  runner.set('python3', ['--version'], { exitCode: 0, stdout: 'Python 3.12.2\n', stderr: '', failed: false })
+  runner.set('datalad', ['--version'], {
+    exitCode: 126,
+    stdout: '',
+    stderr: 'zsh: /usr/local/bin/datalad: bad interpreter: /old/python3: no such file or directory',
+    failed: true
+  })
+  runner.set('git', ['annex', 'version'], { exitCode: 0, stdout: 'git-annex version: 10\n', stderr: '', failed: false })
+
+  const diagnostics = await new DataLadAdapter({ runner }).checkEnvironment()
+
+  assert.equal(diagnostics.issues[0].code, 'DATALAD_BROKEN_LAUNCHER')
+})

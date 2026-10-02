@@ -49,3 +49,15 @@ test('installer puts the Scripts folder of the Python that installed DataLad on 
   assert.match(install, /datalad\.exe/)
   assert.match(install, /SetEnvironmentVariable\('Path'.*'Machine'\)/)
 })
+
+// The NSIS uninstaller only removes the app; DataLad (pip) and the PATH entry
+// the installer added would otherwise be left behind. Python/Git/git-annex are
+// shared tools and must never be removed.
+test('uninstaller offers to remove DataLad and its PATH entry, and leaves Python, Git and git-annex alone', () => {
+  const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
+  assert.ok(un, 'expected a customUnInstall macro')
+  assert.match(un, /MessageBox MB_YESNO.*\/SD IDNO/, 'prompt must default to keeping DataLad when silent')
+  assert.match(un, /pip uninstall -y datalad/)
+  assert.match(un, /SetEnvironmentVariable\('Path'.*'Machine'\)/)
+  assert.doesNotMatch(un, /git-installer|python-installer|git-annex-installer|uninstall -y (git|python)/i)
+})

@@ -23,7 +23,7 @@ export function formatEnvironmentDiagnostics(diagnostics) {
   ]
 
   const recoverySteps = diagnostics.issues
-    .map((issue) => RECOVERY_BY_ISSUE[issue.code])
+    .map((issue) => issue.recovery ?? RECOVERY_BY_ISSUE[issue.code])
     .filter(Boolean)
 
   const dedupedSteps = [...new Set(recoverySteps)]

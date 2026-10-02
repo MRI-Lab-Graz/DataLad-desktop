@@ -39,6 +39,8 @@ const BIDS_TOP_LEVEL_DIR_NAMES = ['rawdata', 'derivatives', 'sourcedata']
 // than the shared .gitignore — these are artifacts of the researcher's own
 // OS, not something to commit and push to collaborators/the studies server.
 const OS_NOISE_PATTERNS = ['.DS_Store', '._*', 'Thumbs.db', 'desktop.ini']
+// pip/pipx launchers embed the installing Python's path; these are the OS errors when it is gone.
+const BROKEN_LAUNCHER_PATTERN = /(fatal error in launcher|bad interpreter)/i
 const NO_DATASET_PATTERN = /(nodatasetfound|not a dataset|no dataset found|could not find dataset)/i
 const NO_COMMITS_PATTERN = /(does not have any commits yet|has no commits yet)/i
 
@@ -63,7 +65,13 @@ export class DataLadAdapter {
       })
     }
 
-    if (!datalad.available) {
+    if (!datalad.available && python.available && BROKEN_LAUNCHER_PATTERN.test(datalad.details ?? '')) {
+      issues.push({
+        code: 'DATALAD_BROKEN_LAUNCHER',
+        message: 'DataLad was installed with a Python that no longer exists.',
+        recovery: `DataLad was installed with a Python that no longer exists. Reinstall it with: ${python.command} -m pip install --force-reinstall --no-deps datalad`
+      })
+    } else if (!datalad.available) {
       issues.push({
         code: 'DATALAD_MISSING',
         message: 'DataLad is not available in PATH.'
@@ -758,7 +766,8 @@ export class DataLadAdapter {
         return {
           available: true,
           version: versionLine,
-          details: null
+          details: null,
+          command: [candidate.command, ...candidate.args.slice(0, -1)].join(' ')
         }
       }
 
