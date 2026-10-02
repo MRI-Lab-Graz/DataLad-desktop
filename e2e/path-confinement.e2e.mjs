@@ -61,7 +61,11 @@ const confinedCalls = [
   ['readGitignore', () => [unauthorizedPath, '']],
   ['addIgnorePatterns', () => [unauthorizedPath, [''], ['*.tmp']]],
   ['setWatchedProject', () => [unauthorizedPath]],
-  ['clearRepositoryLock', () => [unauthorizedPath]]
+  ['clearRepositoryLock', () => [unauthorizedPath]],
+  ['listDatasets', () => [unauthorizedPath]],
+  ['ignoreOsNoiseFiles', () => [unauthorizedPath]],
+  ['runCommand', () => ['save', { projectPath: unauthorizedPath, message: 'x' }]],
+  ['runCommand', () => ['push', { projectPath: unauthorizedPath }]]
 ]
 
 for (const [name, buildArgs] of confinedCalls) {
@@ -71,6 +75,18 @@ for (const [name, buildArgs] of confinedCalls) {
     assert.match(result.message, /not part of an opened project/)
   })
 }
+
+test('runCommand still works for the authorized project path', async () => {
+  const result = await invokeRejects('runCommand', 'save', { projectPath: authorizedProjectPath, message: 'x' })
+  assert.equal(result.rejected, false, 'authorized path should not be rejected')
+})
+
+test('listDatasets and ignoreOsNoiseFiles still work for the authorized project path', async () => {
+  for (const name of ['listDatasets', 'ignoreOsNoiseFiles']) {
+    const result = await invokeRejects(name, authorizedProjectPath)
+    assert.equal(result.rejected, false, `${name} should accept an authorized path`)
+  }
+})
 
 test('listBranches still succeeds for the authorized project path', async () => {
   const result = await invokeRejects('listBranches', authorizedProjectPath)

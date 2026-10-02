@@ -8,6 +8,7 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { buildGitStatusMap } from '../datalad/status.js'
 import { createProjectWatcher } from './fs-watch.js'
+import { isWithinRoots } from './path-confinement.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -72,13 +73,7 @@ function authorizeRoot(rootPath) {
 }
 
 function isWithinAuthorizedRoot(targetPath) {
-  const normalizedTarget = resolve(targetPath)
-  for (const root of authorizedRoots) {
-    if (normalizedTarget === root || normalizedTarget.startsWith(`${root}${sep}`)) {
-      return true
-    }
-  }
-  return false
+  return isWithinRoots(targetPath, authorizedRoots)
 }
 
 // Every IPC handler that accepts a renderer-supplied path must call this
@@ -185,7 +180,13 @@ ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
 })
 
+// clone/create targets don't exist yet; they are authorized after they succeed.
+const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
+
 ipcMain.handle('adapter:runCommand', async (event, payload) => {
+  if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
+    requireAuthorizedRoot(payload.request?.projectPath)
+  }
   const result = await runWithHandle(event, payload.runId, (runOptions) =>
     adapter.runCommand(payload.commandName, payload.request, runOptions)
   )
@@ -207,10 +208,12 @@ ipcMain.handle('adapter:getContract', async () => {
 })
 
 ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.listDatasets(projectPath)
 })
 
 ipcMain.handle('adapter:ignoreOsNoiseFiles', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
   return adapter.ignoreOsNoiseFiles(projectPath)
 })
 
