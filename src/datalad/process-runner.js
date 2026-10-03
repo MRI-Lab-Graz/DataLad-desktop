@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import { killProcessTree, QUIT_ABORT_REASON } from './kill-tree.js'
+import { resolveTool } from './resolve-tool.js'
 
 // git acquires .git/index.lock atomically before any mutation, so a command
 // that fails to acquire it never partially ran — a retry after a short
@@ -32,6 +33,14 @@ function latestLine(chunk) {
  * Small shell boundary used by the adapter so UI layers can stay command-agnostic.
  */
 export class ProcessRunner {
+  #resolve
+  #platform
+
+  constructor({ resolve = resolveTool, platform = process.platform } = {}) {
+    this.#resolve = resolve
+    this.#platform = platform
+  }
+
   async run(command, args = [], options = {}) {
     const startedAt = Date.now()
 
@@ -54,6 +63,12 @@ export class ProcessRunner {
 
   async #runOnce(command, args, options) {
     const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput } = options
+
+    // Bare names are looked up on PATH ourselves: Windows would otherwise try the
+    // (dataset-controlled) cwd first. A shell line is the console's business.
+    const bare = !options.shell && !/[\\/]/.test(command)
+    const exe = bare ? this.#resolve(command) : null
+    const notFound = bare && !exe && this.#platform === 'win32'
 
     return new Promise((resolve) => {
       let stdout = ''
@@ -103,9 +118,21 @@ export class ProcessRunner {
         return
       }
 
-      const child = spawn(command, args, {
+      if (notFound) {
+        finish({
+          command,
+          args,
+          exitCode: 127,
+          stdout,
+          stderr: `${command} not found on PATH`,
+          failed: true
+        })
+        return
+      }
+
+      const child = spawn(exe ?? command, args, {
         cwd: options.cwd,
-        env: { ...process.env, ...(options.env ?? {}) },
+        env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(options.env ?? {}) },
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: options.shell ?? false,
         // POSIX: lead our own process group so cancel/timeout can signal the whole tree.

@@ -373,3 +373,33 @@ test('ProcessRunner does not retry a cancelled run that had printed an index.loc
   assert.equal(result.cancelled, true)
   assert.equal(await readFile(counter, 'utf8'), '1', 'a cancelled run must not be re-spawned by the lock retry')
 })
+
+test('ProcessRunner spawns the resolved absolute path, not the bare name', async () => {
+  const runner = new ProcessRunner({
+    resolve: (name) => (name === 'fake-tool' ? process.execPath : null)
+  })
+  const result = await runner.run('fake-tool', ['-e', "process.stdout.write('ok')"])
+  assert.equal(result.stdout, 'ok')
+})
+
+test('ProcessRunner on win32 refuses an unresolvable bare name instead of searching cwd', async () => {
+  const runner = new ProcessRunner({ resolve: () => null, platform: 'win32' })
+  const result = await runner.run('datalad', ['--version'], { cwd: process.cwd() })
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 127)
+  assert.match(result.stderr, /not found on PATH/i)
+})
+
+test('ProcessRunner tells children not to search the current directory for executables', async () => {
+  const saved = process.env.NoDefaultCurrentDirectoryInExePath
+  delete process.env.NoDefaultCurrentDirectoryInExePath
+  try {
+    const result = await new ProcessRunner().run(process.execPath, [
+      '-e',
+      'process.stdout.write(process.env.NoDefaultCurrentDirectoryInExePath ?? "")'
+    ])
+    assert.equal(result.stdout, '1')
+  } finally {
+    if (saved !== undefined) process.env.NoDefaultCurrentDirectoryInExePath = saved
+  }
+})
