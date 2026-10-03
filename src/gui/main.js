@@ -13,6 +13,7 @@ import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy } from './policy.js'
+import { guardedHandler } from './ipc-guard.js'
 import { createTrustStore, findExecVectors } from './folder-trust.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
@@ -45,6 +46,8 @@ const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 // grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
 const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
+// Every IPC channel goes through here so only the app's own page can call it.
+const handle = (channel, fn) => ipcMain.handle(channel, guardedHandler(APP_RENDERER_URL, fn))
 // Runs `run({ signal, onOutput })` as a cancellable, observable run when the
 // renderer supplied a runId; otherwise runs it plain, as before.
 async function runWithHandle(event, runId, run) {
@@ -138,10 +141,12 @@ function createMainWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      devTools: !app.isPackaged
     }
   })
 
+  mainWindow.webContents.session.setPermissionCheckHandler(() => false)
   mainWindow.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false)
   })
@@ -187,11 +192,11 @@ function applyAppIcon() {
   app.dock.setIcon(iconImage)
 }
 
-ipcMain.handle('adapter:checkEnvironment', async () => {
+handle('adapter:checkEnvironment', async () => {
   return adapter.checkEnvironment()
 })
 
-ipcMain.handle('adapter:detectProject', async (event, projectPath) => {
+handle('adapter:detectProject', async (event, projectPath) => {
   await requireTrustedFolder(event, projectPath)
   const result = await adapter.detectProject(projectPath)
   if (result?.classification) {
@@ -202,21 +207,21 @@ ipcMain.handle('adapter:detectProject', async (event, projectPath) => {
 
 // Read-only probe of a folder that isn't (and may never become) a project —
 // deliberately does not call authorizeRoot, unlike detectProject above.
-ipcMain.handle('adapter:inspectBidsCandidate', async (_event, folderPath) => {
+handle('adapter:inspectBidsCandidate', async (_event, folderPath) => {
   return adapter.inspectBidsCandidate(folderPath)
 })
 
-ipcMain.handle('adapter:ensureBidsMarker', async (_event, payload = {}) => {
+handle('adapter:ensureBidsMarker', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.ensureBidsMarker(payload.projectPath, payload.metadata)
 })
 
-ipcMain.handle('adapter:findUnnestedBidsCandidates', async (_event, projectPath) => {
+handle('adapter:findUnnestedBidsCandidates', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.findUnnestedBidsCandidates(projectPath)
 })
 
-ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
+handle('adapter:untrackPath', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
 })
@@ -224,7 +229,7 @@ ipcMain.handle('adapter:untrackPath', async (_event, payload = {}) => {
 // clone/create targets don't exist yet; they are authorized after they succeed.
 const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
 
-ipcMain.handle('adapter:runCommand', async (event, payload) => {
+handle('adapter:runCommand', async (event, payload) => {
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
   }
@@ -262,7 +267,7 @@ ipcMain.handle('adapter:runCommand', async (event, payload) => {
   return result
 })
 
-ipcMain.handle('prism:inspect', async (_event, projectPath) => {
+handle('prism:inspect', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   if (!(await isPrismProject(projectPath))) {
     return { isPrism: false, validatorReady: false, introducesPrism: false }
@@ -272,13 +277,13 @@ ipcMain.handle('prism:inspect', async (_event, projectPath) => {
   return { isPrism: true, validatorReady, introducesPrism }
 })
 
-ipcMain.handle('adapter:cancelCommand', (_event, runId) => {
+handle('adapter:cancelCommand', (_event, runId) => {
   return typeof runId === 'string' ? runRegistry.cancel(runId) : false
 })
 
-ipcMain.handle('env:status', () => envStatus({ runner: consoleRunner, envDir: managedEnvDir() }))
+handle('env:status', () => envStatus({ runner: consoleRunner, envDir: managedEnvDir() }))
 
-ipcMain.handle('env:ensure', (event, runId) =>
+handle('env:ensure', (event, runId) =>
   ensureGuard.run(async () => {
     const uvPath = resolveUv(uvBaseDir())
     const result = await runWithHandle(event, runId, (runOptions) =>
@@ -298,68 +303,68 @@ ipcMain.handle('env:ensure', (event, runId) =>
   })
 )
 
-ipcMain.handle('adapter:getContract', async () => {
+handle('adapter:getContract', async () => {
   return adapter.getInterfaceContract()
 })
 
-ipcMain.handle('adapter:listDatasets', async (_event, projectPath) => {
+handle('adapter:listDatasets', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.listDatasets(projectPath)
 })
 
-ipcMain.handle('adapter:ignoreOsNoiseFiles', async (_event, projectPath) => {
+handle('adapter:ignoreOsNoiseFiles', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.ignoreOsNoiseFiles(projectPath)
 })
 
-ipcMain.handle('adapter:readGitignore', async (_event, payload = {}) => {
+handle('adapter:readGitignore', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.readGitignore(payload.projectPath, payload.relativeDatasetPath)
 })
 
-ipcMain.handle('adapter:addIgnorePatterns', async (_event, payload = {}) => {
+handle('adapter:addIgnorePatterns', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.addIgnorePatterns(payload.projectPath, payload.relativeDatasetPaths, payload.patterns)
 })
 
-ipcMain.handle('adapter:listBranches', async (_event, projectPath) => {
+handle('adapter:listBranches', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.listBranches(projectPath)
 })
 
-ipcMain.handle('adapter:getLastCommit', async (_event, projectPath) => {
+handle('adapter:getLastCommit', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.getLastCommit(projectPath)
 })
 
-ipcMain.handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
+handle('adapter:getWorkingTreeStatus', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.getWorkingTreeStatus(projectPath)
 })
 
-ipcMain.handle('adapter:listRecentCommits', async (_event, payload = {}) => {
+handle('adapter:listRecentCommits', async (_event, payload = {}) => {
   const projectPath = payload.projectPath
   const options = payload.options ?? {}
   requireAuthorizedRoot(projectPath)
   return adapter.listRecentCommits(projectPath, options)
 })
 
-ipcMain.handle('adapter:getCommitDetails', async (_event, payload = {}) => {
+handle('adapter:getCommitDetails', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
 })
 
-ipcMain.handle('adapter:getProjectHealth', async (_event, projectPath) => {
+handle('adapter:getProjectHealth', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.getProjectHealth(projectPath)
 })
 
-ipcMain.handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
+handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.clearRepositoryLock(projectPath)
 })
 
-ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
+handle('watch:setActiveProject', async (event, projectPath = null) => {
   if (activeProjectWatcher) {
     activeProjectWatcher.stop()
     activeProjectWatcher = null
@@ -386,12 +391,12 @@ ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
   return result
 })
 
-ipcMain.handle('console:setEnabled', async (_event, enabled) => {
+handle('console:setEnabled', async (_event, enabled) => {
   consoleEnabled = Boolean(enabled) && !policy.consoleDisabled
   return consoleEnabled
 })
 
-ipcMain.handle('console:runCommand', async (event, payload = {}) => {
+handle('console:runCommand', async (event, payload = {}) => {
   if (policy.consoleDisabled) {
     throw new Error('The command console has been disabled by your administrator.')
   }
@@ -407,16 +412,16 @@ ipcMain.handle('console:runCommand', async (event, payload = {}) => {
 })
 
 // Global git config only (user.name/user.email); setGitIdentity validates its input.
-ipcMain.handle('identity:get', () => getGitIdentity((command, args) => consoleRunner.run(command, args)))
-ipcMain.handle('identity:set', (_event, identity) =>
+handle('identity:get', () => getGitIdentity((command, args) => consoleRunner.run(command, args)))
+handle('identity:set', (_event, identity) =>
   setGitIdentity((command, args) => consoleRunner.run(command, args), identity)
 )
 
-ipcMain.handle('app:getWorkspaceRoot', async () => {
+handle('app:getWorkspaceRoot', async () => {
   return app.isPackaged ? '' : process.cwd()
 })
 
-ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
+handle('dialog:pickDirectory', async (_event, options = {}) => {
   const ownerWindow = BrowserWindow.fromWebContents(_event.sender)
   const defaultPath = await resolveDialogDefaultPath(options.defaultPath)
 
@@ -434,7 +439,7 @@ ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
   return result.filePaths[0]
 })
 
-ipcMain.handle('fs:listEntries', async (_event, payload = {}) => {
+handle('fs:listEntries', async (_event, payload = {}) => {
   const { rootPath, dirPath = rootPath } = payload
 
   for (const path of [rootPath, dirPath]) {
@@ -449,7 +454,7 @@ ipcMain.handle('fs:listEntries', async (_event, payload = {}) => {
   return listDirectory({ rootPath, dirPath, run: (command, args) => consoleRunner.run(command, args) })
 })
 
-ipcMain.handle('fs:revealPath', async (_event, targetPath) => {
+handle('fs:revealPath', async (_event, targetPath) => {
   if (!targetPath || typeof targetPath !== 'string') {
     throw new Error('targetPath is required')
   }
