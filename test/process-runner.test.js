@@ -403,3 +403,30 @@ test('ProcessRunner tells children not to search the current directory for execu
     if (saved !== undefined) process.env.NoDefaultCurrentDirectoryInExePath = saved
   }
 })
+
+test('ProcessRunner makes git treat pathspecs literally', async () => {
+  const result = await new ProcessRunner().run(process.execPath, [
+    '-e',
+    'process.stdout.write(process.env.GIT_LITERAL_PATHSPECS ?? "")'
+  ])
+  assert.equal(result.stdout, '1')
+})
+
+test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
+  const result = await new ProcessRunner().run(
+    process.execPath,
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_0]))'],
+    { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
+  )
+  assert.deepEqual(JSON.parse(result.stdout), ['2', 'core.fsmonitor', 'false', 'user.name'])
+})
+
+test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'fsm-'))
+  const marker = join(dir, 'PWNED')
+  const runner = new ProcessRunner()
+  await runner.run('git', ['init', '-q', dir])
+  await runner.run('git', ['-C', dir, 'config', 'core.fsmonitor', `touch ${marker}`])
+  await runner.run('git', ['-C', dir, 'status', '--porcelain'])
+  await assert.rejects(readFile(marker), /ENOENT/)
+})

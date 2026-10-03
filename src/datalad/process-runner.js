@@ -14,6 +14,19 @@ const LOCK_RETRY_BASE_DELAY_MS = 150
 const CANCELLED_EXIT_CODE = 130
 const DEFAULT_KILL_GRACE_MS = 3000
 
+// Hardening applied to every child: file names are never git pathspec patterns,
+// and a repo's own .git/config cannot make `git status` run a program.
+function childEnv(extra = {}) {
+  const env = { ...process.env, ...extra }
+  const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
+  env.GIT_CONFIG_COUNT = String(n + 1)
+  env[`GIT_CONFIG_KEY_${n}`] = 'core.fsmonitor'
+  env[`GIT_CONFIG_VALUE_${n}`] = 'false'
+  env.GIT_LITERAL_PATHSPECS = '1'
+  env.NoDefaultCurrentDirectoryInExePath = '1'
+  return env
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -132,7 +145,7 @@ export class ProcessRunner {
 
       const child = spawn(exe ?? command, args, {
         cwd: options.cwd,
-        env: { ...process.env, NoDefaultCurrentDirectoryInExePath: '1', ...(options.env ?? {}) },
+        env: childEnv(options.env),
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: options.shell ?? false,
         // POSIX: lead our own process group so cancel/timeout can signal the whole tree.
