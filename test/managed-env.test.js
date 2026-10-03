@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { access, mkdir, mkdtemp } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -24,9 +24,21 @@ test('envBin uses Scripts/*.exe on Windows and bin/ elsewhere', () => {
   assert.equal(envBin('/e', 'prism-validator', 'darwin'), join('/e', 'bin', 'prism-validator'))
 })
 
-test('MANAGED_ENV pins python and exact-version packages', () => {
+test('MANAGED_ENV pins the python minor version', () => {
   assert.match(MANAGED_ENV.python, /^3\.\d+$/)
-  assert.ok(MANAGED_ENV.packages.every((p) => /==/.test(p)))
+})
+
+// The validator and its whole dependency tree are installed from this file with
+// --require-hashes, so whatever the package index serves has to match.
+test('the shipped PRISM requirements file pins the validator and hashes every requirement', async () => {
+  const text = await readFile(new URL('../build/prism-requirements.txt', import.meta.url), 'utf8')
+  const entries = text.split(/\n(?=\S)/).filter((e) => /^[A-Za-z]/.test(e))
+  assert.ok(entries.some((e) => /^prism-validator==\d+\.\d+\.\d+/.test(e)))
+  for (const entry of entries) {
+    assert.match(entry, /--hash=sha256:[0-9a-f]{64}/, `unhashed: ${entry.split(/\s/)[0]}`)
+  }
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  assert.ok(pkg.build.extraResources.some((r) => r.to === 'prism-requirements.txt'))
 })
 
 function fakeRunner({ failStep, cancelStep } = {}) {
@@ -44,35 +56,44 @@ function fakeRunner({ failStep, cancelStep } = {}) {
   }
 }
 const fresh = async () => join(await mkdtemp(join(tmpdir(), 'env ')), 'env')
+const lockFile = async (text = 'prism-validator==1.2.3 \\\n    --hash=sha256:aa\n') => {
+  const file = join(await mkdtemp(join(tmpdir(), 'lock ')), 'prism-requirements.txt')
+  await writeFile(file, text)
+  return file
+}
 const exists = (p) => access(p).then(() => true, () => false)
 
 test('ensureEnv creates the venv, installs pinned packages, verifies, and writes a marker', async () => {
   const envDir = await fresh() // path contains a space on purpose
   const runner = fakeRunner()
-  const config = { python: '3.12', packages: ['prism-validator==1.2.3'] }
-  const result = await ensureEnv({ runner, uvPath: '/uv', envDir, config })
+  const lockPath = await lockFile()
+  const result = await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath })
   assert.deepEqual(result, { ready: true, validatorVersion: 'prism-validator 1.2.3' })
-  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--python', '3.12', envDir])
-  assert.deepEqual(runner.calls[1].slice(0, 4), ['/uv', 'pip', 'install', '--python'])
-  assert.ok(runner.calls[1].includes('prism-validator==1.2.3'))
+  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--no-config', '--python', '3.12', envDir])
+  // No config discovery, explicit index, hashes required, wheels only (no build scripts run).
+  assert.deepEqual(runner.calls[1], [
+    '/uv', 'pip', 'install', '--no-config', '--python', envDir,
+    '--index-url', 'https://pypi.org/simple',
+    '--require-hashes', '--only-binary', ':all:', '--no-deps', '-r', lockPath
+  ])
 })
 
-test('ensureEnv is a no-op when marker and validator are current, and reinstalls when the pin changes', async () => {
+test('ensureEnv is a no-op when marker and validator are current, and reinstalls when the lock file changes', async () => {
   const envDir = await fresh()
-  const config = { python: '3.12', packages: ['prism-validator==1.2.3'] }
-  await ensureEnv({ runner: fakeRunner(), uvPath: '/uv', envDir, config })
+  const lockPath = await lockFile()
+  await ensureEnv({ runner: fakeRunner(), uvPath: '/uv', envDir, lockPath })
   const again = fakeRunner()
-  await ensureEnv({ runner: again, uvPath: '/uv', envDir, config })
-  assert.equal(again.calls.filter((c) => c[1] === 'venv').length, 0)
+  await ensureEnv({ runner: again, uvPath: '/uv', envDir, lockPath })
+  assert.equal(again.calls.filter((c) => c.includes('venv')).length, 0)
   const bumped = fakeRunner()
-  await ensureEnv({ runner: bumped, uvPath: '/uv', envDir, config: { ...config, packages: ['prism-validator==1.2.4'] } })
-  assert.equal(bumped.calls.filter((c) => c[1] === 'venv').length, 1)
+  await ensureEnv({ runner: bumped, uvPath: '/uv', envDir, lockPath: await lockFile('prism-validator==1.2.4 \\\n    --hash=sha256:bb\n') })
+  assert.equal(bumped.calls.filter((c) => c.includes('venv')).length, 1)
 })
 
 for (const failStep of ['venv', 'install', 'verify']) {
   test(`ensureEnv deletes the env when ${failStep} fails`, async () => {
     const envDir = await fresh()
-    const result = await ensureEnv({ runner: fakeRunner({ failStep }), uvPath: '/uv', envDir, config: MANAGED_ENV })
+    const result = await ensureEnv({ runner: fakeRunner({ failStep }), uvPath: '/uv', envDir, lockPath: await lockFile() })
     assert.equal(result.ready, false)
     assert.equal(result.failure.step, failStep)
     assert.equal(await exists(envDir), false)
@@ -81,7 +102,7 @@ for (const failStep of ['venv', 'install', 'verify']) {
 
 test('ensureEnv reports cancelled and removes the partial env', async () => {
   const envDir = await fresh()
-  const result = await ensureEnv({ runner: fakeRunner({ cancelStep: 'install' }), uvPath: '/uv', envDir, config: MANAGED_ENV })
+  const result = await ensureEnv({ runner: fakeRunner({ cancelStep: 'install' }), uvPath: '/uv', envDir, lockPath: await lockFile() })
   assert.equal(result.cancelled, true)
   assert.equal(await exists(envDir), false)
 })
@@ -90,8 +111,8 @@ test('ensureEnv wipes a half-built env left by an interrupted earlier run', asyn
   const envDir = await fresh()
   await mkdir(envDir, { recursive: true }) // exists, but no marker
   const runner = fakeRunner()
-  await ensureEnv({ runner, uvPath: '/uv', envDir, config: MANAGED_ENV })
-  assert.equal(runner.calls.filter((c) => c[1] === 'venv').length, 1)
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
 })
 
 test('envStatus is not ready when the validator cannot run', async () => {

@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto'
 import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-// One place to bump versions; changing `packages` makes ensureEnv reinstall.
-export const MANAGED_ENV = { python: '3.12', packages: ['prism-validator==0.0.0'] }
+// The validator and its dependencies are pinned, with hashes, in build/prism-requirements.txt
+// (shipped as a resource); changing that file or `python` makes ensureEnv reinstall.
+export const MANAGED_ENV = { python: '3.12' }
 
 const MARKER = 'managed-env.json'
 const exe = (name, platform) => (platform === 'win32' ? `${name}.exe` : name)
@@ -19,7 +21,9 @@ export async function envStatus({ runner, envDir, platform }) {
   return result.failed ? { ready: false, validatorVersion: null } : { ready: true, validatorVersion: firstLine(result.stdout || result.stderr) }
 }
 
-export async function ensureEnv({ runner, uvPath, envDir, config = MANAGED_ENV, signal, onOutput, platform }) {
+export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform }) {
+  const lock = createHash('sha256').update(await readFile(lockPath)).digest('hex')
+  const config = { ...MANAGED_ENV, lock }
   const marker = await readFile(join(envDir, MARKER), 'utf8').then(JSON.parse, () => null)
   if (marker && sameConfig(marker, config)) {
     const status = await envStatus({ runner, envDir, platform })
@@ -30,8 +34,11 @@ export async function ensureEnv({ runner, uvPath, envDir, config = MANAGED_ENV, 
   await rm(envDir, { recursive: true, force: true })
   const opts = { signal, onOutput }
   const steps = [
-    ['venv', ['venv', '--python', config.python, envDir]],
-    ['install', ['pip', 'install', '--python', envDir, ...config.packages]]
+    // --no-config: ignore uv.toml/pyproject.toml found from wherever the app was launched.
+    // Hashes make the index untrusted; wheels only, so no package build script ever runs.
+    ['venv', ['venv', '--no-config', '--python', config.python, envDir]],
+    ['install', ['pip', 'install', '--no-config', '--python', envDir, '--index-url', 'https://pypi.org/simple',
+      '--require-hashes', '--only-binary', ':all:', '--no-deps', '-r', lockPath]]
   ]
   for (const [step, args] of steps) {
     const result = await runner.run(uvPath, args, opts)

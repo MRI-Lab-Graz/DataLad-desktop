@@ -54,6 +54,10 @@
       {
         "from": "build/datalad-requirements.txt",
         "to": "datalad-requirements.txt"
+      },
+      {
+        "from": "build/prism-requirements.txt",
+        "to": "prism-requirements.txt"
       }
     ],
     "mac": {

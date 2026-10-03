@@ -282,7 +282,13 @@ ipcMain.handle('env:ensure', (event, runId) =>
   ensureGuard.run(async () => {
     const uvPath = resolveUv(uvBaseDir())
     const result = await runWithHandle(event, runId, (runOptions) =>
-      ensureEnv({ runner: consoleRunner, uvPath, envDir: managedEnvDir(), ...runOptions })
+      ensureEnv({
+        runner: consoleRunner,
+        uvPath,
+        envDir: managedEnvDir(),
+        lockPath: join(uvBaseDir(), 'prism-requirements.txt'),
+        ...runOptions
+      })
     )
     if (result.ready) {
       return result
