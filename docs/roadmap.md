@@ -9,7 +9,7 @@ What exists today:
 1. Project detection for Git, DataLad dataset, and DataLad superdataset.
 2. A thin adapter layer for environment checks, command execution, and researcher-facing error mapping.
 3. A renderer prototype for clone, get, save, update, publish, branch actions, file browsing, and diagnostics.
-4. A Rust core and Node bridge behind an opt-in feature flag.
+4. ~~A Rust core and Node bridge behind an opt-in feature flag.~~ Removed (2026-10): a second implementation of every command to keep in sync, for no user benefit.
 
 ## Product direction
 
@@ -69,7 +69,6 @@ Follow-up from this decision (tracked here, not left implicit):
 ## Exit criteria for the current prototype
 
 - The repository description matches the implemented product.
-- The JS and Rust adapter paths expose the same runtime contract.
 - The UI does not silently overwrite user intent during refreshes.
 - Windows and macOS users can complete clone, save, get, update, and publish with documented prerequisites.
 - Packaging and CI claims are backed by tested workflows.
