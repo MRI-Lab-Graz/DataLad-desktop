@@ -63,3 +63,10 @@ test('the release publishes SHA256SUMS and a build provenance attestation', () =
   assert.match(release, /SHA256SUMS\.txt/)
   assert.match(release, /actions\/attest-build-provenance@/)
 })
+
+test('CI tool downloads are verified against a pinned SHA-256 before use', () => {
+  const checks = text['security-checks.yml']
+  assert.match(checks, /GITLEAKS_SHA256: '[0-9a-f]{64}'/)
+  assert.match(checks, /sha256sum -c/)
+  assert.ok(checks.indexOf('sha256sum -c') < checks.indexOf('tar -xzf'), 'verify before extracting')
+})
