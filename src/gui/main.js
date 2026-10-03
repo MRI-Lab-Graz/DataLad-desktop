@@ -12,6 +12,7 @@ import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
+import { loadPolicy } from './policy.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -30,6 +31,9 @@ let activeProjectWatcher = null
 // alone must not be the only gate — a compromised renderer could skip it. The
 // main process tracks the toggle itself and refuses console runs while off.
 let consoleEnabled = false
+const policy = loadPolicy({
+  file: join(app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build'), 'policy.json')
+})
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and
 // paths that passed project detection or were created by clone/create.
@@ -344,14 +348,18 @@ ipcMain.handle('watch:setActiveProject', async (event, projectPath = null) => {
 })
 
 ipcMain.handle('console:setEnabled', async (_event, enabled) => {
-  consoleEnabled = Boolean(enabled)
+  consoleEnabled = Boolean(enabled) && !policy.consoleDisabled
   return consoleEnabled
 })
 
 ipcMain.handle('console:runCommand', async (event, payload = {}) => {
+  if (policy.consoleDisabled) {
+    throw new Error('The command console has been disabled by your administrator.')
+  }
   if (!consoleEnabled) {
     throw new Error('The command console is disabled. Enable power-user mode first.')
   }
+  requireAuthorizedRoot(payload.projectPath)
 
   const commandSpec = buildConsoleCommand(payload)
   return runWithHandle(event, payload.runId, (runOptions) =>
