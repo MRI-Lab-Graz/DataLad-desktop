@@ -56,6 +56,8 @@ Most researchers should just download the ready-to-run app:
 > installation instructions for your platform. The app's diagnostics screen tells you what's
 > missing.
 
+The PRISM validator installs privately from Setup -> PRISM Validator (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically.
+
 ### First launch: your name and email
 
 The first time you start the app it asks for your **name and email**. They are

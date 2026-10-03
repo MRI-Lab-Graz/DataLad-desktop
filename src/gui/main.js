@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
+import { createEnsureGuard, describeEnvFailure, ensureEnv, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
@@ -18,6 +19,10 @@ const __dirname = dirname(__filename)
 const adapter = createAdapter()
 const consoleRunner = new ProcessRunner()
 const runRegistry = createRunRegistry()
+const ensureGuard = createEnsureGuard()
+// Packaged: electron-builder copies build/uv to <resources>/uv; dev: build/uv in the repo.
+const uvBaseDir = () => (app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build'))
+const managedEnvDir = () => join(app.getPath('userData'), 'env')
 
 let activeProjectWatcher = null
 // The console executes arbitrary commands, so the renderer's power-user toggle
@@ -201,6 +206,22 @@ ipcMain.handle('adapter:runCommand', async (event, payload) => {
 ipcMain.handle('adapter:cancelCommand', (_event, runId) => {
   return typeof runId === 'string' ? runRegistry.cancel(runId) : false
 })
+
+ipcMain.handle('env:status', () => envStatus({ runner: consoleRunner, envDir: managedEnvDir() }))
+
+ipcMain.handle('env:ensure', (event, runId) =>
+  ensureGuard.run(async () => {
+    const uvPath = resolveUv(uvBaseDir())
+    const result = await runWithHandle(event, runId, (runOptions) =>
+      ensureEnv({ runner: consoleRunner, uvPath, envDir: managedEnvDir(), ...runOptions })
+    )
+    if (result.ready) {
+      return result
+    }
+    const { code, message } = describeEnvFailure({ failure: result.failure, cancelled: result.cancelled, uvPath })
+    return { ready: false, cancelled: result.cancelled, code, message, technical: result.failure.stderr }
+  })
+)
 
 ipcMain.handle('adapter:getContract', async () => {
   return adapter.getInterfaceContract()

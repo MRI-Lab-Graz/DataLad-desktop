@@ -187,6 +187,11 @@ const elements = {
   globalBusyStop: document.getElementById('global-busy-stop'),
   globalBusyBarFill: document.getElementById('global-busy-bar-fill'),
   environmentOutput: document.getElementById('environment-output'),
+  prismEnvStatus: document.getElementById('prism-env-status'),
+  prismEnvInstall: document.getElementById('prism-env-install'),
+  prismEnvCancel: document.getElementById('prism-env-cancel'),
+  prismEnvTechnical: document.getElementById('prism-env-technical'),
+  prismEnvTechnicalText: document.getElementById('prism-env-technical-text'),
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
@@ -359,6 +364,41 @@ elements.checkEnvButton.addEventListener('click', async () => {
   } finally {
     setButtonBusy(elements.checkEnvButton, false)
   }
+})
+
+async function refreshPrismEnvStatus() {
+  const status = await api.getManagedEnvStatus()
+  elements.prismEnvStatus.textContent = status.ready ? `Ready (${status.validatorVersion})` : 'Not installed.'
+  elements.prismEnvInstall.hidden = status.ready
+}
+
+elements.prismEnvInstall.addEventListener('click', async () => {
+  const runId = `prism-env-${Date.now()}`
+  elements.prismEnvInstall.hidden = true
+  elements.prismEnvCancel.hidden = false
+  elements.prismEnvCancel.onclick = () => api.cancelCommand(runId)
+  elements.prismEnvStatus.textContent = 'Installing…'
+  let installed = false
+  try {
+    const result = await api.ensureManagedEnv(runId)
+    elements.prismEnvTechnical.hidden = !result.technical
+    elements.prismEnvTechnicalText.textContent = result.technical ?? ''
+    if (result.ready) {
+      installed = true
+      await refreshPrismEnvStatus()
+    } else {
+      elements.prismEnvStatus.textContent = result.message
+    }
+  } catch (error) {
+    elements.prismEnvStatus.textContent = String(error?.message ?? error)
+  } finally {
+    elements.prismEnvCancel.hidden = true
+    elements.prismEnvInstall.hidden = installed
+  }
+})
+
+elements.openSettingsButton.addEventListener('click', () => {
+  refreshPrismEnvStatus().catch(() => {})
 })
 
 elements.environmentOutput.addEventListener('click', (event) => {

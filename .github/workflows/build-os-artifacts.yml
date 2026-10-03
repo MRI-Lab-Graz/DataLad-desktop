@@ -51,6 +51,9 @@ jobs:
           echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
           echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
 
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs aarch64-apple-darwin
+
       - name: Build macOS artifacts (Apple silicon)
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ vars.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
@@ -86,6 +89,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs x86_64-pc-windows-msvc
 
       - name: Build Windows artifacts
         run: npm run package:win:x64 -- --publish=never
@@ -151,6 +157,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs x86_64-unknown-linux-gnu
 
       - name: Build Linux artifacts
         run: npm run package:linux -- --publish=never
