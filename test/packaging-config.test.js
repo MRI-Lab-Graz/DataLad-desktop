@@ -51,3 +51,27 @@ test('every packaging job fetches uv before electron-builder runs', async () => 
 test('Windows uninstall removes the app data folder that holds the managed env', async () => {
   assert.equal(JSON.parse(await read('package.json')).build.nsis.deleteAppDataOnUninstall, true)
 })
+
+// The signed app must not double as a general Node interpreter for local malware
+// (ELECTRON_RUN_AS_NODE / NODE_OPTIONS / --inspect), and must load only its own asar.
+test('Electron fuses lock the packaged app down', async () => {
+  const { electronFuses } = JSON.parse(await read('package.json')).build
+  assert.equal(electronFuses.runAsNode, false)
+  assert.equal(electronFuses.enableNodeOptionsEnvironmentVariable, false)
+  assert.equal(electronFuses.enableNodeCliInspectArguments, false)
+  assert.equal(electronFuses.enableEmbeddedAsarIntegrityValidation, true)
+  assert.equal(electronFuses.onlyLoadAppFromAsar, true)
+  // Flipping fuses invalidates the arm64 signature; unsigned local builds are re-signed ad hoc instead of being killed on launch.
+  assert.equal(electronFuses.resetAdHocDarwinSignature, true)
+})
+
+test('the package ships only runtime sources, not tests, docs or Rust build output', async () => {
+  const { files } = JSON.parse(await read('package.json')).build
+  assert.deepEqual(files, ['package.json', 'src/**/*'])
+})
+
+test('macOS entitlements are minimal and do not disable library validation', async () => {
+  const plist = await read('build/entitlements.mac.plist')
+  assert.match(plist, /cs\.allow-jit/)
+  assert.doesNotMatch(plist, /disable-library-validation/)
+})

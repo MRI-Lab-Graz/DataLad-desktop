@@ -33,6 +33,19 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "package.json",
+      "src/**/*"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "resetAdHocDarwinSignature": true
+    },
     "extraResources": [
       {
         "from": "build/uv",
