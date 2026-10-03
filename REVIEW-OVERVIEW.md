@@ -41,7 +41,7 @@ The renderer is treated as the untrusted side. `src/gui/main.js` registers its I
 
 **CI and hygiene**
 - Workflows: tests + coverage gate (`test-coverage.yml`, thresholds 85/85/75 on `src/datalad/**`), gitleaks (`security-checks.yml`), cross-platform and Windows installer smoke builds, release builds (`build-os-artifacts.yml`).
-- `npm audit --omit=dev`: 0 vulnerabilities. Tests: `npm test` 412 passing; `npm run test:e2e` 52 passing, 0 failing, 2 skipped.
+- `npm audit --omit=dev`: 0 vulnerabilities. Tests: `npm test` 428 passing; `npm run test:e2e` 52 passing, 0 failing, 2 skipped.
 - Reports in repo: `SECURITY.md`, `CHANGELOG.md`.
 
 ## Controls added after the independent security review (2026-10-03)
