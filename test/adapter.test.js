@@ -2036,3 +2036,17 @@ test('gitignore handlers refuse a .gitignore that is a symlink', async () => {
   await assert.rejects(adapter.readGitignore(root, '.'), /not a regular file/)
   assert.equal(await readFile(target, 'utf8'), 'keep\n')
 })
+
+test('gitignore handlers refuse a dataset folder that is a symlink leaving the project', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'dlad-gi-dir-'))
+  const root = join(base, 'project')
+  const outside = join(base, 'outside')
+  await mkdir(root)
+  await mkdir(outside)
+  await symlink(outside, join(root, 'sub-link'))
+  const adapter = new DataLadAdapter({ runner: gitProjectRunner(root) })
+
+  await assert.rejects(adapter.addIgnorePatterns(root, ['sub-link'], ['*.log']), /outside the project/)
+  await assert.rejects(adapter.readGitignore(root, 'sub-link'), /outside the project/)
+  await assert.rejects(readFile(join(outside, '.gitignore')), /ENOENT/)
+})

@@ -1,5 +1,5 @@
-import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
 import { ProcessRunner } from './process-runner.js'
@@ -391,7 +391,7 @@ export class DataLadAdapter {
   async readGitignore(projectPath, relativeDatasetPath = '.') {
     await this.#ensureGitProject(projectPath)
 
-    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const datasetPath = await this.#resolveInsideProject(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
     const exists = await gitignoreExists(gitignorePath)
 
@@ -417,7 +417,7 @@ export class DataLadAdapter {
   }
 
   async #addIgnorePatternsToDataset(projectPath, relativeDatasetPath, cleanPatterns) {
-    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const datasetPath = await this.#resolveInsideProject(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
     const exists = await gitignoreExists(gitignorePath)
     const existingContent = exists ? await readFile(gitignorePath, 'utf8') : ''
@@ -438,6 +438,16 @@ export class DataLadAdapter {
     await writeFile(gitignorePath, nextContent, 'utf8')
 
     return { relativeDatasetPath, addedPatterns, content: nextContent }
+  }
+
+  // A folder committed as a symlink (sub-01 -> /elsewhere) must not redirect writes out of the project.
+  async #resolveInsideProject(projectPath, relativeDatasetPath) {
+    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const [root, real] = await Promise.all([realpath(projectPath), realpath(datasetPath).catch(() => null)])
+    if (real !== null && real !== root && !real.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)) {
+      throw new Error(`Dataset path resolves outside the project: ${relativeDatasetPath}`)
+    }
+    return datasetPath
   }
 
   #resolveDatasetPath(projectPath, relativeDatasetPath) {
