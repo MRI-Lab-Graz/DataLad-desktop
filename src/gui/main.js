@@ -13,6 +13,7 @@ import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy } from './policy.js'
+import { createTrustStore, findExecVectors } from './folder-trust.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -73,6 +74,36 @@ function createAdapter() {
 
 
   return new DataLadAdapter()
+}
+
+let trustStore
+const folderTrust = () => (trustStore ??= createTrustStore(join(app.getPath('userData'), 'trusted-folders.json')))
+
+// Opening a folder runs git in it, and a folder from elsewhere can name programs for git
+// to run (hooks, config). Ask once per folder; the app's own clones/creates are trusted.
+async function requireTrustedFolder(event, projectPath) {
+  if (typeof projectPath !== 'string' || folderTrust().has(projectPath)) {
+    return
+  }
+  const vectors = findExecVectors(projectPath)
+  if (vectors.length === 0) {
+    return
+  }
+  const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: 'warning',
+    buttons: ['Cancel', 'Open and trust this folder'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Only open folders you trust',
+    message: 'This folder can run programs on your computer.',
+    detail:
+      `${projectPath}\n\nIt contains settings that make Git run commands (${vectors.slice(0, 5).join(', ')}). ` +
+      'Open it only if you know where it came from.'
+  })
+  if (response !== 1) {
+    throw new Error('Folder not opened: it was not trusted.')
+  }
+  folderTrust().add(projectPath)
 }
 
 function authorizeRoot(rootPath) {
@@ -160,7 +191,8 @@ ipcMain.handle('adapter:checkEnvironment', async () => {
   return adapter.checkEnvironment()
 })
 
-ipcMain.handle('adapter:detectProject', async (_event, projectPath) => {
+ipcMain.handle('adapter:detectProject', async (event, projectPath) => {
+  await requireTrustedFolder(event, projectPath)
   const result = await adapter.detectProject(projectPath)
   if (result?.classification) {
     authorizeRoot(projectPath)
@@ -225,6 +257,7 @@ ipcMain.handle('adapter:runCommand', async (event, payload) => {
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
   ) {
     authorizeRoot(request?.targetPath)
+    folderTrust().add(request.targetPath)
   }
   return result
 })
