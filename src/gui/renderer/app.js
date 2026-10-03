@@ -5,6 +5,7 @@ import {
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
 } from './button-gating.js'
+import { escapeHtml } from './escape-html.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -3930,15 +3931,6 @@ function loadingPanelHtml(message) {
   return `<p>${escapeHtml(message)}</p><div class="loading-bar" role="progressbar" aria-label="${escapeHtml(
     message
   )}"></div>`
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
 }
 
 function nextRequestToken(key) {

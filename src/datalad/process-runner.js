@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { killProcessTree, QUIT_ABORT_REASON } from './kill-tree.js'
 import { resolveTool } from './resolve-tool.js'
 
@@ -28,10 +29,6 @@ function childEnv(extra = {}) {
   env.GIT_LITERAL_PATHSPECS = '1'
   env.NoDefaultCurrentDirectoryInExePath = '1'
   return env
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 // Progress bars redraw with \r, so split on both; only the latest visible line
