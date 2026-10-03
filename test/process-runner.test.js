@@ -430,3 +430,16 @@ test('ProcessRunner fsmonitor override really stops a repo config from running c
   await runner.run('git', ['-C', dir, 'status', '--porcelain'])
   await assert.rejects(readFile(marker), /ENOENT/)
 })
+
+test('ProcessRunner stops a command whose output exceeds the cap instead of buffering without limit', async () => {
+  const runner = new ProcessRunner()
+  const result = await runner.run(
+    process.execPath,
+    ['-e', "const chunk = 'x'.repeat(10000); setInterval(() => process.stdout.write(chunk), 1)"],
+    { maxOutputBytes: 100_000 }
+  )
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 125)
+  assert.match(result.stderr, /output exceeded 100000 bytes/i)
+  assert.ok(result.stdout.length < 1_000_000, 'buffered far past the cap')
+})

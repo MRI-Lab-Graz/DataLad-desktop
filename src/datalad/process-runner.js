@@ -13,6 +13,9 @@ const MAX_LOCK_RETRIES = 4
 const LOCK_RETRY_BASE_DELAY_MS = 150
 const CANCELLED_EXIT_CODE = 130
 const DEFAULT_KILL_GRACE_MS = 3000
+// A dataset with millions of files must not be able to exhaust the app's memory.
+const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+const OUTPUT_LIMIT_EXIT_CODE = 125
 
 // Hardening applied to every child: file names are never git pathspec patterns,
 // and a repo's own .git/config cannot make `git status` run a program.
@@ -75,7 +78,7 @@ export class ProcessRunner {
   }
 
   async #runOnce(command, args, options) {
-    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput } = options
+    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES } = options
 
     // Bare names are looked up on PATH ourselves: Windows would otherwise try the
     // (dataset-controlled) cwd first. A shell line is the console's business.
@@ -179,14 +182,36 @@ export class ProcessRunner {
         }
       }
 
+      let received = 0
+      const accept = (chunk) => {
+        received += chunk.length
+        if (received > maxOutputBytes) {
+          killProcessTree(child, killGraceMs)
+          finish({
+            command,
+            args,
+            exitCode: OUTPUT_LIMIT_EXIT_CODE,
+            stdout: '',
+            stderr: `${command} output exceeded ${maxOutputBytes} bytes and was stopped`,
+            failed: true
+          })
+          return false
+        }
+        return true
+      }
+
       child.stdout.on('data', (chunk) => {
-        stdout += String(chunk)
-        report(chunk)
+        if (accept(chunk)) {
+          stdout += String(chunk)
+          report(chunk)
+        }
       })
 
       child.stderr.on('data', (chunk) => {
-        stderr += String(chunk)
-        report(chunk)
+        if (accept(chunk)) {
+          stderr += String(chunk)
+          report(chunk)
+        }
       })
 
       child.on('error', (error) => {
