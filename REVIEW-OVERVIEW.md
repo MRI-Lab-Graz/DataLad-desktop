@@ -50,7 +50,7 @@ Both the process-execution and the Electron/IPC surface were reviewed in depth; 
 
 ## Limitations we found ourselves (please push on these)
 
-1. **Console toggle is renderer-settable.** `console:setEnabled` is an IPC call, so the gate protects against UI bypass and bugs, not against a compromised renderer. Administrators can remove the console completely (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or `resources/policy.json`).
+1. **Console toggle is renderer-settable.** `console:setEnabled` is an IPC call, so the gate protects against UI bypass and bugs, not against a compromised renderer. Administrators can remove the console completely (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or a system-level `policy.json`, see `SECURITY.md`).
 2. **Path confinement exceptions.** `adapter:inspectBidsCandidate` (read-only probe; returns only BIDS marker names) and the clone/create target path are deliberately outside `requireAuthorizedRoot`; `adapter:detectProject` authorizes any git work tree it is given. Windows case-insensitivity and junction points are not specifically tested.
 3. **Windows installer** (`build/installer.nsh`, NSIS, needs admin): not yet run on Windows by the author; the installer smoke workflow is the check. git-annex has no versioned URL, so its pinned hash must be bumped when upstream releases.
 4. **Signing.** Release tags fail unless signing is configured (SignPath for Windows, Apple credentials for macOS). Unsigned builds are possible only from manual test runs.

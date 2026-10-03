@@ -14,7 +14,7 @@ Result of an independent security review (see `SECURITY.md` for what is protecte
 - Electron fuses locked (no run-as-node, `NODE_OPTIONS`, `--inspect`; ASAR integrity on); minimal macOS entitlements; only runtime sources are packaged.
 - Windows installer: DataLad installs into a private, hash-locked environment; git-annex download is hash-verified; PowerShell by absolute path; no user-controlled `PATH`. Uninstall removes that environment instead of running `pip uninstall`.
 - PRISM validator installs from a hash-locked, wheels-only requirements file (now pinned to 1.19.1) with uv config discovery off.
-- Administrators can remove the command console (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or `resources/policy.json`); the console's working directory is confined.
+- Administrators can remove the command console (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or a system-level `policy.json`); the console's working directory is confined.
 - Commands printing more than 256 MiB are stopped.
 - CI/release: actions pinned by SHA, read-only default token, scoped signing secrets, release tags require signing, `SHA256SUMS.txt` and provenance attestation, verified gitleaks download, green `npm audit` gate.
 - **Removed:** the optional Rust adapter and the adapter-contract plumbing (Technical Details tab), the stale `latest.yml`/`builder-debug.yml`, a duplicate `escapeHtml`, and ~200 lines of unrelated `.gitignore`.

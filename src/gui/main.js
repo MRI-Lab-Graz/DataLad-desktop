@@ -11,7 +11,7 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
-import { loadPolicy } from './policy.js'
+import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
 import { createTrustStore, findExecVectors } from './folder-trust.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
@@ -33,7 +33,7 @@ let activeProjectWatcher = null
 // main process tracks the toggle itself and refuses console runs while off.
 let consoleEnabled = false
 const policy = loadPolicy({
-  file: join(app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build'), 'policy.json')
+  files: policyFiles({ resourcesDir: app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build') })
 })
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and

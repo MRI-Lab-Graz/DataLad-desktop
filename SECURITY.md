@@ -45,7 +45,7 @@ Each control below has a test; the file names are where to verify it.
 
 **Command console**
 - Off by default; enforced in the main process, not just the UI (`e2e/console-gate.e2e.mjs`). The working directory must be an authorized root.
-- **Administrators can remove it entirely**: set the environment variable `DATALAD_DESKTOP_DISABLE_CONSOLE=1`, or place a `policy.json` containing `{"consoleDisabled": true}` in the install's `resources` folder. A `policy.json` that cannot be parsed also disables the console (`src/gui/policy.js`, `e2e/console-policy.e2e.mjs`).
+- **Administrators can remove it entirely**: set the environment variable `DATALAD_DESKTOP_DISABLE_CONSOLE=1`, or create a `policy.json` containing `{"consoleDisabled": true}` in an administrator-only system folder that updates do not touch: `%ProgramData%\DataLad Desktop\` on Windows, `/Library/Application Support/DataLad Desktop/` on macOS, `/etc/datalad-desktop/` on Linux (a `policy.json` in the app's `resources` folder is honoured too, but an update replaces that folder). A `policy.json` that cannot be parsed also disables the console (`src/gui/policy.js`, `e2e/console-policy.e2e.mjs`).
 - On Windows the line is handed to `cmd.exe` so `.cmd` shims work; shell operators therefore work there. On macOS and Linux it is tokenized and run without a shell.
 
 **Managed Python environment (PRISM validator)**

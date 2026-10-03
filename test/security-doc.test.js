@@ -31,3 +31,12 @@ test('SECURITY.md states the limits honestly', () => {
     assert.match(doc, topic)
   }
 })
+
+// The admin policy must live where an update cannot erase it, and the doc must say where.
+test('SECURITY.md documents the system locations that policyFiles really uses', async () => {
+  const { policyFiles } = await import('../src/gui/policy.js')
+  const env = { ProgramData: 'C:\\ProgramData' }
+  assert.ok(doc.includes('%ProgramData%\\DataLad Desktop'))
+  assert.ok(doc.includes(policyFiles({ platform: 'darwin', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
+  assert.ok(doc.includes(policyFiles({ platform: 'linux', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
+})
