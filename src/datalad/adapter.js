@@ -1232,7 +1232,7 @@ async function fileExists(path) {
 // .gitmodules `path =` values come from repository content, which may belong to a cloned/untrusted
 // dataset. Every consumer joins this value onto a filesystem path, so a `../` or absolute path here
 // would let a malicious dataset make the app read or write outside the project directory.
-function isSafeRelativeSubdatasetPath(relativePath) {
+export function isSafeRelativeSubdatasetPath(relativePath) {
   if (typeof relativePath !== 'string' || relativePath.length === 0) {
     return false
   }

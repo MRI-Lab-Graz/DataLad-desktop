@@ -77,7 +77,7 @@ async function requireTrustedFolder(event, projectPath) {
   if (typeof projectPath !== 'string' || folderTrust().has(projectPath)) {
     return
   }
-  const vectors = findExecVectors(projectPath)
+  const vectors = await findExecVectors(projectPath)
   if (vectors.length === 0) {
     return
   }
@@ -221,6 +221,9 @@ const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'
 handle('adapter:runCommand', async (event, payload) => {
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
+  } else {
+    // `create --force` over an existing folder runs that folder's own hooks.
+    await requireTrustedFolder(event, payload.request?.targetPath)
   }
 
   let request = payload.request
@@ -420,6 +423,11 @@ handle('dialog:pickDirectory', async (_event, options = {}) => {
     return null
   }
 
+  try {
+    await requireTrustedFolder(_event, result.filePaths[0])
+  } catch {
+    return null // the user declined to trust it: it is not authorized
+  }
   authorizeRoot(result.filePaths[0])
   return result.filePaths[0]
 })
