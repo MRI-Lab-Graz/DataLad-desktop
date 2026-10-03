@@ -24,15 +24,19 @@ const ANNEX_FILTER = {
 // is reported. (A blocklist of "keys that run programs" misses new ones: gpg.ssh.defaultKeyCommand,
 // annex.*-command, diff.*.command, datalad result hooks ...)
 const HARMLESS_KEYS = [
-  /^core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks|autocrlf|eol|safecrlf|quotepath|untrackedcache|sharedrepository)$/,
+  /^core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks|autocrlf|eol|safecrlf|quotepath|untrackedcache|sharedrepository|longpaths|protectntfs|protecthfs|hidedotfiles|trustctime|checkstat|preloadindex|fscache)$/,
   /^extensions\.[a-z]+$/,
   /^user\.(name|email)$/,
   /^branch\..+\.(remote|merge|rebase|description)$/,
-  /^remote\..+\.(pushurl|fetch|push|tagopt|annex-uuid|annex-ignore|annex-version|annex-bare)$/,
-  /^annex\.(uuid|version|numcopies|mincopies|largefiles|backend|genmetadata|thin|addunlocked|autocommit|securehashesonly|dotfiles)$/,
+  /^remote\..+\.(pushurl|fetch|push|tagopt)$/,
   /^datalad\.dataset\.id$/,
   /^submodule\.(active|.+\.(url|active|branch|datalad-id|datalad-url))$/
 ]
+// git-annex writes many settings (more on Windows, where it runs in "crippled filesystem" mode), so
+// annex.* and remote.*.annex-* are allowed as a family, minus the ones that name a program to run.
+const ANNEX_KEY = /^(annex\.[a-z0-9.-]+|remote\..+\.annex-[a-z0-9-]+)$/
+const ANNEX_RUNS_PROGRAMS = /(command|shell|externaltype|ssh|rsync|program|hook)/
+
 const MAX_SUBDATASETS = 100
 const MAX_DEPTH = 3
 const GIT_TIMEOUT_MS = 15000
@@ -44,6 +48,9 @@ function isHarmless(key, value) {
   }
   if (/^remote\..+\.url$/.test(key)) {
     return !/^(ext|fd)::/i.test(value)
+  }
+  if (ANNEX_KEY.test(key)) {
+    return !ANNEX_RUNS_PROGRAMS.test(key.replace(/^remote\..+?\.annex-/, 'annex.'))
   }
   return HARMLESS_KEYS.some((pattern) => pattern.test(key))
 }
