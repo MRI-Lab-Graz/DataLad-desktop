@@ -50,6 +50,10 @@
       {
         "from": "build/uv",
         "to": "uv"
+      },
+      {
+        "from": "build/datalad-requirements.txt",
+        "to": "datalad-requirements.txt"
       }
     ],
     "mac": {

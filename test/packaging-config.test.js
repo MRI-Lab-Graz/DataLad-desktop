@@ -34,7 +34,10 @@ test('workflows use Node 24-capable checkout and setup-node', async () => {
 
 test('uv is bundled for every build target with a pinned SHA-256', async () => {
   const pkg = JSON.parse(await read('package.json'))
-  assert.deepEqual(pkg.build.extraResources, [{ from: 'build/uv', to: 'uv' }])
+  assert.deepEqual(pkg.build.extraResources, [
+    { from: 'build/uv', to: 'uv' },
+    { from: 'build/datalad-requirements.txt', to: 'datalad-requirements.txt' }
+  ])
   for (const target of ['aarch64-apple-darwin', 'x86_64-pc-windows-msvc', 'x86_64-unknown-linux-gnu']) {
     assert.match(UV.targets[target].sha256, /^[0-9a-f]{64}$/, target)
   }

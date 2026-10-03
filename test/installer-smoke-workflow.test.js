@@ -44,7 +44,14 @@ test('builds the NSIS installer, installs it silently, checks the tools, drives 
 test('dumps Python/DataLad diagnostics when a step fails', () => {
   const step = workflow.split('- name:').find((s) => s.includes('if: failure()'))
   assert.ok(step, 'expected a step gated on failure()')
-  for (const needle of ['py -0p', 'pip show', 'Get-Command']) {
+  for (const needle of ['py -0p', 'datalad-env', 'Get-Command']) {
     assert.ok(step.includes(needle), `diagnostics step should run: ${needle}`)
   }
+})
+
+// The installer must leave DataLad in its private env and the uninstaller must take it away again.
+test('proves datalad comes from the private env and that uninstall removes it', () => {
+  assert.match(workflow, /\(Get-Command datalad\)\.Source/)
+  assert.match(workflow, /datalad-env\\Scripts/)
+  assert.match(workflow, /Test-Path "\$dir\\datalad-env"/)
 })

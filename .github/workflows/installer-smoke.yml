@@ -60,6 +60,8 @@ jobs:
           git --version
           datalad --version
           git annex version
+          $source = (Get-Command datalad).Source
+          if ($source -notlike 'C:\Program Files\DataLad Desktop\datalad-env\Scripts\*') { throw "datalad resolved outside the private env: $source" }
 
       # The installer's silent mode prints nothing, so show where Python and
       # DataLad actually ended up when a check above fails.
@@ -70,8 +72,8 @@ jobs:
           Get-Command py, python, pip, datalad, git-annex -ErrorAction SilentlyContinue | Format-Table Name, Source
           py -0p
           py -3 -c "import sys; print(sys.executable)"
-          py -3 -m pip show -f datalad
-          py -3 -m datalad --version
+          Get-ChildItem 'C:\Program Files\DataLad Desktop\datalad-env\Scripts' | Format-Table Name
+          & 'C:\Program Files\DataLad Desktop\datalad-env\Scripts\python.exe' -m pip list
           $env:Path -split ';' | Select-String -Pattern 'Python|Scripts|git-annex|Git'
 
       - name: Drive the installed app (Check Environment)
@@ -87,3 +89,4 @@ jobs:
           Start-Process -FilePath "$dir\Uninstall DataLad Desktop.exe" -ArgumentList '/S' -Wait
           for ($i = 0; $i -lt 30 -and (Test-Path "$dir\DataLad Desktop.exe"); $i++) { Start-Sleep -Seconds 2 }
           if (Test-Path "$dir\DataLad Desktop.exe") { throw 'Uninstall left the app behind' }
+          if (Test-Path "$dir\datalad-env") { throw 'Uninstall left the DataLad environment behind' }
