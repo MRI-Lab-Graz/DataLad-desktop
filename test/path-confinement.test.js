@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, symlink, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { isWithinRoots } from '../src/gui/path-confinement.js'
+import { isWithinRoots, initialAuthorizedRoots } from '../src/gui/path-confinement.js'
 
 async function fixture() {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'confine-')))
@@ -46,4 +46,9 @@ test('isWithinRoots accepts a root given through a symlink', async () => {
   await symlink(root, alias, 'dir')
   assert.equal(isWithinRoots(join(root, 'sub'), [alias]), true)
   assert.equal(isWithinRoots(join(alias, 'sub'), [root]), true)
+})
+
+test('initialAuthorizedRoots seeds the launch directory only for unpackaged (dev) runs', () => {
+  assert.deepEqual([...initialAuthorizedRoots({ cwd: '/work/repo', isPackaged: false })], ['/work/repo'])
+  assert.deepEqual([...initialAuthorizedRoots({ cwd: '/', isPackaged: true })], [])
 })

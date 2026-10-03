@@ -23,3 +23,9 @@ export function isWithinRoots(targetPath, roots) {
   }
   return false
 }
+
+// A packaged app launched from Finder/Explorer has cwd `/` (or a system dir),
+// which would authorize the whole disk. Only dev runs trust the cwd.
+export function initialAuthorizedRoots({ cwd, isPackaged }) {
+  return new Set(isPackaged ? [] : [resolve(cwd)])
+}

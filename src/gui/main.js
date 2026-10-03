@@ -11,7 +11,7 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
-import { isWithinRoots } from './path-confinement.js'
+import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -33,7 +33,7 @@ let consoleEnabled = false
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and
 // paths that passed project detection or were created by clone/create.
-const authorizedRoots = new Set([resolve(process.cwd())])
+const authorizedRoots = initialAuthorizedRoots({ cwd: process.cwd(), isPackaged: app.isPackaged })
 const APP_NAME = 'DataLad Desktop'
 const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
 // macOS Dock icons need transparent padding around a smaller squircle (Apple's
@@ -366,7 +366,7 @@ ipcMain.handle('identity:set', (_event, identity) =>
 )
 
 ipcMain.handle('app:getWorkspaceRoot', async () => {
-  return process.cwd()
+  return app.isPackaged ? '' : process.cwd()
 })
 
 ipcMain.handle('dialog:pickDirectory', async (_event, options = {}) => {
