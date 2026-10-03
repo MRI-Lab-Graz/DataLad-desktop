@@ -443,3 +443,12 @@ test('ProcessRunner stops a command whose output exceeds the cap instead of buff
   assert.match(result.stderr, /output exceeded 100000 bytes/i)
   assert.ok(result.stdout.length < 1_000_000, 'buffered far past the cap')
 })
+
+// POSIX execvp would honour an empty or relative PATH entry (a trailing ':') and run ./datalad from the dataset.
+test('ProcessRunner refuses an unresolvable bare name on every platform, not just win32', async () => {
+  const runner = new ProcessRunner({ resolve: () => null, platform: 'linux' })
+  const result = await runner.run('datalad', ['--version'])
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 127)
+  assert.match(result.stderr, /not found on PATH/i)
+})

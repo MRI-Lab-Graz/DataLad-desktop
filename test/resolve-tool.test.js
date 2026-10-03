@@ -32,15 +32,30 @@ test('resolveTool ignores empty, "." and relative PATH entries', async () => {
   }
 })
 
-test('resolveTool tries PATHEXT on win32 and finds the executable', async () => {
+test('resolveTool finds git.exe on win32', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rt-'))
   const exe = await fakeTool(join(root, 'bin'), 'git.exe')
   assert.equal(
-    resolveTool('git', { pathEnv: join(root, 'bin'), platform: 'win32', pathExt: '.exe;.cmd' }),
+    resolveTool('git', { pathEnv: join(root, 'bin'), platform: 'win32' }),
     exe
   )
 })
 
 test('resolveTool returns null for names containing a path separator', () => {
   assert.equal(resolveTool('../evil', { pathEnv: '/usr/bin', platform: 'linux' }), null)
+})
+
+// Windows never runs an extensionless file, and Node cannot spawn .cmd/.bat shims without a shell
+// (spawn throws EINVAL), so only real executables count, whichever PATH directory comes first.
+test('resolveTool on win32 accepts only .exe/.com, never extensionless files or .cmd/.bat shims', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rt-'))
+  await fakeTool(join(root, 'shims'), 'git')
+  await fakeTool(join(root, 'shims'), 'git.cmd')
+  await fakeTool(join(root, 'shims'), 'git.bat')
+  const exe = await fakeTool(join(root, 'real'), 'git.exe')
+  assert.equal(resolveTool('git', { pathEnv: join(root, 'shims'), platform: 'win32' }), null)
+  assert.equal(
+    resolveTool('git', { pathEnv: [join(root, 'shims'), join(root, 'real')].join(delimiter), platform: 'win32' }),
+    exe
+  )
 })

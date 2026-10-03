@@ -8,14 +8,14 @@ export function resolveTool(
   name,
   {
     pathEnv = process.env.PATH ?? process.env.Path ?? '',
-    platform = process.platform,
-    pathExt = process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD'
+    platform = process.platform
   } = {}
 ) {
   if (/[\\/]/.test(name)) {
     return null
   }
-  const exts = platform === 'win32' ? ['', ...pathExt.split(';').filter(Boolean)] : ['']
+  // Windows runs only .exe/.com directly; .cmd/.bat shims need a shell, which we never use here.
+  const exts = platform === 'win32' ? ['.exe', '.com'] : ['']
   for (const dir of pathEnv.split(delimiter)) {
     if (!dir || !isAbsolute(dir)) {
       continue

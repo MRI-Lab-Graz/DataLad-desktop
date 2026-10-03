@@ -47,11 +47,9 @@ function latestLine(chunk) {
  */
 export class ProcessRunner {
   #resolve
-  #platform
 
-  constructor({ resolve = resolveTool, platform = process.platform } = {}) {
+  constructor({ resolve = resolveTool } = {}) {
     this.#resolve = resolve
-    this.#platform = platform
   }
 
   async run(command, args = [], options = {}) {
@@ -81,7 +79,7 @@ export class ProcessRunner {
     // (dataset-controlled) cwd first. A shell line is the console's business.
     const bare = !options.shell && !/[\\/]/.test(command)
     const exe = bare ? this.#resolve(command) : null
-    const notFound = bare && !exe && this.#platform === 'win32'
+    const notFound = bare && !exe
 
     return new Promise((resolve) => {
       let stdout = ''
