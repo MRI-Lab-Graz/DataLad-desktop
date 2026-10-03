@@ -18,7 +18,7 @@ test('every action is pinned to a full commit SHA', () => {
 
 test('every workflow defaults to read-only contents permission', () => {
   for (const [name, body] of Object.entries(text)) {
-    assert.match(body, /^permissions:\n  contents: read\n/m, `${name} must start from contents: read`)
+    assert.match(body, /^permissions:\r?\n  contents: read\r?\n/m, `${name} must start from contents: read`)
   }
 })
 

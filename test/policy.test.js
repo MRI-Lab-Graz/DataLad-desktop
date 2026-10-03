@@ -45,6 +45,6 @@ test('policyFiles puts the admin policy in a system location that survives updat
   assert.deepEqual(policyFiles({ platform: 'darwin', env: {}, resourcesDir: resources })[0], '/Library/Application Support/DataLad Desktop/policy.json')
   assert.deepEqual(policyFiles({ platform: 'linux', env: {}, resourcesDir: resources })[0], '/etc/datalad-desktop/policy.json')
   for (const platform of ['win32', 'darwin', 'linux']) {
-    assert.ok(policyFiles({ platform, env: {}, resourcesDir: resources }).some((f) => f.startsWith(resources)), 'resources policy still honoured')
+    assert.ok(policyFiles({ platform, env: {}, resourcesDir: resources }).some((f) => f.startsWith(join(resources))), 'resources policy still honoured')
   }
 })

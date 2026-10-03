@@ -14,12 +14,12 @@ test('build outputs are not committed and are git-ignored', () => {
     assert.doesNotThrow(() => execFileSync('git', ['check-ignore', '-q', file]), `${file} is not ignored`)
   }
   for (const pattern of ['node_modules/', 'dist/', 'build/uv/', '.env']) {
-    assert.ok(ignore.split('\n').includes(pattern), `.gitignore lacks ${pattern}`)
+    assert.ok(ignore.split(/\r?\n/).includes(pattern), `.gitignore lacks ${pattern}`)
   }
 })
 
 test('.gitignore only carries what a Node/Electron project needs', () => {
-  const rules = read('.gitignore').split('\n').filter((l) => l.trim() && !l.startsWith('#'))
+  const rules = read('.gitignore').split(/\r?\n/).filter((l) => l.trim() && !l.startsWith('#'))
   assert.ok(rules.length < 25, `${rules.length} rules`)
   assert.doesNotMatch(read('.gitignore'), /Django|Flask|Celery|Scrapy|PyInstaller|Jupyter/)
 })
