@@ -55,3 +55,8 @@ test('proves datalad comes from the private env and that uninstall removes it', 
   assert.match(workflow, /datalad-env\\Scripts/)
   assert.match(workflow, /Test-Path "\$dir\\datalad-env"/)
 })
+
+test('prints the installer log when a step fails', () => {
+  const step = workflow.split('- name:').find((s) => s.includes('if: failure()'))
+  assert.match(step, /install\.log/)
+})

@@ -22,6 +22,15 @@
 !define PS `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"`
 !define MACHINE_PATH "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine');"
 
+; A silent install prints nothing, so every step that can fail appends a line to
+; $INSTDIR\install.log (what happened, and the output of the failing command).
+!macro Log text
+  FileOpen $9 "$INSTDIR\install.log" a
+  FileSeek $9 0 END
+  FileWrite $9 "${text}$\r$\n"
+  FileClose $9
+!macroend
+
 !macro customInstall
   InitPluginsDir
   DetailPrint "Checking for Git..."
@@ -82,6 +91,7 @@
   DetailPrint "Installing DataLad into its own environment..."
   nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$venv = '$INSTDIR\datalad-env'; if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -m venv $$venv } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m venv $$venv } else { exit 1 }; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & (Join-Path $$venv 'Scripts\python.exe') -m pip install --require-hashes --only-binary :all: --no-deps --disable-pip-version-check -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
   Pop $0
+  !insertmacro Log "DataLad install exit $0"
   ${If} $0 != 0
     DetailPrint "DataLad install failed (exit $0) - it can be installed later from the app's diagnostics screen."
   ${Else}
@@ -102,16 +112,21 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "git-annex not found - downloading installer..."
-    nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
+    nsExec::ExecToStack `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
     Pop $0
+    Pop $1
+    !insertmacro Log "git-annex download exit $0 into $PLUGINSDIR: $1"
     ${If} $0 == 0
       nsExec::ExecToStack `${PS} -NoProfile -Command "if ((Get-FileHash '$PLUGINSDIR\git-annex-installer.exe' -Algorithm SHA256).Hash -ne '4D4CA04DFB7A2FAF8C1A43BE7BFDDA98219833974BBF2678384A1DBAA1FEB1F9') { exit 1 } else { exit 0 }"`
       Pop $0
+      Pop $1
+      !insertmacro Log "git-annex hash check exit $0: $1"
       ${If} $0 != 0
         DetailPrint "git-annex installer failed hash verification (a newer version may have been released) - not running it. Install git-annex manually from git-annex.branchable.com."
       ${Else}
         DetailPrint "Installing git-annex (silent)..."
         ExecWait `"$PLUGINSDIR\git-annex-installer.exe" /S` $0
+        !insertmacro Log "git-annex installer exit $0"
         ${If} $0 != 0
           DetailPrint "git-annex installer exited with code $0 - continuing without it."
         ${EndIf}

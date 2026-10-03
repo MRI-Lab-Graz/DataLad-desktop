@@ -74,6 +74,7 @@ jobs:
           py -3 -c "import sys; print(sys.executable)"
           Get-ChildItem 'C:\Program Files\DataLad Desktop\datalad-env\Scripts' | Format-Table Name
           & 'C:\Program Files\DataLad Desktop\datalad-env\Scripts\python.exe' -m pip list
+          Get-Content 'C:\Program Files\DataLad Desktop\install.log' -ErrorAction Continue
           # git-annex: is the pinned hash what the runner actually downloads, and did anything land next to Git?
           $pinned = (Select-String -Path 'build/installer.nsh' -Pattern "git-annex-installer.exe' -Algorithm SHA256\)\.Hash -ne '([0-9A-Fa-f]{64})'").Matches[0].Groups[1].Value
           Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile "$env:RUNNER_TEMP\ga.exe"

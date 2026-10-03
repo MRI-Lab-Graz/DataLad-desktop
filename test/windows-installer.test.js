@@ -106,3 +106,13 @@ test('the machine PATH entry is only added when the install folder is under Prog
   const install = nsh.split('Making the datalad command available on PATH...')[1]?.split('Checking for git-annex...')[0]
   assert.match(install, /StartsWith\(\$\$env:ProgramW6432/)
 })
+
+// A silent install prints nothing, so a failed prerequisite (git-annex hash, download, exit code) was invisible.
+test('the installer records what it did and why a step failed in install.log', () => {
+  assert.match(nsh, /!macro Log text/)
+  assert.match(nsh, /\$INSTDIR\\install\.log/)
+  const install = nsh.split('!macro customInstall')[1]?.split('!macroend')[0]
+  for (const needle of ['git-annex download', 'git-annex hash', 'git-annex installer exit', 'DataLad install exit']) {
+    assert.ok(install.includes(needle), `no log line for: ${needle}`)
+  }
+})
