@@ -51,11 +51,12 @@
     DetailPrint "Git already present."
   ${EndIf}
 
-  DetailPrint "Checking for Python 3..."
-  nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (Get-Command py -ErrorAction SilentlyContinue) { exit 0 } elseif (Get-Command python -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"`
+  ; The DataLad lock file is compiled for Python 3.12; another interpreter may lack a pinned wheel.
+  DetailPrint "Checking for Python 3.12..."
+  nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -c 'import sys'; exit $$LASTEXITCODE } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)'; exit $$LASTEXITCODE } else { exit 1 }"`
   Pop $0
   ${If} $0 != 0
-    DetailPrint "Python not found - downloading installer..."
+    DetailPrint "Python 3.12 not found - downloading installer..."
     nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' -OutFile '$PLUGINSDIR\python-installer.exe'"`
     Pop $0
     ${If} $0 == 0
@@ -64,7 +65,7 @@
       ${If} $0 != 0
         DetailPrint "Python installer failed hash verification - not running it. Install Python manually from python.org."
       ${Else}
-        DetailPrint "Installing Python 3 (silent)..."
+        DetailPrint "Installing Python 3.12 (silent)..."
         ExecWait `"$PLUGINSDIR\python-installer.exe" /quiet InstallAllUsers=1 PrependPath=1 Include_pip=1 Include_launcher=1` $0
         ${If} $0 != 0
           DetailPrint "Python installer exited with code $0 - continuing without it."
@@ -75,22 +76,24 @@
     ${EndIf}
     Delete "$PLUGINSDIR\python-installer.exe"
   ${Else}
-    DetailPrint "Python 3 already present."
+    DetailPrint "Python 3.12 already present."
   ${EndIf}
 
   DetailPrint "Installing DataLad into its own environment..."
-  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$venv = '$INSTDIR\datalad-env'; if (Get-Command py -ErrorAction SilentlyContinue) { py -3 -m venv $$venv } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m venv $$venv } else { exit 1 }; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & (Join-Path $$venv 'Scripts\python.exe') -m pip install --require-hashes --no-deps --disable-pip-version-check -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
+  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$venv = '$INSTDIR\datalad-env'; if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -m venv $$venv } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m venv $$venv } else { exit 1 }; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & (Join-Path $$venv 'Scripts\python.exe') -m pip install --require-hashes --only-binary :all: --no-deps --disable-pip-version-check -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
   Pop $0
   ${If} $0 != 0
     DetailPrint "DataLad install failed (exit $0) - it can be installed later from the app's diagnostics screen."
   ${Else}
-    ; The private env's Scripts folder sits under the install folder (admin-writable),
-    ; so putting it on the machine PATH cannot be used to plant programs.
+    ; The private env's Scripts folder sits under the install folder. It only goes on the
+    ; machine PATH when that is under Program Files (admin-writable); an install on a data
+    ; drive can be writable by every user, and a machine-wide PATH entry there would let
+    ; any of them plant programs.
     DetailPrint "Making the datalad command available on PATH..."
-    nsExec::ExecToLog `${PS} -NoProfile -Command "$$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ((Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
+    nsExec::ExecToLog `${PS} -NoProfile -Command "$$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts.StartsWith($$env:ProgramW6432, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
     Pop $0
     ${If} $0 != 0
-      DetailPrint "Could not add DataLad to PATH (exit $0) - add $INSTDIR\datalad-env\Scripts manually if the datalad command is not found."
+      DetailPrint "DataLad was not added to PATH (exit $0): the install folder must be under Program Files. Add $INSTDIR\datalad-env\Scripts manually if the datalad command is not found."
     ${EndIf}
   ${EndIf}
 

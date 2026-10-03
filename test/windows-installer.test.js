@@ -42,6 +42,7 @@ test('DataLad is installed into a private venv from the hash-locked requirements
   assert.match(install, /-m venv/)
   assert.match(install, /\$INSTDIR\\datalad-env/)
   assert.match(install, /--require-hashes/)
+  assert.match(install, /--only-binary :all:/, 'no sdist builds: their build tools are not hash-checked')
   assert.match(install, /\$INSTDIR\\resources\\datalad-requirements\.txt/)
   assert.doesNotMatch(install, /--upgrade|pip datalad/, 'no unpinned installs')
 })
@@ -86,4 +87,22 @@ test('uninstaller removes the private DataLad env and its PATH entry and leaves 
 test('uninstaller leaves the DataLad env alone during an update', () => {
   const un = nsh.split('!macro customUnInstall')[1]?.split('!macroend')[0]
   assert.match(un, /\$\{ifNot\} \$\{isUpdated\}/i)
+})
+
+// The lock file is compiled for Python 3.12; any other interpreter may lack a pinned wheel.
+test('the private env is built with Python 3.12 only, and a missing 3.12 triggers the pinned installer', () => {
+  const python = nsh.split('Checking for Python 3.12...')[1]?.split('Installing DataLad into its own environment...')[0]
+  assert.ok(python, 'expected a "Checking for Python 3.12" step before the DataLad step')
+  assert.match(python, /py -3\.12/)
+  assert.match(python, /version_info/)
+  assert.match(python, /python-3\.12\.\d+-amd64\.exe/)
+  const install = nsh.split('Installing DataLad into its own environment...')[1]?.split('Checking for git-annex...')[0]
+  assert.match(install, /py -3\.12 -m venv/)
+  assert.doesNotMatch(install, /py -3 -m venv/)
+})
+
+// A machine-wide PATH entry is only safe if the folder is admin-writable: Program Files, not a data drive.
+test('the machine PATH entry is only added when the install folder is under Program Files', () => {
+  const install = nsh.split('Making the datalad command available on PATH...')[1]?.split('Checking for git-annex...')[0]
+  assert.match(install, /StartsWith\(\$\$env:ProgramW6432/)
 })
