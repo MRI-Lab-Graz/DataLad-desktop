@@ -16,8 +16,8 @@ Result of an independent security review (see `SECURITY.md` for what is protecte
 - PRISM validator installs from a hash-locked, wheels-only requirements file (now pinned to 1.19.1) with uv config discovery off.
 - Administrators can remove the command console (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or a system-level `policy.json`); the console's working directory is confined.
 - Commands printing more than 256 MiB are stopped.
-- CI/release: actions pinned by SHA, read-only default token, scoped signing secrets, release tags require signing, `SHA256SUMS.txt` and provenance attestation, verified gitleaks download, green `npm audit` gate.
-- **Removed:** the optional Rust adapter and the adapter-contract plumbing (Technical Details tab), the stale `latest.yml`/`builder-debug.yml`, a duplicate `escapeHtml`, and ~200 lines of unrelated `.gitignore`.
+- CI/release: actions pinned by SHA, read-only default token, scoped signing secrets, releases labelled unsigned until a certificate exists, with `SHA256SUMS.txt` and a provenance attestation, verified gitleaks download, green `npm audit` gate.
+- **Removed:** the duplicate GitLab release pipeline, the optional Rust adapter and the adapter-contract plumbing (Technical Details tab), the stale `latest.yml`/`builder-debug.yml`, a duplicate `escapeHtml`, and ~200 lines of unrelated `.gitignore`.
 
 ## 0.4.0
 

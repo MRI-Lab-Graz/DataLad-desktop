@@ -56,13 +56,13 @@ Each control below has a test; the file names are where to verify it.
 
 **Build and release** (`.github/workflows/`)
 - Every action is pinned to a commit SHA; workflows default to a read-only token; signing secrets go only to the signing step; the gitleaks download is checksum-verified (`test/workflow-security.test.js`).
-- A release tag **fails** unless macOS and Windows signing are configured. The release publishes `SHA256SUMS.txt` and a build provenance attestation.
+- Releases are **currently unsigned** (no certificate yet); the release notes say so for each platform. Instead, every release publishes `SHA256SUMS.txt` and a build provenance attestation that ties each file to the commit and workflow that built it. Verify a download with `sha256sum -c SHA256SUMS.txt --ignore-missing` and `gh attestation verify <file> --repo <owner/repo>`. Signing turns on by setting `MACOS_SIGNING_ENABLED` / `SIGNPATH_ENABLED` and the matching secrets; nothing else changes.
 - Checks on pushes to `main` and pull requests: unit and e2e tests with a coverage gate, gitleaks, and `npm audit` (`tests/npm-audit.sh`).
 
 ## Known limitations
 
 - **Folder trust is a prompt, not a sandbox.** If you trust a folder, git runs what its config and hooks say.
-- **Signed releases only exist once signing is configured.** Manual (`workflow_dispatch`) test builds can be unsigned. Windows signing goes through SignPath; macOS needs Apple credentials.
+- **No code signing yet.** Windows shows a SmartScreen warning and macOS a Gatekeeper warning until a certificate is bought (Windows signing goes through SignPath; macOS needs Apple credentials). Until then, integrity rests on the checksum and the provenance attestation above, and on downloading from this repository's releases only.
 - **The Windows installer has not been run by the author on Windows.** The installer smoke workflow (`.github/workflows/installer-smoke.yml`) is the check; run it before a rollout. Likewise the planted-`datalad.exe` protection rests on code review of libuv's search order plus the absolute-path resolution, not on a Windows test.
 - **git-annex has no versioned download URL.** The installer pins the hash of the current release, so when upstream publishes a new version the hash check fails and git-annex is skipped (and logged) until the pin in `build/installer.nsh` is bumped.
 - **A custom install folder chosen by an administrator.** The DataLad `Scripts` folder is only added to the machine `PATH` when the install is under Program Files; on a data drive (often writable by every user) it is skipped and logged, because a machine-wide `PATH` entry there would let any user plant programs. The private environment is built with Python 3.12 only (the version the lock file is compiled for); if none is installed, the pinned 3.12 installer runs.

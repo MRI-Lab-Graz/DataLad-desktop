@@ -39,12 +39,14 @@ test('signing secrets are passed to the signing step only, never exported to the
   }
 })
 
-test('a release tag cannot produce an unsigned build', () => {
-  for (const flag of ['MACOS_SIGNING_ENABLED', 'SIGNPATH_ENABLED']) {
-    const guard = new RegExp(`startsWith\\(github\\.ref, 'refs/tags/v'\\) && vars\\.${flag} != 'true'`)
-    assert.match(release, guard, `no tag guard for ${flag}`)
-  }
-  assert.match(release, /exit 1/)
+// No signing certificate yet: a release tag publishes unsigned builds, but the release says so
+// and tells users how to verify what they download instead.
+test('an unsigned release is allowed but is labelled as such, with verification instructions', () => {
+  assert.doesNotMatch(release, /Refuse to build an unsigned release/)
+  assert.match(release, /body_path: release-note\.md/)
+  assert.match(release, /UNSIGNED/)
+  assert.match(release, /sha256sum -c SHA256SUMS\.txt/)
+  assert.match(release, /gh attestation verify/)
 })
 
 test('every signed Windows executable replaces its unsigned twin, not just the installer', () => {

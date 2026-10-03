@@ -16,17 +16,11 @@ jobs:
     name: macOS (Apple silicon)
     runs-on: macos-latest
     steps:
-      # Signing/notarization is opt-in for manual (workflow_dispatch) test builds via the
-      # MACOS_SIGNING_ENABLED repo variable, but mandatory for release tags: an unsigned
-      # build must never be published. To enable it set the variable to 'true' and add these
-      # repo secrets: MACOS_CSC_LINK (base64-encoded .p12 developer ID certificate),
-      # MACOS_CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
-      - name: Refuse to build an unsigned release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && vars.MACOS_SIGNING_ENABLED != 'true' }}
-        run: |
-          echo "::error::Release tags must be signed and notarized. Set the MACOS_SIGNING_ENABLED variable and signing secrets."
-          exit 1
-
+      # Signing/notarization is opt-in via the MACOS_SIGNING_ENABLED repo variable (there is no
+      # certificate yet, so releases are currently unsigned and say so in the release notes).
+      # To enable it set the variable to 'true' and add these repo secrets: MACOS_CSC_LINK
+      # (base64-encoded .p12 developer ID certificate), MACOS_CSC_KEY_PASSWORD, APPLE_ID,
+      # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -77,13 +71,6 @@ jobs:
     name: Windows (x64)
     runs-on: windows-latest
     steps:
-      - name: Refuse to build an unsigned release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_ENABLED != 'true' }}
-        shell: bash
-        run: |
-          echo "::error::Release tags must be signed. Set the SIGNPATH_ENABLED variable and SignPath secrets."
-          exit 1
-
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -128,8 +115,8 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: 'dist-signed'
 
-      # Both the installer and the portable exe must be signed; a signed file with no
-      # unsigned twin means the signing configuration changed, so fail loudly.
+      # When signing is on, both the installer and the portable exe must be signed; a signed
+      # file with no unsigned twin means the signing configuration changed, so fail loudly.
       - name: Replace every executable with its signed version
         if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
         shell: bash
@@ -218,9 +205,37 @@ jobs:
             release-assets/*.exe
             release-assets/*.AppImage
 
+      # Be explicit about what users are getting: unsigned builds trigger OS warnings, so
+      # tell them how to check the download against what CI built instead.
+      - name: Describe signing status and how to verify
+        run: |
+          {
+            echo "## Verify your download"
+            echo
+            if [ "${{ vars.MACOS_SIGNING_ENABLED }}" = 'true' ]; then
+              echo "- macOS: signed and notarized."
+            else
+              echo "- macOS: **UNSIGNED**. Gatekeeper will warn; see the README for System Settings, Privacy and Security, Open Anyway."
+            fi
+            if [ "${{ vars.SIGNPATH_ENABLED }}" = 'true' ]; then
+              echo "- Windows: signed."
+            else
+              echo "- Windows: **UNSIGNED**. SmartScreen will warn on first run."
+            fi
+            echo
+            echo "Check the file you downloaded against what CI built:"
+            echo
+            echo '```'
+            echo "sha256sum -c SHA256SUMS.txt --ignore-missing"
+            echo "gh attestation verify <downloaded file> --repo ${{ github.repository }}"
+            echo '```'
+          } > release-note.md
+          cat release-note.md
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          body_path: release-note.md
           generate_release_notes: true
           files: |
             release-assets/*.dmg

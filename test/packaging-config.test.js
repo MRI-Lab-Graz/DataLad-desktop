@@ -15,7 +15,7 @@ test('package.json has no macOS x64 build scripts', async () => {
   assert.equal(scripts['package:mac:arm64'], 'electron-builder --mac --arm64')
 })
 
-for (const file of ['.github/workflows/build-os-artifacts.yml', '.gitlab-ci.yml']) {
+for (const file of ['.github/workflows/build-os-artifacts.yml']) {
   test(`${file} builds macOS for Apple silicon only`, async () => {
     const text = await read(file)
     assert.doesNotMatch(text, /mac:both|mac:x64|Intel/)

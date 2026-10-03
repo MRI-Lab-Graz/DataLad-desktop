@@ -40,3 +40,9 @@ test('SECURITY.md documents the system locations that policyFiles really uses', 
   assert.ok(doc.includes(policyFiles({ platform: 'darwin', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
   assert.ok(doc.includes(policyFiles({ platform: 'linux', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
 })
+
+test('SECURITY.md says releases are currently unsigned and how to verify them', () => {
+  assert.match(doc, /currently unsigned/i)
+  assert.match(doc, /SHA256SUMS/)
+  assert.match(doc, /gh attestation verify/)
+})

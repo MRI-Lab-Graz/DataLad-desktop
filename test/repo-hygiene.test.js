@@ -28,3 +28,8 @@ test('no tracked file is a stray build output', () => {
   const tracked = execFileSync('git', ['ls-files'], { encoding: 'utf8' }).split('\n')
   assert.deepEqual(tracked.filter((f) => /^(latest.*|builder-debug)\.yml$/.test(f)), [])
 })
+
+// One release pipeline (GitHub Actions). The GitLab copy built unsigned, ran no tests and was not hardened.
+test('there is no second, unhardened release pipeline', () => {
+  assert.equal(existsSync(new URL('../.gitlab-ci.yml', import.meta.url)), false)
+})
