@@ -46,7 +46,7 @@ test('the stock git-annex hooks and filter are not flagged', async () => {
 test('the extra settings git and git-annex write on Windows are not flagged', async () => {
   const dir = await repo({
     config: '[core]\n\tsymlinks = false\n\tlongpaths = true\n\tprotectntfs = true\n\thidedotfiles = dotgitonly\n' +
-      '[annex]\n\tcrippledfilesystem = true\n\tadjustedbranchrefresh = true\n\tbackend = SHA256E\n\tfreezecontent = false\n' +
+      '[annex]\n\tcrippledfilesystem = true\n\tadjustedbranchrefresh = true\n\tbackend = SHA256E\n\tfreezecontent = false\n\tsshcaching = true\n' +
       '[remote "origin"]\n\turl = https://example.org/ds.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n\tannex-uuid = 1\n\tannex-ignore = true\n\tannex-cost = 150\n'
   })
   assert.deepEqual(await findExecVectors(dir), [])

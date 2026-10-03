@@ -35,7 +35,7 @@ const HARMLESS_KEYS = [
 // git-annex writes many settings (more on Windows, where it runs in "crippled filesystem" mode), so
 // annex.* and remote.*.annex-* are allowed as a family, minus the ones that name a program to run.
 const ANNEX_KEY = /^(annex\.[a-z0-9.-]+|remote\..+\.annex-[a-z0-9-]+)$/
-const ANNEX_RUNS_PROGRAMS = /(command|shell|externaltype|ssh|rsync|program|hook)/
+const ANNEX_RUNS_PROGRAMS = /(command|shell|externaltype|ssh-options|rsync-options|program|hook)/
 
 const MAX_SUBDATASETS = 100
 const MAX_DEPTH = 3
