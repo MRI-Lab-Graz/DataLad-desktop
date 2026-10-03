@@ -5,6 +5,7 @@ import {
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
 } from './button-gating.js'
+import { escapeHtml } from './escape-html.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -68,8 +69,8 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
-  extendedCommands: [],
   rootProjectIsBids: false,
+  rootProjectPrism: null,
   createProjectBidsCandidate: null
 }
 
@@ -113,6 +114,7 @@ const elements = {
   currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
+  currentProjectPrismBadge: document.getElementById('current-project-prism-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
@@ -181,16 +183,19 @@ const elements = {
   identitySummary: document.getElementById('identity-summary'),
   identityOpenButton: document.getElementById('identity-open'),
   detectProjectButton: document.getElementById('detect-project'),
-  refreshContractButton: document.getElementById('refresh-contract'),
   globalBusyOverlay: document.getElementById('global-busy-overlay'),
   globalBusyText: document.getElementById('global-busy-text'),
   globalBusyStop: document.getElementById('global-busy-stop'),
   globalBusyBarFill: document.getElementById('global-busy-bar-fill'),
   environmentOutput: document.getElementById('environment-output'),
+  prismEnvStatus: document.getElementById('prism-env-status'),
+  prismEnvInstall: document.getElementById('prism-env-install'),
+  prismEnvCancel: document.getElementById('prism-env-cancel'),
+  prismEnvTechnical: document.getElementById('prism-env-technical'),
+  prismEnvTechnicalText: document.getElementById('prism-env-technical-text'),
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
-  contractOutput: document.getElementById('contract-output'),
   remoteInfo: document.getElementById('remote-info'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
@@ -213,8 +218,6 @@ const elements = {
 
 loadRecentProjects()
 await seedWorkspacePath()
-await renderContract()
-
 // Never auto-load a project on start. Only "Latest Projects" and "Open
 // Project" should be visible until the user explicitly opens, clones, or
 // picks a recent one — every other card stays hidden until then.
@@ -359,6 +362,47 @@ elements.checkEnvButton.addEventListener('click', async () => {
   } finally {
     setButtonBusy(elements.checkEnvButton, false)
   }
+})
+
+elements.commandOutput.addEventListener('click', (event) => {
+  if (event.target.closest('[data-open-setup]')) {
+    elements.openSettingsButton.click()
+  }
+})
+
+async function refreshPrismEnvStatus() {
+  const status = await api.getManagedEnvStatus()
+  elements.prismEnvStatus.textContent = status.ready ? `Ready (${status.validatorVersion})` : 'Not installed.'
+  elements.prismEnvInstall.hidden = status.ready
+}
+
+elements.prismEnvInstall.addEventListener('click', async () => {
+  const runId = `prism-env-${Date.now()}`
+  elements.prismEnvInstall.hidden = true
+  elements.prismEnvCancel.hidden = false
+  elements.prismEnvCancel.onclick = () => api.cancelCommand(runId)
+  elements.prismEnvStatus.textContent = 'Installing…'
+  let installed = false
+  try {
+    const result = await api.ensureManagedEnv(runId)
+    elements.prismEnvTechnical.hidden = !result.technical
+    elements.prismEnvTechnicalText.textContent = result.technical ?? ''
+    if (result.ready) {
+      installed = true
+      await refreshPrismEnvStatus()
+    } else {
+      elements.prismEnvStatus.textContent = result.message
+    }
+  } catch (error) {
+    elements.prismEnvStatus.textContent = String(error?.message ?? error)
+  } finally {
+    elements.prismEnvCancel.hidden = true
+    elements.prismEnvInstall.hidden = installed
+  }
+})
+
+elements.openSettingsButton.addEventListener('click', () => {
+  refreshPrismEnvStatus().catch(() => {})
 })
 
 elements.environmentOutput.addEventListener('click', (event) => {
@@ -523,7 +567,7 @@ elements.createProjectButton.addEventListener('click', async () => {
 // the shared detectAndMaybeNestBids afterward instead of a bespoke loop.
 async function runCreateNewProject(targetPath) {
   const candidate = state.createProjectBidsCandidate
-  const isAdopting = isBidsModeSupported() && Boolean(candidate?.bidsLikely)
+  const isAdopting = Boolean(candidate?.bidsLikely)
 
   // Skips its own background refresh — detectAndMaybeNestBids's first call is
   // always detectProjectType, an awaited refresh that fully supersedes it and
@@ -635,7 +679,7 @@ function hideGlobalBusyOverlay() {
 // is a no-op in the common case.
 async function detectAndMaybeNestBids(projectPath, button) {
   await detectProjectType(projectPath)
-  if (!state.rootProjectIsBids || !isBidsModeSupported() || !isBidsAutoNestEnabled()) {
+  if (!state.rootProjectIsBids || !isBidsAutoNestEnabled()) {
     return null
   }
 
@@ -805,7 +849,9 @@ elements.saveProjectButton.addEventListener('click', async () => {
     }
 
     const selectedPaths = gatherSavePaths()
-    if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
+    // PRISM projects are validated and saved as a whole (the main process ignores the selection).
+    const prismSavesEverything = Boolean(state.rootProjectPrism) && !state.rootProjectPrism.introducesPrism
+    if (latestStatus.totalChanged > 0 && selectedPaths.length === 0 && !prismSavesEverything) {
       elements.commandOutput.textContent =
         'Select at least one changed file or provide manual paths before saving.'
       setLastActionState('Select files to save first.', 'error')
@@ -1277,10 +1323,6 @@ elements.filesOutput.addEventListener('click', async (event) => {
   await refreshWorkingTreeStatus(projectPath)
 })
 
-elements.refreshContractButton.addEventListener('click', async () => {
-  await renderContract()
-})
-
 api.onFilesChanged(({ projectPath }) => {
   if (!projectPath || projectPath !== state.rootProjectPath) {
     return
@@ -1303,7 +1345,9 @@ async function detectProjectType(projectPath) {
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
     state.rootProjectIsBids = Boolean(result.isBids)
+    state.rootProjectPrism = null
     setCurrentProjectHeader(projectPath, result.classification)
+    void refreshPrismInspect(projectPath)
     rememberRecentProject(projectPath)
     void api.setWatchedProject(projectPath)
     // Best-effort, fire-and-forget: always exclude OS noise files (.DS_Store
@@ -1429,6 +1473,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     const result = await api.runCommand(commandName, request, runId)
 
     const nextProjectPath = request.projectPath ?? request.targetPath
+    if (commandName === 'save' && result.ok && nextProjectPath) void refreshPrismInspect(nextProjectPath)
     let saveSummary = null
     if (result.ok && nextProjectPath) {
       // Multi-step automated sequences (BIDS nesting, batch conversions) call
@@ -2307,36 +2352,12 @@ async function seedWorkspacePath() {
   }
 }
 
-async function renderContract() {
-  try {
-    const contract = await api.getContract()
-    elements.contractOutput.textContent = JSON.stringify(contract, null, 2)
-    state.extendedCommands = contract.extendedCommands ?? []
-  } catch (error) {
-    elements.contractOutput.textContent = String(error.message)
-    state.extendedCommands = []
-  }
-  applyBidsFeatureGate()
-}
-
-// BIDS mode (createSubdataset + the procedure/force createProject fields) is
-// a JS-adapter-only extension — under the Rust adapter (DATALAD_DESKTOP_USE_RUST_ADAPTER=1)
-// extendedCommands won't include it, so the UI hides itself rather than
-// offering an action that would silently no-op.
-function isBidsModeSupported() {
-  return state.extendedCommands.includes('createSubdataset')
-}
-
-function applyBidsFeatureGate() {
-  elements.bidsAutoNestToggle.closest('label').hidden = !isBidsModeSupported()
-}
-
 // Silent, no-UI probe of a not-yet-a-project folder — used only to decide
 // `force: true` before calling createProject on a non-empty target. What
 // actually gets nested afterward is decided automatically by
 // detectAndMaybeNestBids once the folder is a real project, not by this.
 async function checkCreateProjectBidsCandidate(folderPath) {
-  if (!isBidsModeSupported() || !folderPath) {
+  if (!folderPath) {
     return
   }
 
@@ -2565,7 +2586,8 @@ function updateSaveButtonState() {
     hasConflicts: Boolean(snapshot?.conflictCount),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    messageLabel: getMessageTermLabel()
+    messageLabel: getMessageTermLabel(),
+    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
   })
 
   elements.saveProjectButton.disabled = gating.disabled
@@ -2688,6 +2710,12 @@ function renderCommandResult(result, summary = null) {
 
   if (shouldShowUserErrorMessage(result)) {
     html += `<p>${escapeHtml(result.userError.message)}</p>`
+    if (Array.isArray(result.userError.items) && result.userError.items.length > 0) {
+      html += `<ul>${result.userError.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+    }
+    if (result.userError.code === 'PRISM_VALIDATOR_MISSING') {
+      html += '<p><button type="button" class="button button-ghost button-inline" data-open-setup>Open Setup</button></p>'
+    }
   }
 
   html +=
@@ -2917,6 +2945,19 @@ function setBidsBadge(projectPath) {
   elements.currentProjectBidsBadge.hidden = !projectPath || !state.rootProjectIsBids
 }
 
+// Display-only: the Save gate itself runs in the main process and never trusts this.
+async function refreshPrismInspect(projectPath) {
+  try {
+    const info = await api.inspectPrism(projectPath)
+    if (projectPath !== state.rootProjectPath) return
+    state.rootProjectPrism = info.isPrism ? info : null
+  } catch {
+    state.rootProjectPrism = null
+  }
+  elements.currentProjectPrismBadge.hidden = !state.rootProjectPrism
+  updateSaveButtonState()
+}
+
 function applyDatasetGatedButtons(classification) {
   state.currentProjectClassification = classification
   updateGetDataGating()
@@ -3035,9 +3076,6 @@ function applyRemoteGatedButtons(health) {
   elements.publishProjectButton.disabled = gating.publish.disabled
   elements.publishProjectButton.title = gating.publish.title
 
-  // JS-adapter-only, same as BIDS mode — hide rather than offer an action
-  // that would fail under the experimental Rust adapter.
-  elements.disconnectRemoteButton.hidden = !state.extendedCommands.includes('disconnectRemote')
   elements.disconnectRemoteButton.disabled = gating.disconnect.disabled
   elements.disconnectRemoteButton.title = gating.disconnect.title
 
@@ -3815,7 +3853,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
         // whether it's registered in state.datasets, not its gitStatus.
         const isRegisteredSubdataset = (state.datasets ?? []).some((dataset) => dataset.relativePath === node.name)
         const convertButton =
-          depth === 0 && !isRegisteredSubdataset && isBidsModeSupported()
+          depth === 0 && !isRegisteredSubdataset
             ? `<button type="button" class="button button-ghost button-mini" data-convert-subdataset-path="${escapeHtml(node.name)}">Convert to subdataset</button>`
             : ''
         return (
@@ -3893,15 +3931,6 @@ function loadingPanelHtml(message) {
   return `<p>${escapeHtml(message)}</p><div class="loading-bar" role="progressbar" aria-label="${escapeHtml(
     message
   )}"></div>`
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
 }
 
 function nextRequestToken(key) {

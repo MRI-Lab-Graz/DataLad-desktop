@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { killProcessTree, QUIT_ABORT_REASON } from './kill-tree.js'
+import { resolveTool } from './resolve-tool.js'
 
 // git acquires .git/index.lock atomically before any mutation, so a command
 // that fails to acquire it never partially ran — a retry after a short
@@ -12,9 +14,21 @@ const MAX_LOCK_RETRIES = 4
 const LOCK_RETRY_BASE_DELAY_MS = 150
 const CANCELLED_EXIT_CODE = 130
 const DEFAULT_KILL_GRACE_MS = 3000
+// A dataset with millions of files must not be able to exhaust the app's memory.
+const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+const OUTPUT_LIMIT_EXIT_CODE = 125
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+// Hardening applied to every child: file names are never git pathspec patterns,
+// and a repo's own .git/config cannot make `git status` run a program.
+function childEnv(extra = {}) {
+  const env = { ...process.env, ...extra }
+  const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
+  env.GIT_CONFIG_COUNT = String(n + 1)
+  env[`GIT_CONFIG_KEY_${n}`] = 'core.fsmonitor'
+  env[`GIT_CONFIG_VALUE_${n}`] = 'false'
+  env.GIT_LITERAL_PATHSPECS = '1'
+  env.NoDefaultCurrentDirectoryInExePath = '1'
+  return env
 }
 
 // Progress bars redraw with \r, so split on both; only the latest visible line
@@ -32,6 +46,12 @@ function latestLine(chunk) {
  * Small shell boundary used by the adapter so UI layers can stay command-agnostic.
  */
 export class ProcessRunner {
+  #resolve
+
+  constructor({ resolve = resolveTool } = {}) {
+    this.#resolve = resolve
+  }
+
   async run(command, args = [], options = {}) {
     const startedAt = Date.now()
 
@@ -53,7 +73,13 @@ export class ProcessRunner {
   }
 
   async #runOnce(command, args, options) {
-    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput } = options
+    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES } = options
+
+    // Bare names are looked up on PATH ourselves: Windows would otherwise try the
+    // (dataset-controlled) cwd first. A shell line is the console's business.
+    const bare = !options.shell && !/[\\/]/.test(command)
+    const exe = bare ? this.#resolve(command) : null
+    const notFound = bare && !exe
 
     return new Promise((resolve) => {
       let stdout = ''
@@ -103,9 +129,21 @@ export class ProcessRunner {
         return
       }
 
-      const child = spawn(command, args, {
+      if (notFound) {
+        finish({
+          command,
+          args,
+          exitCode: 127,
+          stdout,
+          stderr: `${command} not found on PATH`,
+          failed: true
+        })
+        return
+      }
+
+      const child = spawn(exe ?? command, args, {
         cwd: options.cwd,
-        env: { ...process.env, ...(options.env ?? {}) },
+        env: childEnv(options.env),
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: options.shell ?? false,
         // POSIX: lead our own process group so cancel/timeout can signal the whole tree.
@@ -139,14 +177,36 @@ export class ProcessRunner {
         }
       }
 
+      let received = 0
+      const accept = (chunk) => {
+        received += chunk.length
+        if (received > maxOutputBytes) {
+          killProcessTree(child, killGraceMs)
+          finish({
+            command,
+            args,
+            exitCode: OUTPUT_LIMIT_EXIT_CODE,
+            stdout: '',
+            stderr: `${command} output exceeded ${maxOutputBytes} bytes and was stopped`,
+            failed: true
+          })
+          return false
+        }
+        return true
+      }
+
       child.stdout.on('data', (chunk) => {
-        stdout += String(chunk)
-        report(chunk)
+        if (accept(chunk)) {
+          stdout += String(chunk)
+          report(chunk)
+        }
       })
 
       child.stderr.on('data', (chunk) => {
-        stderr += String(chunk)
-        report(chunk)
+        if (accept(chunk)) {
+          stderr += String(chunk)
+          report(chunk)
+        }
       })
 
       child.on('error', (error) => {

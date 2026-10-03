@@ -1,5 +1,7 @@
 // Pure helpers for the "running commands" strip, kept out of app.js so they are
 // unit-testable (same idea as save-gating.js).
+import { escapeHtml } from './escape-html.js'
+
 const ANSI_ESCAPE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
 // OSC sequences (window titles, hyperlinks) end with BEL or ESC \\.
 const OSC_SEQUENCE = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g
@@ -18,16 +20,6 @@ export function formatActivityLine(line, max = 120) {
     .replace(/\s+/g, ' ')
     .trim()
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
-}
-
-// The activity line is process output (untrusted): always escape.
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
 }
 
 export function renderRunningRows(runs) {

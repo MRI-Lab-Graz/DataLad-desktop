@@ -1,13 +1,12 @@
-import { lstat, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
 import { ProcessRunner } from './process-runner.js'
 import { parseGitStatusPorcelain } from './status.js'
 import {
   assertCommandRequest,
-  buildCommandResult,
-  getAdapterInterfaceContract
+  buildCommandResult
 } from './schema.js'
 
 const CURATED_COMMANDS = new Set([
@@ -392,9 +391,9 @@ export class DataLadAdapter {
   async readGitignore(projectPath, relativeDatasetPath = '.') {
     await this.#ensureGitProject(projectPath)
 
-    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const datasetPath = await this.#resolveInsideProject(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
-    const exists = await fileExists(gitignorePath)
+    const exists = await gitignoreExists(gitignorePath)
 
     return {
       relativeDatasetPath,
@@ -418,9 +417,9 @@ export class DataLadAdapter {
   }
 
   async #addIgnorePatternsToDataset(projectPath, relativeDatasetPath, cleanPatterns) {
-    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const datasetPath = await this.#resolveInsideProject(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
-    const exists = await fileExists(gitignorePath)
+    const exists = await gitignoreExists(gitignorePath)
     const existingContent = exists ? await readFile(gitignorePath, 'utf8') : ''
     const existingLines = new Set(
       existingContent
@@ -441,8 +440,24 @@ export class DataLadAdapter {
     return { relativeDatasetPath, addedPatterns, content: nextContent }
   }
 
+  // A folder committed as a symlink (sub-01 -> /elsewhere) must not redirect writes out of the project.
+  async #resolveInsideProject(projectPath, relativeDatasetPath) {
+    const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
+    const [root, real] = await Promise.all([realpath(projectPath), realpath(datasetPath).catch(() => null)])
+    if (real !== null && real !== root && !real.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)) {
+      throw new Error(`Dataset path resolves outside the project: ${relativeDatasetPath}`)
+    }
+    return datasetPath
+  }
+
   #resolveDatasetPath(projectPath, relativeDatasetPath) {
-    return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
+    if (relativeDatasetPath === '.') {
+      return projectPath
+    }
+    if (!isSafeRelativeSubdatasetPath(relativeDatasetPath)) {
+      throw new Error(`Invalid dataset path: ${relativeDatasetPath}`)
+    }
+    return join(projectPath, relativeDatasetPath)
   }
 
   async listBranches(projectPath) {
@@ -741,10 +756,6 @@ export class DataLadAdapter {
       ...sync,
       ...missingContent
     }
-  }
-
-  getInterfaceContract() {
-    return getAdapterInterfaceContract()
   }
 
   async #checkPython() {
@@ -1055,9 +1066,7 @@ export class DataLadAdapter {
         }
       }
       case 'createProject': {
-        // `procedure`/`force` are JS-only extensions (see the comment on
-        // BRIDGE_COMMAND_SCHEMAS.createProject in schema.js) — omitted, they
-        // produce the exact same args as before this existed.
+        // `procedure`/`force` are optional (BIDS mode); omitted, they add no args.
         const args = ['create']
         if (request.procedure) {
           args.push('-c', request.procedure)
@@ -1146,7 +1155,7 @@ export class DataLadAdapter {
         const branchName = request.branchName
         return {
           command: 'git',
-          args: ['-C', projectPath, 'checkout', branchName],
+          args: ['-C', projectPath, 'checkout', branchName, '--'],
           options: { cwd: projectPath }
         }
       }
@@ -1204,6 +1213,23 @@ export class DataLadAdapter {
 // target doesn't exist locally; it still very much exists as a tracked path
 // (e.g. for isBids's dataset_description.json check), so following the link
 // would incorrectly report it as missing.
+// A .gitignore that is a symlink (e.g. committed as -> .git/config) would be
+// followed on write, so anything but a plain file is refused.
+async function gitignoreExists(path) {
+  try {
+    const info = await lstat(path)
+    if (!info.isFile()) {
+      throw new Error(`${path} is not a regular file`)
+    }
+    return true
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 async function fileExists(path) {
   try {
     await lstat(path)
@@ -1216,7 +1242,7 @@ async function fileExists(path) {
 // .gitmodules `path =` values come from repository content, which may belong to a cloned/untrusted
 // dataset. Every consumer joins this value onto a filesystem path, so a `../` or absolute path here
 // would let a malicious dataset make the app read or write outside the project directory.
-function isSafeRelativeSubdatasetPath(relativePath) {
+export function isSafeRelativeSubdatasetPath(relativePath) {
   if (typeof relativePath !== 'string' || relativePath.length === 0) {
     return false
   }

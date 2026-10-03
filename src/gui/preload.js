@@ -26,7 +26,9 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getGitIdentity: () => ipcRenderer.invoke('identity:get'),
   setGitIdentity: (identity) => ipcRenderer.invoke('identity:set', identity),
-  getContract: () => ipcRenderer.invoke('adapter:getContract'),
+  inspectPrism: (projectPath) => ipcRenderer.invoke('prism:inspect', projectPath),
+  getManagedEnvStatus: () => ipcRenderer.invoke('env:status'),
+  ensureManagedEnv: (runId) => ipcRenderer.invoke('env:ensure', runId),
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
   ignoreOsNoiseFiles: (projectPath) => ipcRenderer.invoke('adapter:ignoreOsNoiseFiles', projectPath),
   readGitignore: (projectPath, relativeDatasetPath) =>

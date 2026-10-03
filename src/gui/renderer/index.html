@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'none'"
     />
     <title>DataLad Desktop</title>
     <link rel="icon" type="image/png" href="../assets/icons/datalad_desktop.png" />
@@ -74,6 +74,20 @@
             <button id="check-env" class="button button-ghost button-inline" type="button">Check Environment</button>
           </div>
           <div id="environment-output" class="panel panel-muted panel-compact" hidden></div>
+        </div>
+
+        <div class="setup-section">
+          <h3 class="setup-section-title">PRISM Validator</h3>
+          <p class="lede-small">Checks that your data follows the PRISM structure. Installed privately for this app.</p>
+          <p id="prism-env-status" class="lede-small"></p>
+          <div class="row-actions">
+            <button id="prism-env-install" class="button button-ghost button-inline" type="button">Install</button>
+            <button id="prism-env-cancel" class="button button-ghost button-inline" type="button" hidden>Cancel</button>
+          </div>
+          <details id="prism-env-technical" hidden>
+            <summary>Technical details</summary>
+            <pre id="prism-env-technical-text" class="panel panel-code"></pre>
+          </details>
         </div>
 
       </section>
@@ -221,6 +235,7 @@
         <div class="strip-state-group">
           <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
           <span id="current-project-bids-badge" class="badge badge-bids" hidden>BIDS</span>
+          <span id="current-project-prism-badge" class="badge badge-bids" hidden>PRISM</span>
           <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
           <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
             Switch Project
@@ -270,10 +285,6 @@
           <button type="button" class="onboarding-tile" id="project-nav-tile-console" data-nav-target="power-user-console" role="tab" aria-selected="false" aria-controls="power-user-console" hidden>
             <span class="onboarding-tile-icon" aria-hidden="true">🖥️</span>
             <span class="onboarding-tile-label">Power User Console</span>
-          </button>
-          <button type="button" class="onboarding-tile" data-nav-target="technical-details-aside" role="tab" aria-selected="false" aria-controls="technical-details-aside">
-            <span class="onboarding-tile-icon" aria-hidden="true">🔧</span>
-            <span class="onboarding-tile-label">Technical Details</span>
           </button>
         </div>
 
@@ -619,19 +630,6 @@
 
             <div id="tm-action-output" class="panel panel-muted panel-compact" hidden></div>
           </section>
-        </section>
-
-        <section id="technical-details-aside" class="card reveal" aria-labelledby="contract-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🔧</span>
-          <div class="section-head">
-            <h2 id="contract-title">Technical Details (Optional)</h2>
-            <button id="refresh-contract" class="button button-ghost">Refresh</button>
-          </div>
-
-          <details>
-            <summary>Adapter contract</summary>
-            <pre id="contract-output" class="panel panel-code">Loading interface contract...</pre>
-          </details>
         </section>
       </section>
     </div>

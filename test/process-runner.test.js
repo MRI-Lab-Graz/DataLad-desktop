@@ -373,3 +373,82 @@ test('ProcessRunner does not retry a cancelled run that had printed an index.loc
   assert.equal(result.cancelled, true)
   assert.equal(await readFile(counter, 'utf8'), '1', 'a cancelled run must not be re-spawned by the lock retry')
 })
+
+test('ProcessRunner spawns the resolved absolute path, not the bare name', async () => {
+  const runner = new ProcessRunner({
+    resolve: (name) => (name === 'fake-tool' ? process.execPath : null)
+  })
+  const result = await runner.run('fake-tool', ['-e', "process.stdout.write('ok')"])
+  assert.equal(result.stdout, 'ok')
+})
+
+test('ProcessRunner on win32 refuses an unresolvable bare name instead of searching cwd', async () => {
+  const runner = new ProcessRunner({ resolve: () => null, platform: 'win32' })
+  const result = await runner.run('datalad', ['--version'], { cwd: process.cwd() })
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 127)
+  assert.match(result.stderr, /not found on PATH/i)
+})
+
+test('ProcessRunner tells children not to search the current directory for executables', async () => {
+  const saved = process.env.NoDefaultCurrentDirectoryInExePath
+  delete process.env.NoDefaultCurrentDirectoryInExePath
+  try {
+    const result = await new ProcessRunner().run(process.execPath, [
+      '-e',
+      'process.stdout.write(process.env.NoDefaultCurrentDirectoryInExePath ?? "")'
+    ])
+    assert.equal(result.stdout, '1')
+  } finally {
+    if (saved !== undefined) process.env.NoDefaultCurrentDirectoryInExePath = saved
+  }
+})
+
+test('ProcessRunner makes git treat pathspecs literally', async () => {
+  const result = await new ProcessRunner().run(process.execPath, [
+    '-e',
+    'process.stdout.write(process.env.GIT_LITERAL_PATHSPECS ?? "")'
+  ])
+  assert.equal(result.stdout, '1')
+})
+
+test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
+  const result = await new ProcessRunner().run(
+    process.execPath,
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_0]))'],
+    { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
+  )
+  assert.deepEqual(JSON.parse(result.stdout), ['2', 'core.fsmonitor', 'false', 'user.name'])
+})
+
+test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'fsm-'))
+  const marker = join(dir, 'PWNED')
+  const runner = new ProcessRunner()
+  await runner.run('git', ['init', '-q', dir])
+  await runner.run('git', ['-C', dir, 'config', 'core.fsmonitor', `touch ${marker}`])
+  await runner.run('git', ['-C', dir, 'status', '--porcelain'])
+  await assert.rejects(readFile(marker), /ENOENT/)
+})
+
+test('ProcessRunner stops a command whose output exceeds the cap instead of buffering without limit', async () => {
+  const runner = new ProcessRunner()
+  const result = await runner.run(
+    process.execPath,
+    ['-e', "const chunk = 'x'.repeat(10000); setInterval(() => process.stdout.write(chunk), 1)"],
+    { maxOutputBytes: 100_000 }
+  )
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 125)
+  assert.match(result.stderr, /output exceeded 100000 bytes/i)
+  assert.ok(result.stdout.length < 1_000_000, 'buffered far past the cap')
+})
+
+// POSIX execvp would honour an empty or relative PATH entry (a trailing ':') and run ./datalad from the dataset.
+test('ProcessRunner refuses an unresolvable bare name on every platform, not just win32', async () => {
+  const runner = new ProcessRunner({ resolve: () => null, platform: 'linux' })
+  const result = await runner.run('datalad', ['--version'])
+  assert.equal(result.failed, true)
+  assert.equal(result.exitCode, 127)
+  assert.match(result.stderr, /not found on PATH/i)
+})

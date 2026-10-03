@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
@@ -563,7 +563,7 @@ test('runCommand routes createBranch through curated git invocation', async () =
 
 test('runCommand routes switchBranch through curated git invocation', async () => {
   const runner = new FakeRunner()
-  runner.set('git', ['-C', '/tmp/project', 'checkout', 'main'], {
+  runner.set('git', ['-C', '/tmp/project', 'checkout', 'main', '--'], {
     exitCode: 0,
     stdout: 'Switched to branch main\n',
     stderr: '',
@@ -577,7 +577,7 @@ test('runCommand routes switchBranch through curated git invocation', async () =
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'checkout', 'main'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'checkout', 'main', '--'])
 })
 
 test('runCommand returns non-fatal clone advisories from stderr output', async () => {
@@ -1084,16 +1084,6 @@ test('getProjectHealth degrades gracefully without an upstream or git-annex', as
   assert.equal(health.behind, null)
   assert.equal(health.annexSupported, false)
   assert.equal(health.missingContentCount, null)
-})
-
-test('getInterfaceContract returns stable schema metadata', () => {
-  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
-  const contract = adapter.getInterfaceContract()
-
-  assert.equal(contract.version, '0.5.0')
-  assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
-  assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
-  assert.deepEqual(contract.commands.createBranch.required, ['projectPath', 'branchName'])
 })
 
 test('runCommand routes get without explicit paths to a bare datalad get', async () => {
@@ -2018,4 +2008,45 @@ test('checkEnvironment treats a macOS bad-interpreter failure as a broken launch
   const diagnostics = await new DataLadAdapter({ runner }).checkEnvironment()
 
   assert.equal(diagnostics.issues[0].code, 'DATALAD_BROKEN_LAUNCHER')
+})
+
+function gitProjectRunner(root) {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  return runner
+}
+
+test('gitignore handlers reject a dataset path that escapes the project', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-gi-escape-'))
+  const adapter = new DataLadAdapter({ runner: gitProjectRunner(root) })
+
+  await assert.rejects(adapter.readGitignore(root, '../../etc'), /Invalid dataset path/)
+  await assert.rejects(adapter.addIgnorePatterns(root, ['../outside'], ['x']), /Invalid dataset path/)
+  await assert.rejects(adapter.readGitignore(root, '/etc'), /Invalid dataset path/)
+})
+
+test('gitignore handlers refuse a .gitignore that is a symlink', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-gi-link-'))
+  const target = join(root, 'victim')
+  await writeFile(target, 'keep\n')
+  await symlink(target, join(root, '.gitignore'))
+  const adapter = new DataLadAdapter({ runner: gitProjectRunner(root) })
+
+  await assert.rejects(adapter.addIgnorePatterns(root, ['.'], ['*.log']), /not a regular file/)
+  await assert.rejects(adapter.readGitignore(root, '.'), /not a regular file/)
+  assert.equal(await readFile(target, 'utf8'), 'keep\n')
+})
+
+test('gitignore handlers refuse a dataset folder that is a symlink leaving the project', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'dlad-gi-dir-'))
+  const root = join(base, 'project')
+  const outside = join(base, 'outside')
+  await mkdir(root)
+  await mkdir(outside)
+  await symlink(outside, join(root, 'sub-link'))
+  const adapter = new DataLadAdapter({ runner: gitProjectRunner(root) })
+
+  await assert.rejects(adapter.addIgnorePatterns(root, ['sub-link'], ['*.log']), /outside the project/)
+  await assert.rejects(adapter.readGitignore(root, 'sub-link'), /outside the project/)
+  await assert.rejects(readFile(join(outside, '.gitignore')), /ENOENT/)
 })

@@ -3,8 +3,7 @@ import assert from 'node:assert/strict'
 import {
   assertCommandRequest,
   assertRunnerResultShape,
-  buildCommandResult,
-  getAdapterInterfaceContract
+  buildCommandResult
 } from '../src/datalad/schema.js'
 
 test('assertCommandRequest rejects unsupported command names', () => {
@@ -73,7 +72,9 @@ test('buildCommandResult marks ok=false when the run failed', () => {
   assert.equal(result.commandName, 'save')
 })
 
-test('getAdapterInterfaceContract exposes the documented classification values', () => {
-  const contract = getAdapterInterfaceContract()
-  assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
+test('assertCommandRequest rejects a clone source that looks like an option or ext:: transport', () => {
+  const base = { targetPath: '/tmp/ds' }
+  assert.throws(() => assertCommandRequest('cloneInstall', { ...base, source: '--upload-pack=touch x' }), /source cannot start with -/)
+  assert.throws(() => assertCommandRequest('cloneInstall', { ...base, source: 'ext::sh -c touch% x' }), /transport is not allowed/)
+  assert.doesNotThrow(() => assertCommandRequest('cloneInstall', { ...base, source: 'https://example.org/ds.git' }))
 })

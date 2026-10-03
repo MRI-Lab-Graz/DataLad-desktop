@@ -2,6 +2,23 @@
 
 Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0.
 
+## Unreleased: security hardening
+
+Result of an independent security review (see `SECURITY.md` for what is protected and what is not).
+
+- **Windows:** `git`/`datalad` are resolved to absolute paths from absolute `PATH` entries, so a program of the same name inside a dataset is never run.
+- Every child process gets literal pathspecs (a file named `*` can no longer widen Discard/Restore) and `core.fsmonitor` forced off.
+- **Folder trust:** opening a folder whose git config or hooks can run programs now asks first.
+- Clone sources starting with `-` or using `ext::` are refused; branch checkout ends with `--`; `.gitignore` handlers confine their paths and refuse symlinks.
+- Packaged builds no longer authorize the launch directory (it was `/` for apps started from Finder); only the app's own page can call IPC handlers; DevTools are off; the CSP forbids frames.
+- Electron fuses locked (no run-as-node, `NODE_OPTIONS`, `--inspect`; ASAR integrity on); minimal macOS entitlements; only runtime sources are packaged.
+- Windows installer: DataLad installs into a private, hash-locked environment; git-annex download is hash-verified; PowerShell by absolute path; no user-controlled `PATH`. Uninstall removes that environment instead of running `pip uninstall`.
+- PRISM validator installs from a hash-locked, wheels-only requirements file (now pinned to 1.19.1) with uv config discovery off.
+- Administrators can remove the command console (`DATALAD_DESKTOP_DISABLE_CONSOLE=1` or a system-level `policy.json`); the console's working directory is confined.
+- Commands printing more than 256 MiB are stopped.
+- CI/release: actions pinned by SHA, read-only default token, scoped signing secrets, releases labelled unsigned until a certificate exists, with `SHA256SUMS.txt` and a provenance attestation, verified gitleaks download, green `npm audit` gate.
+- **Removed:** the duplicate GitLab release pipeline, the optional Rust adapter and the adapter-contract plumbing (Technical Details tab), the stale `latest.yml`/`builder-debug.yml`, a duplicate `escapeHtml`, and ~200 lines of unrelated `.gitignore`.
+
 ## 0.4.0
 
 - **Git identity:** the app asks for your name and email on first launch (stored in the global git config), blocks Save, Create Project and Update until they are set, and lets you change them under Setup → Your Name and Email.

@@ -11,11 +11,6 @@
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/datalad/**\" --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=75",
     "test:coverage:lcov": "node -e \"require('node:fs').mkdirSync('coverage', { recursive: true })\" && node --test --experimental-test-coverage --test-coverage-include=\"src/datalad/**\" --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout",
-    "test:rust:core": "cd rust-core && cargo test",
-    "test:rust:addon": "cd native/rust-core-node && cargo test",
-    "build:rust:addon": "cd native/rust-core-node && npm install && npm run build",
-    "test:bridge": "node --test test/rust-bridge.test.js",
-    "test:parity": "node --test test/adapter-parity.test.js",
     "test:e2e": "node --test --test-concurrency=1 e2e/*.e2e.mjs",
     "package:dir": "electron-builder --dir",
     "package:dist": "electron-builder",
@@ -24,6 +19,7 @@
     "package:mac:arm64": "electron-builder --mac --arm64",
     "package:win:x64": "electron-builder --win --x64",
     "package:linux": "electron-builder --linux",
+    "fetch:uv": "node scripts/fetch-uv.mjs",
     "package:platforms": "npm run package:mac:arm64 && npm run package:win:x64 && npm run package:linux"
   },
   "build": {
@@ -32,6 +28,33 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "package.json",
+      "src/**/*"
+    ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "resetAdHocDarwinSignature": true
+    },
+    "extraResources": [
+      {
+        "from": "build/uv",
+        "to": "uv"
+      },
+      {
+        "from": "build/datalad-requirements.txt",
+        "to": "datalad-requirements.txt"
+      },
+      {
+        "from": "build/prism-requirements.txt",
+        "to": "prism-requirements.txt"
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "src/gui/assets/icons/datalad_desktop.icns",
@@ -59,7 +82,8 @@
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": true
     },
     "linux": {
       "target": [

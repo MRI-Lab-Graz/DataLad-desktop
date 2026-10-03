@@ -73,3 +73,21 @@ test('hasIdentity defaults to true so existing callers are unchanged', () => {
   const gating = computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true })
   assert.equal(gating.guidance.text, 'Ready to save selected changes.')
 })
+
+test('PRISM project: selection is not required and the hint says everything is checked and saved together', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true, prismMode: 'gated' })
+  assert.equal(gating.disabled, false)
+  assert.match(gating.guidance.text, /checked before every save, and everything is saved together/)
+  assert.equal(gating.guidance.warning, false)
+})
+
+test('the save that adds project.json explains checking starts next time', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true, prismMode: 'conversion' })
+  assert.match(gating.guidance.text, /adds project\.json/)
+})
+
+test('PRISM mode never hides conflicts', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: true, hasChanges: true, prismMode: 'gated' })
+  assert.equal(gating.disabled, true)
+  assert.match(gating.guidance.text, /Resolve conflicts/)
+})

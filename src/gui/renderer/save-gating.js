@@ -12,7 +12,8 @@
  * @param {{
  *   hasIdentity?: boolean (git name+email set; defaults to true),
  *   hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean,
- *   messageLabel?: string
+ *   messageLabel?: string,
+ *   prismMode?: 'gated' | 'conversion' (PRISM project: everything is validated and saved together)
  * }} input messageLabel lets callers swap in git terminology ("commit message") for power users
  *   while plain-language users ("checkpoint message") get the default.
  * @returns {{ disabled: boolean, guidance: { text: string, warning: boolean } }}
@@ -23,9 +24,11 @@ export function computeSaveGating({
   hasConflicts,
   hasChanges,
   hasIdentity = true,
-  messageLabel = 'checkpoint message'
+  messageLabel = 'checkpoint message',
+  prismMode
 }) {
-  const disabled = hasConflicts || (hasChanges && !hasSelection)
+  const selected = hasSelection || prismMode === 'gated'
+  const disabled = hasConflicts || (hasChanges && !selected)
 
   if (hasConflicts) {
     return {
@@ -34,7 +37,7 @@ export function computeSaveGating({
     }
   }
 
-  if (hasChanges && !hasSelection) {
+  if (hasChanges && !selected) {
     return {
       disabled,
       guidance: { text: 'Select changed files or add manual paths before saving.', warning: true }
@@ -56,7 +59,11 @@ export function computeSaveGating({
   }
 
   if (hasChanges) {
-    return { disabled, guidance: { text: 'Ready to save selected changes.', warning: false } }
+    const texts = {
+      gated: 'PRISM project: your data is checked before every save, and everything is saved together.',
+      conversion: 'This save adds project.json. Checking starts with your next save.'
+    }
+    return { disabled, guidance: { text: texts[prismMode] ?? 'Ready to save selected changes.', warning: false } }
   }
 
   return {

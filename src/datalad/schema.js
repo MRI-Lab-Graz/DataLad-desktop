@@ -1,22 +1,11 @@
-export const ADAPTER_INTERFACE_VERSION = '0.5.0'
-
-// Commands in the stable Rust bridge contract — the Rust adapter must implement exactly these.
-const BRIDGE_COMMAND_SCHEMAS = Object.freeze({
+export const COMMAND_SCHEMAS = Object.freeze({
   cloneInstall: {
     required: ['source', 'targetPath'],
     optional: []
   },
-  // `procedure`/`force` (BIDS mode) are intentionally NOT listed here even
-  // though the JS adapter accepts them — they're JS-only extensions on top
-  // of this bridge command, not part of the Rust-checked contract. Adding
-  // them here would assert Rust parity that doesn't exist: the Rust adapter
-  // hardcodes a plain `create -- targetPath` and ignores unknown fields
-  // rather than rejecting them, and validateRustAdapterContract only checks
-  // command names, not each command's required/optional fields, so it can't
-  // catch that drift. Use `extendedCommands` (below) to gate BIDS UI instead.
   createProject: {
     required: ['targetPath'],
-    optional: []
+    optional: ['procedure', 'force']
   },
   get: {
     required: ['projectPath'],
@@ -41,11 +30,7 @@ const BRIDGE_COMMAND_SCHEMAS = Object.freeze({
   switchBranch: {
     required: ['projectPath', 'branchName'],
     optional: []
-  }
-})
-
-// JS-only extended commands — not part of the Rust bridge contract.
-const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
+  },
   createBranchAt: {
     required: ['projectPath', 'branchName', 'startPoint'],
     optional: []
@@ -72,10 +57,9 @@ const EXTENDED_COMMAND_SCHEMAS = Object.freeze({
   }
 })
 
-export const COMMAND_SCHEMAS = Object.freeze({ ...BRIDGE_COMMAND_SCHEMAS, ...EXTENDED_COMMAND_SCHEMAS })
-
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
 const LEADING_DASH_FIELDS = Object.freeze({
+  cloneInstall: ['source'],
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
@@ -120,6 +104,10 @@ export function assertCommandRequest(commandName, request) {
     }
   }
 
+  if (commandName === 'cloneInstall' && /^\s*ext::/i.test(request.source)) {
+    throw new Error('Invalid request for cloneInstall: the ext:: transport is not allowed')
+  }
+
   for (const pathValue of request.paths ?? []) {
     if (typeof pathValue !== 'string' || !pathValue.trim()) {
       throw new Error(`Invalid request for ${commandName}: each path must be a non-empty string`)
@@ -143,19 +131,5 @@ export function buildCommandResult(commandName, runResult, userError = null, war
     ...runResult,
     userError,
     warnings
-  }
-}
-
-export function getAdapterInterfaceContract() {
-  return {
-    version: ADAPTER_INTERFACE_VERSION,
-    classificationValues: ['git', 'dataset', 'superdataset'],
-    commands: BRIDGE_COMMAND_SCHEMAS,
-    // Purely additive — validateRustAdapterContract (rust-bridge.js) only
-    // compares `.version` and the key set of `.commands`, so this field is
-    // safe to add without risking a false contract-mismatch under the Rust
-    // adapter. The renderer uses it to feature-detect JS-only capabilities
-    // (e.g. BIDS mode's createSubdataset) instead of assuming they exist.
-    extendedCommands: Object.keys(EXTENDED_COMMAND_SCHEMAS)
   }
 }

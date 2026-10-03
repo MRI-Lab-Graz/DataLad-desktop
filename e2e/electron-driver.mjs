@@ -13,7 +13,7 @@ import electronPath from 'electron'
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 // `identity: false` launches against an empty global git config, like a fresh Windows machine.
-export async function launchApp({ identity = true } = {}) {
+export async function launchApp({ identity = true, env = {} } = {}) {
   // Setting this to '' (rather than deleting it) does NOT reliably clear it
   // on Windows: empty-string env vars get dropped when child_process builds
   // the Windows environment block, so the parent's truthy value (if any)
@@ -39,6 +39,7 @@ export async function launchApp({ identity = true } = {}) {
   const gitConfigGlobal = join(userDataDir, 'gitconfig')
   await writeFile(gitConfigGlobal, identity ? '[user]\n\tname = E2E Test\n\temail = e2e@example.org\n' : '')
   childEnv.GIT_CONFIG_GLOBAL = gitConfigGlobal
+  Object.assign(childEnv, env)
 
   // The first `datalad status` probe detectProject runs (see
   // DataLadAdapter#probeDataLadDataset) pays a one-time cold-start cost —
@@ -64,7 +65,7 @@ export async function launchApp({ identity = true } = {}) {
   try {
     const app = await connect(child)
     await warmUp
-    return { ...app, gitConfigGlobal }
+    return { ...app, gitConfigGlobal, userDataDir }
   } catch (err) {
     // A failure below (e.g. #check-env never appears) leaves the spawned
     // Electron process and any open CDP socket dangling. Nothing then
