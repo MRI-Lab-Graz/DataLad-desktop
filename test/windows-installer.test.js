@@ -18,9 +18,22 @@ test('installer verifies the SHA-256 of every download before running it, git-an
   const downloads = [...nsh.matchAll(/-Uri '([^']+)' -OutFile '([^']+)'/g)]
   assert.ok(downloads.length >= 3, 'expected Git, Python and git-annex downloads')
   for (const [, uri, outFile] of downloads) {
-    const verify = new RegExp(`Get-FileHash '${outFile.replace(/[\\$]/g, '\\$&')}' -Algorithm SHA256\\)\\.Hash -ne '[0-9A-Fa-f]{64}'`)
+    const verify = new RegExp(`ReadAllBytes\\('${outFile.replace(/[\\$]/g, '\\$&')}'\\)\\)\\) -replace '-'\\) -ne '[0-9A-Fa-f]{64}'`)
     assert.match(nsh, verify, `no hash check for ${uri}`)
   }
+})
+
+// Windows PowerShell started from another host (CI's pwsh 7, a user's shell) inherits that host's
+// PSModulePath; Get-FileHash then went missing. An elevated script must not trust a user-controlled
+// module path anyway, so every call resets it, and the hash check uses .NET, not a module cmdlet.
+test('every PowerShell call resets PSModulePath, and hashing does not depend on a module', () => {
+  assert.match(nsh, /!define MACHINE_PATH "[^"]*PSModulePath[^"]*'Machine'/)
+  const calls = [...nsh.matchAll(/\$\{PS\} -NoProfile[^`]*/g)].map((m) => m[0])
+  assert.ok(calls.length >= 8, `expected many PowerShell calls, found ${calls.length}`)
+  for (const call of calls) {
+    assert.match(call, /\$\{MACHINE_PATH\}|MACHINE_PATH/, `no env reset in: ${call.slice(0, 90)}`)
+  }
+  assert.doesNotMatch(nsh, /Get-FileHash/)
 })
 
 // Elevated installer hygiene: a planted powershell.exe next to the installer, a

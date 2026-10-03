@@ -20,7 +20,7 @@
 ; git-annex is installed.
 
 !define PS `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"`
-!define MACHINE_PATH "$$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine');"
+!define MACHINE_PATH "$$env:PSModulePath = [Environment]::GetEnvironmentVariable('PSModulePath', 'Machine'); $$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine');"
 
 ; A silent install prints nothing, so every step that can fail appends a line to
 ; $INSTDIR\install.log (what happened, and the output of the failing command).
@@ -38,10 +38,10 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "Git not found - downloading installer..."
-    nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe' -OutFile '$PLUGINSDIR\git-installer.exe'"`
+    nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe' -OutFile '$PLUGINSDIR\git-installer.exe'"`
     Pop $0
     ${If} $0 == 0
-      nsExec::ExecToStack `${PS} -NoProfile -Command "if ((Get-FileHash '$PLUGINSDIR\git-installer.exe' -Algorithm SHA256).Hash -ne 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6') { exit 1 } else { exit 0 }"`
+      nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes('$PLUGINSDIR\git-installer.exe'))) -replace '-') -ne 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6') { exit 1 } else { exit 0 }"`
       Pop $0
       ${If} $0 != 0
         DetailPrint "Git installer failed hash verification - not running it. Install Git manually from git-scm.com."
@@ -66,10 +66,10 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "Python 3.12 not found - downloading installer..."
-    nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' -OutFile '$PLUGINSDIR\python-installer.exe'"`
+    nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' -OutFile '$PLUGINSDIR\python-installer.exe'"`
     Pop $0
     ${If} $0 == 0
-      nsExec::ExecToStack `${PS} -NoProfile -Command "if ((Get-FileHash '$PLUGINSDIR\python-installer.exe' -Algorithm SHA256).Hash -ne '1206721601A62C925D4E4A0DCFC371E88F2DDBE8C0C07962EBB2BE9B5BDE4570') { exit 1 } else { exit 0 }"`
+      nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes('$PLUGINSDIR\python-installer.exe'))) -replace '-') -ne '1206721601A62C925D4E4A0DCFC371E88F2DDBE8C0C07962EBB2BE9B5BDE4570') { exit 1 } else { exit 0 }"`
       Pop $0
       ${If} $0 != 0
         DetailPrint "Python installer failed hash verification - not running it. Install Python manually from python.org."
@@ -100,7 +100,7 @@
     ; drive can be writable by every user, and a machine-wide PATH entry there would let
     ; any of them plant programs.
     DetailPrint "Making the datalad command available on PATH..."
-    nsExec::ExecToLog `${PS} -NoProfile -Command "$$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts.StartsWith($$env:ProgramW6432, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
+    nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts.StartsWith($$env:ProgramW6432, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
     Pop $0
     ${If} $0 != 0
       DetailPrint "DataLad was not added to PATH (exit $0): the install folder must be under Program Files. Add $INSTDIR\datalad-env\Scripts manually if the datalad command is not found."
@@ -112,12 +112,12 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "git-annex not found - downloading installer..."
-    nsExec::ExecToStack `${PS} -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
+    nsExec::ExecToStack `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
     Pop $0
     Pop $1
     !insertmacro Log "git-annex download exit $0 into $PLUGINSDIR: $1"
     ${If} $0 == 0
-      nsExec::ExecToStack `${PS} -NoProfile -Command "if ((Get-FileHash '$PLUGINSDIR\git-annex-installer.exe' -Algorithm SHA256).Hash -ne '4D4CA04DFB7A2FAF8C1A43BE7BFDDA98219833974BBF2678384A1DBAA1FEB1F9') { exit 1 } else { exit 0 }"`
+      nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes('$PLUGINSDIR\git-annex-installer.exe'))) -replace '-') -ne '4D4CA04DFB7A2FAF8C1A43BE7BFDDA98219833974BBF2678384A1DBAA1FEB1F9') { exit 1 } else { exit 0 }"`
       Pop $0
       Pop $1
       !insertmacro Log "git-annex hash check exit $0: $1"
@@ -148,7 +148,7 @@
 !macro customUnInstall
   ${ifNot} ${isUpdated}
     DetailPrint "Removing DataLad..."
-    nsExec::ExecToLog `${PS} -NoProfile -Command "$$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); [Environment]::SetEnvironmentVariable('Path', (($$machine -split ';' | Where-Object { $$_ -and $$_ -ne $$scripts }) -join ';'), 'Machine')"`
+    nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); [Environment]::SetEnvironmentVariable('Path', (($$machine -split ';' | Where-Object { $$_ -and $$_ -ne $$scripts }) -join ';'), 'Machine')"`
     Pop $0
     RMDir /r "$INSTDIR\datalad-env"
   ${endIf}
