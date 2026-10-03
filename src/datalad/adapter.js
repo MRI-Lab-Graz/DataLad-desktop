@@ -394,7 +394,7 @@ export class DataLadAdapter {
 
     const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
-    const exists = await fileExists(gitignorePath)
+    const exists = await gitignoreExists(gitignorePath)
 
     return {
       relativeDatasetPath,
@@ -420,7 +420,7 @@ export class DataLadAdapter {
   async #addIgnorePatternsToDataset(projectPath, relativeDatasetPath, cleanPatterns) {
     const datasetPath = this.#resolveDatasetPath(projectPath, relativeDatasetPath)
     const gitignorePath = join(datasetPath, '.gitignore')
-    const exists = await fileExists(gitignorePath)
+    const exists = await gitignoreExists(gitignorePath)
     const existingContent = exists ? await readFile(gitignorePath, 'utf8') : ''
     const existingLines = new Set(
       existingContent
@@ -442,7 +442,13 @@ export class DataLadAdapter {
   }
 
   #resolveDatasetPath(projectPath, relativeDatasetPath) {
-    return relativeDatasetPath === '.' ? projectPath : join(projectPath, relativeDatasetPath)
+    if (relativeDatasetPath === '.') {
+      return projectPath
+    }
+    if (!isSafeRelativeSubdatasetPath(relativeDatasetPath)) {
+      throw new Error(`Invalid dataset path: ${relativeDatasetPath}`)
+    }
+    return join(projectPath, relativeDatasetPath)
   }
 
   async listBranches(projectPath) {
@@ -1146,7 +1152,7 @@ export class DataLadAdapter {
         const branchName = request.branchName
         return {
           command: 'git',
-          args: ['-C', projectPath, 'checkout', branchName],
+          args: ['-C', projectPath, 'checkout', branchName, '--'],
           options: { cwd: projectPath }
         }
       }
@@ -1204,6 +1210,23 @@ export class DataLadAdapter {
 // target doesn't exist locally; it still very much exists as a tracked path
 // (e.g. for isBids's dataset_description.json check), so following the link
 // would incorrectly report it as missing.
+// A .gitignore that is a symlink (e.g. committed as -> .git/config) would be
+// followed on write, so anything but a plain file is refused.
+async function gitignoreExists(path) {
+  try {
+    const info = await lstat(path)
+    if (!info.isFile()) {
+      throw new Error(`${path} is not a regular file`)
+    }
+    return true
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 async function fileExists(path) {
   try {
     await lstat(path)

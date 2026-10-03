@@ -76,6 +76,7 @@ export const COMMAND_SCHEMAS = Object.freeze({ ...BRIDGE_COMMAND_SCHEMAS, ...EXT
 
 const RESULT_BASE_FIELDS = ['command', 'args', 'exitCode', 'stdout', 'stderr', 'failed']
 const LEADING_DASH_FIELDS = Object.freeze({
+  cloneInstall: ['source'],
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
@@ -118,6 +119,10 @@ export function assertCommandRequest(commandName, request) {
     if (typeof value === 'string' && value.trim().startsWith('-')) {
       throw new Error(`Invalid request for ${commandName}: ${field} cannot start with -`)
     }
+  }
+
+  if (commandName === 'cloneInstall' && /^\s*ext::/i.test(request.source)) {
+    throw new Error('Invalid request for cloneInstall: the ext:: transport is not allowed')
   }
 
   for (const pathValue of request.paths ?? []) {
