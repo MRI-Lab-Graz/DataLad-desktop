@@ -5,7 +5,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
-import { createEnsureGuard, describeEnvFailure, ensureEnv, envStatus, resolveUv } from '../datalad/managed-env.js'
+import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
+import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
@@ -191,16 +192,47 @@ ipcMain.handle('adapter:runCommand', async (event, payload) => {
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
   }
+
+  let request = payload.request
+  if (payload.commandName === 'save') {
+    const gate = await runWithHandle(event, payload.runId, (runOptions) =>
+      gateSave({
+        runner: consoleRunner,
+        projectPath: request.projectPath,
+        validatorBin: envBin(managedEnvDir(), 'prism-validator'),
+        checkValidator: async () => (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready,
+        ...runOptions
+      })
+    )
+    if (!gate.allow) {
+      return gate.result
+    }
+    // The validator checked the whole project, so commit the whole project, whatever the UI selected.
+    if (gate.saveAll) {
+      request = { ...request, paths: [] }
+    }
+  }
+
   const result = await runWithHandle(event, payload.runId, (runOptions) =>
-    adapter.runCommand(payload.commandName, payload.request, runOptions)
+    adapter.runCommand(payload.commandName, request, runOptions)
   )
   if (
     result?.ok &&
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
   ) {
-    authorizeRoot(payload.request?.targetPath)
+    authorizeRoot(request?.targetPath)
   }
   return result
+})
+
+ipcMain.handle('prism:inspect', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  if (!(await isPrismProject(projectPath))) {
+    return { isPrism: false, validatorReady: false, introducesPrism: false }
+  }
+  const validatorReady = (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready
+  const introducesPrism = await isConversionSave({ runner: consoleRunner, projectPath }).catch(() => false)
+  return { isPrism: true, validatorReady, introducesPrism }
 })
 
 ipcMain.handle('adapter:cancelCommand', (_event, runId) => {

@@ -70,6 +70,7 @@ const state = {
   timeMachineProjectPath: null,
   extendedCommands: [],
   rootProjectIsBids: false,
+  rootProjectPrism: null,
   createProjectBidsCandidate: null
 }
 
@@ -113,6 +114,7 @@ const elements = {
   currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
+  currentProjectPrismBadge: document.getElementById('current-project-prism-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
@@ -363,6 +365,12 @@ elements.checkEnvButton.addEventListener('click', async () => {
     elements.environmentOutput.innerHTML = renderEnvironmentError(error)
   } finally {
     setButtonBusy(elements.checkEnvButton, false)
+  }
+})
+
+elements.commandOutput.addEventListener('click', (event) => {
+  if (event.target.closest('[data-open-setup]')) {
+    elements.openSettingsButton.click()
   }
 })
 
@@ -845,7 +853,9 @@ elements.saveProjectButton.addEventListener('click', async () => {
     }
 
     const selectedPaths = gatherSavePaths()
-    if (latestStatus.totalChanged > 0 && selectedPaths.length === 0) {
+    // PRISM projects are validated and saved as a whole (the main process ignores the selection).
+    const prismSavesEverything = Boolean(state.rootProjectPrism) && !state.rootProjectPrism.introducesPrism
+    if (latestStatus.totalChanged > 0 && selectedPaths.length === 0 && !prismSavesEverything) {
       elements.commandOutput.textContent =
         'Select at least one changed file or provide manual paths before saving.'
       setLastActionState('Select files to save first.', 'error')
@@ -1343,7 +1353,9 @@ async function detectProjectType(projectPath) {
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
     state.rootProjectIsBids = Boolean(result.isBids)
+    state.rootProjectPrism = null
     setCurrentProjectHeader(projectPath, result.classification)
+    void refreshPrismInspect(projectPath)
     rememberRecentProject(projectPath)
     void api.setWatchedProject(projectPath)
     // Best-effort, fire-and-forget: always exclude OS noise files (.DS_Store
@@ -1469,6 +1481,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     const result = await api.runCommand(commandName, request, runId)
 
     const nextProjectPath = request.projectPath ?? request.targetPath
+    if (commandName === 'save' && result.ok && nextProjectPath) void refreshPrismInspect(nextProjectPath)
     let saveSummary = null
     if (result.ok && nextProjectPath) {
       // Multi-step automated sequences (BIDS nesting, batch conversions) call
@@ -2605,7 +2618,8 @@ function updateSaveButtonState() {
     hasConflicts: Boolean(snapshot?.conflictCount),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    messageLabel: getMessageTermLabel()
+    messageLabel: getMessageTermLabel(),
+    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
   })
 
   elements.saveProjectButton.disabled = gating.disabled
@@ -2728,6 +2742,12 @@ function renderCommandResult(result, summary = null) {
 
   if (shouldShowUserErrorMessage(result)) {
     html += `<p>${escapeHtml(result.userError.message)}</p>`
+    if (Array.isArray(result.userError.items) && result.userError.items.length > 0) {
+      html += `<ul>${result.userError.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+    }
+    if (result.userError.code === 'PRISM_VALIDATOR_MISSING') {
+      html += '<p><button type="button" class="button button-ghost button-inline" data-open-setup>Open Setup</button></p>'
+    }
   }
 
   html +=
@@ -2955,6 +2975,19 @@ function setCurrentProjectHeader(projectPath, classification) {
 
 function setBidsBadge(projectPath) {
   elements.currentProjectBidsBadge.hidden = !projectPath || !state.rootProjectIsBids
+}
+
+// Display-only: the Save gate itself runs in the main process and never trusts this.
+async function refreshPrismInspect(projectPath) {
+  try {
+    const info = await api.inspectPrism(projectPath)
+    if (projectPath !== state.rootProjectPath) return
+    state.rootProjectPrism = info.isPrism ? info : null
+  } catch {
+    state.rootProjectPrism = null
+  }
+  elements.currentProjectPrismBadge.hidden = !state.rootProjectPrism
+  updateSaveButtonState()
 }
 
 function applyDatasetGatedButtons(classification) {

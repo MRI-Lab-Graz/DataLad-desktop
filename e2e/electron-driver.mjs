@@ -64,7 +64,7 @@ export async function launchApp({ identity = true } = {}) {
   try {
     const app = await connect(child)
     await warmUp
-    return { ...app, gitConfigGlobal }
+    return { ...app, gitConfigGlobal, userDataDir }
   } catch (err) {
     // A failure below (e.g. #check-env never appears) leaves the spawned
     // Electron process and any open CDP socket dangling. Nothing then
