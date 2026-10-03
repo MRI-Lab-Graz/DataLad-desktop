@@ -6,8 +6,7 @@ import { ProcessRunner } from './process-runner.js'
 import { parseGitStatusPorcelain } from './status.js'
 import {
   assertCommandRequest,
-  buildCommandResult,
-  getAdapterInterfaceContract
+  buildCommandResult
 } from './schema.js'
 
 const CURATED_COMMANDS = new Set([
@@ -749,10 +748,6 @@ export class DataLadAdapter {
     }
   }
 
-  getInterfaceContract() {
-    return getAdapterInterfaceContract()
-  }
-
   async #checkPython() {
     const attemptedDetails = []
 
@@ -1061,9 +1056,7 @@ export class DataLadAdapter {
         }
       }
       case 'createProject': {
-        // `procedure`/`force` are JS-only extensions (see the comment on
-        // BRIDGE_COMMAND_SCHEMAS.createProject in schema.js) — omitted, they
-        // produce the exact same args as before this existed.
+        // `procedure`/`force` are optional (BIDS mode); omitted, they add no args.
         const args = ['create']
         if (request.procedure) {
           args.push('-c', request.procedure)

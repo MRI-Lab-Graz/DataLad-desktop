@@ -1086,16 +1086,6 @@ test('getProjectHealth degrades gracefully without an upstream or git-annex', as
   assert.equal(health.missingContentCount, null)
 })
 
-test('getInterfaceContract returns stable schema metadata', () => {
-  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
-  const contract = adapter.getInterfaceContract()
-
-  assert.equal(contract.version, '0.5.0')
-  assert.deepEqual(contract.classificationValues, ['git', 'dataset', 'superdataset'])
-  assert.deepEqual(contract.commands.save.required, ['projectPath', 'message'])
-  assert.deepEqual(contract.commands.createBranch.required, ['projectPath', 'branchName'])
-})
-
 test('runCommand routes get without explicit paths to a bare datalad get', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['-C', '/tmp/project', 'get'], {

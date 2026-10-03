@@ -68,7 +68,6 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
-  extendedCommands: [],
   rootProjectIsBids: false,
   rootProjectPrism: null,
   createProjectBidsCandidate: null
@@ -183,7 +182,6 @@ const elements = {
   identitySummary: document.getElementById('identity-summary'),
   identityOpenButton: document.getElementById('identity-open'),
   detectProjectButton: document.getElementById('detect-project'),
-  refreshContractButton: document.getElementById('refresh-contract'),
   globalBusyOverlay: document.getElementById('global-busy-overlay'),
   globalBusyText: document.getElementById('global-busy-text'),
   globalBusyStop: document.getElementById('global-busy-stop'),
@@ -197,7 +195,6 @@ const elements = {
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
-  contractOutput: document.getElementById('contract-output'),
   remoteInfo: document.getElementById('remote-info'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
@@ -220,8 +217,6 @@ const elements = {
 
 loadRecentProjects()
 await seedWorkspacePath()
-await renderContract()
-
 // Never auto-load a project on start. Only "Latest Projects" and "Open
 // Project" should be visible until the user explicitly opens, clones, or
 // picks a recent one — every other card stays hidden until then.
@@ -571,7 +566,7 @@ elements.createProjectButton.addEventListener('click', async () => {
 // the shared detectAndMaybeNestBids afterward instead of a bespoke loop.
 async function runCreateNewProject(targetPath) {
   const candidate = state.createProjectBidsCandidate
-  const isAdopting = isBidsModeSupported() && Boolean(candidate?.bidsLikely)
+  const isAdopting = Boolean(candidate?.bidsLikely)
 
   // Skips its own background refresh — detectAndMaybeNestBids's first call is
   // always detectProjectType, an awaited refresh that fully supersedes it and
@@ -683,7 +678,7 @@ function hideGlobalBusyOverlay() {
 // is a no-op in the common case.
 async function detectAndMaybeNestBids(projectPath, button) {
   await detectProjectType(projectPath)
-  if (!state.rootProjectIsBids || !isBidsModeSupported() || !isBidsAutoNestEnabled()) {
+  if (!state.rootProjectIsBids || !isBidsAutoNestEnabled()) {
     return null
   }
 
@@ -1325,10 +1320,6 @@ elements.filesOutput.addEventListener('click', async (event) => {
   await refreshDatasetList(projectPath)
   await refreshFileBrowser(projectPath)
   await refreshWorkingTreeStatus(projectPath)
-})
-
-elements.refreshContractButton.addEventListener('click', async () => {
-  await renderContract()
 })
 
 api.onFilesChanged(({ projectPath }) => {
@@ -2360,36 +2351,12 @@ async function seedWorkspacePath() {
   }
 }
 
-async function renderContract() {
-  try {
-    const contract = await api.getContract()
-    elements.contractOutput.textContent = JSON.stringify(contract, null, 2)
-    state.extendedCommands = contract.extendedCommands ?? []
-  } catch (error) {
-    elements.contractOutput.textContent = String(error.message)
-    state.extendedCommands = []
-  }
-  applyBidsFeatureGate()
-}
-
-// BIDS mode (createSubdataset + the procedure/force createProject fields) is
-// a JS-adapter-only extension — under the Rust adapter (DATALAD_DESKTOP_USE_RUST_ADAPTER=1)
-// extendedCommands won't include it, so the UI hides itself rather than
-// offering an action that would silently no-op.
-function isBidsModeSupported() {
-  return state.extendedCommands.includes('createSubdataset')
-}
-
-function applyBidsFeatureGate() {
-  elements.bidsAutoNestToggle.closest('label').hidden = !isBidsModeSupported()
-}
-
 // Silent, no-UI probe of a not-yet-a-project folder — used only to decide
 // `force: true` before calling createProject on a non-empty target. What
 // actually gets nested afterward is decided automatically by
 // detectAndMaybeNestBids once the folder is a real project, not by this.
 async function checkCreateProjectBidsCandidate(folderPath) {
-  if (!isBidsModeSupported() || !folderPath) {
+  if (!folderPath) {
     return
   }
 
@@ -3108,9 +3075,6 @@ function applyRemoteGatedButtons(health) {
   elements.publishProjectButton.disabled = gating.publish.disabled
   elements.publishProjectButton.title = gating.publish.title
 
-  // JS-adapter-only, same as BIDS mode — hide rather than offer an action
-  // that would fail under the experimental Rust adapter.
-  elements.disconnectRemoteButton.hidden = !state.extendedCommands.includes('disconnectRemote')
   elements.disconnectRemoteButton.disabled = gating.disconnect.disabled
   elements.disconnectRemoteButton.title = gating.disconnect.title
 
@@ -3888,7 +3852,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
         // whether it's registered in state.datasets, not its gitStatus.
         const isRegisteredSubdataset = (state.datasets ?? []).some((dataset) => dataset.relativePath === node.name)
         const convertButton =
-          depth === 0 && !isRegisteredSubdataset && isBidsModeSupported()
+          depth === 0 && !isRegisteredSubdataset
             ? `<button type="button" class="button button-ghost button-mini" data-convert-subdataset-path="${escapeHtml(node.name)}">Convert to subdataset</button>`
             : ''
         return (

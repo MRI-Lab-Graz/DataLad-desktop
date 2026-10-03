@@ -8,7 +8,6 @@ import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
-import { tryLoadRustAdapter } from '../datalad/rust-bridge.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
@@ -20,7 +19,7 @@ import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const adapter = createAdapter()
+const adapter = new DataLadAdapter()
 const consoleRunner = new ProcessRunner()
 const runRegistry = createRunRegistry()
 const ensureGuard = createEnsureGuard()
@@ -67,16 +66,6 @@ async function runWithHandle(event, runId, run) {
     activity.stop()
     runRegistry.finish(runId)
   }
-}
-
-function createAdapter() {
-  const rustAdapterState = tryLoadRustAdapter()
-  if (rustAdapterState.enabled) {
-    return rustAdapterState.adapter
-  }
-
-
-  return new DataLadAdapter()
 }
 
 let trustStore
@@ -302,10 +291,6 @@ handle('env:ensure', (event, runId) =>
     return { ready: false, cancelled: result.cancelled, code, message, technical: result.failure.stderr }
   })
 )
-
-handle('adapter:getContract', async () => {
-  return adapter.getInterfaceContract()
-})
 
 handle('adapter:listDatasets', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
