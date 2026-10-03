@@ -26,6 +26,13 @@ ALLOWLISTED_ADVISORIES="GHSA-mh99-v99m-4gvg GHSA-ch52-4w7c-c8xp"
 
 report="$(npm audit --audit-level=high --json || true)"
 
+# If the audit itself failed (offline, registry error) the report has no vulnerabilities
+# section and the count below would be 0: that must fail the gate, not pass it.
+if ! node -e "const r = JSON.parse(process.argv[1]); process.exit(r.error || !r.vulnerabilities ? 1 : 0)" "$report" 2>/dev/null; then
+  echo "npm audit did not produce a usable report; failing the gate rather than passing silently." >&2
+  exit 1
+fi
+
 other_high_count=$(node -e "
   const report = JSON.parse(process.argv[1])
   const allowlisted = process.argv[2].split(' ')
