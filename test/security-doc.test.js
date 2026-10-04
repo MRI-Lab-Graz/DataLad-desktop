@@ -69,3 +69,13 @@ test('SECURITY.md documents the git-annex own hooks and the per-launch "not full
   assert.match(doc, /pre-commit-annex/)
   assert.match(doc, /this launch|current launch|this session/i)
 })
+
+test('SECURITY.md lists the git-annex hooks and every place they are looked for, including remotes and the push-time check', () => {
+  for (const hook of ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']) {
+    assert.ok(doc.includes(hook), hook)
+  }
+  assert.match(doc, /local-path remote/i)
+  assert.match(doc, /right before a push/i)
+  assert.match(doc, /safe\.bareRepository/)
+  assert.doesNotMatch(doc, /two hooks of its own/)
+})

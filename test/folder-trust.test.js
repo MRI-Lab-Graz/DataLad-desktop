@@ -467,3 +467,21 @@ test('datalad push to a local-path dataset still works, and its hooks were repor
   const pushed = await runner.run('datalad', ['-C', clone, 'push'], { cwd: clone })
   assert.equal(pushed.failed, false, pushed.stderr)
 })
+
+// An accepted `include.path` names a file the repository ships; what that file says must be judged too.
+test("the contents of an included config file are judged, not just the include line", async () => {
+  const dir = await repo()
+  await writeFile(join(dir, '.git', 'extra.cfg'), '[core]\n\tsshCommand = evil via include\n')
+  appendFileSync(join(dir, '.git', 'config'), '[include]\n\tpath = extra.cfg\n')
+  const out = await flagged(dir)
+  assert.match(out, /config include\.path/)
+  assert.match(out, /config core\.sshcommand = evil via include/)
+})
+
+test('control and bidi characters never reach the dialog, and a long finding keeps its tail', () => {
+  const shown = describeVectors(['config core.sshcommand = safe‮gnp.exe\u0007​'])
+  assert.ok(!/[‮\u0007​]/.test(shown))
+  const long = describeVectors([`config ${'x'.repeat(300)}.clean = the-actual-command --flag`], { width: 100 })
+  assert.match(long, /the-actual-command --flag$/)
+  assert.ok(long.length <= 100)
+})

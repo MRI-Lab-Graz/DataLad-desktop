@@ -64,7 +64,8 @@ async function scanRepo(runner, repo, prefix) {
   const found = []
 
   for (const scope of ['--local', '--worktree']) {
-    const listed = await git(['config', scope, '--list', '-z'])
+    // --includes: an include.path names a file the repository ships, and what it says counts too.
+    const listed = await git(['config', scope, '--list', '--includes', '-z'])
     if (listed.failed && scope === '--local') {
       found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${prefix || 'the folder'})`)
     }
@@ -306,9 +307,11 @@ export function createTrustStore(file) {
 // What the trust dialog shows: "not fully scanned" first (it must never hide behind the cap), each
 // finding flattened to one short line, and a count of whatever did not fit.
 export function describeVectors(vectors, { max = 5, width = 120 } = {}) {
+  // Control and bidi characters in a dataset's text could reorder or hide what the dialog says.
   const oneLine = (vector) => {
-    const flat = vector.replace(/\s+/g, ' ').trim()
-    return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat
+    const flat = vector.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim()
+    // A long finding keeps its start and its end: the command is usually at the end.
+    return flat.length > width ? `${flat.slice(0, Math.floor(width * 0.4))}…${flat.slice(-(width - Math.floor(width * 0.4) - 1))}` : flat
   }
   const ordered = [...vectors.filter((v) => v.startsWith(NOT_FULLY_SCANNED)), ...vectors.filter((v) => !v.startsWith(NOT_FULLY_SCANNED))]
   const lines = ordered.slice(0, max).map(oneLine)
