@@ -85,3 +85,14 @@ test("SECURITY.md says a local remote is judged like an opened repository, and w
   assert.match(doc, /receive-side|pre-receive/)
   assert.match(doc, /stock git-annex hooks/i)
 })
+
+test('SECURITY.md states the trust-before-run rule, its sources, and its limits', () => {
+  assert.match(doc, /trust before run/i)
+  assert.match(doc, /trustedRoots/)
+  assert.match(doc, /Trust everything inside this folder/)
+  assert.match(doc, /created[^.]*empty/i)
+  assert.match(doc, /share'?s? own permissions/i)
+  assert.match(doc, /ownership/i)
+  const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
+  assert.match(main, /policy\.trustedRoots/)
+})
