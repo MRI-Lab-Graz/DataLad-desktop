@@ -72,27 +72,61 @@ async function scanRepo(runner, repo, prefix) {
     }
   }
   found.push(...(await scanDataladProcedures(runner, repo, prefix)))
-  const common = await git(['rev-parse', '--path-format=absolute', '--git-common-dir'])
-  if (!common.failed) {
-    found.push(...(await scanAnnexHooks(join(common.stdout.trim(), 'hooks'), prefix)))
+  const sites = await hookSites(runner, repo)
+  if (!sites) {
+    found.push(`${NOT_FULLY_SCANNED} (cannot find the git directory of ${prefix || 'the folder'})`)
+  }
+  for (const gitDir of sites ?? []) {
+    found.push(...(await annexHooksIn(gitDir, prefix)))
   }
   return found
 }
 
-// git's own hooks never run (core.hooksPath, process-runner.js), but git-annex runs two hooks itself
-// from the repository's own hooks folder and ignores core.hooksPath. The fingerprint makes a changed
-// hook a new finding.
-async function scanAnnexHooks(hooksDir, prefix) {
-  let names = []
-  try {
-    names = await readdir(hooksDir)
-  } catch {
-    return []
-  }
+// git's own hooks never run (core.hooksPath, process-runner.js), but git-annex runs hooks of its own
+// from <git dir>/hooks and ignores core.hooksPath. The git dirs are whatever git says they are: the
+// work tree's own (a linked worktree has its own) and the shared one.
+async function hookSites(runner, repo) {
+  const dirs = await runner.run('git', ['-C', repo, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
+  return dirs.failed ? null : [...new Set(dirs.stdout.split(/\r?\n/).filter(Boolean))]
+}
+
+// The hooks git-annex runs (git-annex 10.2026). Looked up by name with lstat, because executing a hook
+// needs only the x bit on its folder: a folder that cannot be listed can still run them.
+const ANNEX_HOOK_NAMES = ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']
+const ABSENT = new Set(['ENOENT', 'ENOTDIR'])
+
+// A fingerprint of the whole hook makes a changed hook a new finding. Anything that cannot be read is
+// reported as "not fully scanned" (accepted for this launch only), never silently skipped.
+async function annexHooksIn(gitDir, prefix) {
+  const hooksDir = join(gitDir, 'hooks')
   const found = []
-  for (const name of names.filter((n) => /annex/i.test(n) && !n.endsWith('.sample'))) {
-    const body = await readFile(join(hooksDir, name)).catch(() => null)
-    found.push(`${prefix}hook ${name}${body ? ` ${createHash('sha256').update(body).digest('hex').slice(0, 8)}` : ''}`)
+  const inspect = async (name) => {
+    const file = join(hooksDir, name)
+    try {
+      await lstat(file)
+    } catch (error) {
+      if (!ABSENT.has(error.code)) {
+        found.push(`${NOT_FULLY_SCANNED} (cannot read hook ${name} in ${prefix}${hooksDir})`)
+      }
+      return
+    }
+    try {
+      found.push(`${prefix}hook ${name} ${createHash('sha256').update(await readFile(file)).digest('hex')}`)
+    } catch {
+      found.push(`${NOT_FULLY_SCANNED} (cannot read hook ${name} in ${prefix}${hooksDir})`)
+    }
+  }
+
+  let others = []
+  try {
+    others = (await readdir(hooksDir)).filter((name) => /annex/i.test(name) && !name.endsWith('.sample') && !ANNEX_HOOK_NAMES.includes(name))
+  } catch (error) {
+    if (!ABSENT.has(error.code)) {
+      found.push(`${NOT_FULLY_SCANNED} (cannot list ${prefix}${hooksDir})`)
+    }
+  }
+  for (const name of [...ANNEX_HOOK_NAMES, ...others]) {
+    await inspect(name)
   }
   return found
 }

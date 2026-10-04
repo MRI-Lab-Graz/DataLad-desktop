@@ -273,10 +273,10 @@ test("a repository's own hook is no longer reported: hooks never run", async () 
 test("git-annex's own per-repository hooks are reported, with a fingerprint of their content", async () => {
   const dir = await repo({ hooks: { 'pre-commit-annex': '#!/bin/sh\nevil\n', 'post-update-annex': '#!/bin/sh\nevil\n' } })
   const out = await flagged(dir)
-  assert.match(out, /hook pre-commit-annex [0-9a-f]{8}/)
-  assert.match(out, /hook post-update-annex [0-9a-f]{8}/)
+  assert.match(out, /hook pre-commit-annex [0-9a-f]{64}/)
+  assert.match(out, /hook post-update-annex [0-9a-f]{64}/)
   const changed = await repo({ hooks: { 'pre-commit-annex': '#!/bin/sh\nsomething else\n' } })
-  assert.notEqual((await flagged(changed)).match(/hook pre-commit-annex ([0-9a-f]{8})/)[1], out.match(/hook pre-commit-annex ([0-9a-f]{8})/)[1])
+  assert.notEqual((await flagged(changed)).match(/hook pre-commit-annex ([0-9a-f]{64})/)[1], out.match(/hook pre-commit-annex ([0-9a-f]{64})/)[1])
 })
 
 test('the stock git-annex hooks and other hooks (which never run) are not reported', async () => {
@@ -328,4 +328,44 @@ test('"not fully scanned" is accepted for this session only, never remembered ac
   assert.equal(store.accepts(target, vectors), true)
   assert.equal(createTrustStore(file).accepts(target, vectors), false)
   assert.equal(createTrustStore(file).accepts(target, ['config a = 1']), true)
+})
+
+const ANNEX_HOOK_NAMES = ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']
+const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+
+test('every git-annex hook name is reported', async () => {
+  const hooks = Object.fromEntries(ANNEX_HOOK_NAMES.map((name) => [name, '#!/bin/sh\n:\n']))
+  const out = await flagged(await repo({ hooks }))
+  for (const name of ANNEX_HOOK_NAMES) assert.match(out, new RegExp(`hook ${name} [0-9a-f]{64}`), name)
+})
+
+// git-annex reads hooks from the git dir of the work tree it runs in, not only from the shared one.
+test("hooks in a linked worktree's own git dir are reported", async () => {
+  const main = await repo()
+  git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x')
+  const wt = join(await realpath(await mkdtemp(join(tmpdir(), 'trust-wt-'))), 'wt')
+  git(main, 'worktree', 'add', '-q', wt)
+  await hook(join(main, '.git', 'worktrees', 'wt'), 'freezecontent-annex', '#!/bin/sh\n:\n')
+  assert.match(await flagged(wt), /hook freezecontent-annex [0-9a-f]{64}/)
+})
+
+// Executing a hook only needs the x bit on its folder, so a folder git-annex can use may not be listable.
+test('a hooks folder that cannot be listed is still checked, hook by hook', { skip: (process.platform === 'win32' || isRoot) && 'needs POSIX permissions and a non-root user' }, async () => {
+  const dir = await repo({ hooks: { 'freezecontent-annex': '#!/bin/sh\n:\n' } })
+  await chmod(join(dir, '.git', 'hooks'), 0o311)
+  try {
+    const out = await flagged(dir)
+    assert.match(out, /hook freezecontent-annex [0-9a-f]{64}/)
+    assert.match(out, /not fully scanned/)
+  } finally {
+    await chmod(join(dir, '.git', 'hooks'), 0o755)
+  }
+})
+
+test('a hook that cannot be read is a not-fully-scanned finding, not a fingerprint', { skip: (process.platform === 'win32' || isRoot) && 'needs POSIX permissions and a non-root user' }, async () => {
+  const dir = await repo({ hooks: { 'pre-commit-annex': '#!/bin/sh\n:\n' } })
+  await chmod(join(dir, '.git', 'hooks', 'pre-commit-annex'), 0o111)
+  const out = await flagged(dir)
+  assert.match(out, /not fully scanned \(cannot read hook pre-commit-annex/)
+  assert.doesNotMatch(out, /hook pre-commit-annex [0-9a-f]{64}/)
 })
