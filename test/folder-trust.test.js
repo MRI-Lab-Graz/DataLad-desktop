@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
-import { mkdtemp, mkdir, writeFile, chmod, realpath } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { findExecVectors, createTrustStore } from '../src/gui/folder-trust.js'
@@ -164,4 +164,36 @@ test('a freshly created DataLad dataset is not flagged', { skip: !hasDatalad && 
     env: { ...process.env, GIT_AUTHOR_NAME: 'x', GIT_AUTHOR_EMAIL: 'x@x.io', GIT_COMMITTER_NAME: 'x', GIT_COMMITTER_EMAIL: 'x@x.io' }
   })
   assert.deepEqual(await findExecVectors(dir), [])
+})
+
+test('a procedure shipped in .datalad/procedures is flagged', async () => {
+  const dir = await repo()
+  await mkdir(join(dir, '.datalad', 'procedures'), { recursive: true })
+  await writeFile(join(dir, '.datalad', 'procedures', 'cfg_text2git.sh'), '#!/bin/sh\n')
+  assert.match(await flagged(dir), /datalad procedure cfg_text2git\.sh/)
+})
+
+test('a not-yet-downloaded (dangling symlink) procedure is flagged too', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const dir = await repo()
+  await mkdir(join(dir, '.datalad', 'procedures'), { recursive: true })
+  await symlink('../../.git/annex/objects/missing', join(dir, '.datalad', 'procedures', 'cfg_x.py'))
+  assert.match(await flagged(dir), /datalad procedure cfg_x\.py/)
+})
+
+test('.datalad/config keys that name procedures or their locations are flagged', async () => {
+  const dir = await repo()
+  await mkdir(join(dir, '.datalad'), { recursive: true })
+  await writeFile(join(dir, '.datalad', 'config'),
+    '[datalad "dataset"]\n\tid = 1234\n[datalad "procedures.cfg_text2git"]\n\tcall-format = sh -c x\n[datalad "locations"]\n\tdataset-procedures = code\n')
+  const out = await flagged(dir)
+  assert.match(out, /datalad config datalad\.procedures\.cfg_text2git\.call-format/)
+  assert.match(out, /datalad config datalad\.locations\.dataset-procedures/)
+  assert.doesNotMatch(out, /datalad\.dataset\.id/)
+})
+
+test('an unparseable .datalad/config is flagged, not ignored', async () => {
+  const dir = await repo()
+  await mkdir(join(dir, '.datalad'), { recursive: true })
+  await writeFile(join(dir, '.datalad', 'config'), '[broken\n')
+  assert.match(await flagged(dir), /datalad config \(unreadable\)/)
 })

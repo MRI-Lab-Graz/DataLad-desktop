@@ -97,6 +97,9 @@ async function scan(runner, projectPath, depth, state, prefix = '') {
   }
 
   const top = await git(['rev-parse', '--show-toplevel'])
+  if (!top.failed) {
+    found.push(...(await scanDataladProcedures(runner, top.stdout.trim(), prefix)))
+  }
   if (depth < MAX_DEPTH && !top.failed) {
     const root = top.stdout.trim()
     const paths = await runner.run('git', ['config', '--file', join(root, '.gitmodules'), '--get-regexp', '^submodule\\..*\\.path$'])
@@ -120,6 +123,34 @@ async function scan(runner, projectPath, depth, state, prefix = '') {
     }
   }
   return [...new Set(found)]
+}
+
+// datalad prefers a dataset's own .datalad/procedures over its built-in ones, and reads
+// procedure settings from the committed .datalad/config.
+async function scanDataladProcedures(runner, root, prefix) {
+  const found = []
+  let procedures = []
+  try {
+    procedures = await readdir(join(root, '.datalad', 'procedures'))
+  } catch {
+    // none shipped
+  }
+  for (const name of procedures) found.push(`${prefix}datalad procedure ${name}`)
+
+  const configFile = join(root, '.datalad', 'config')
+  if (!(await lstat(configFile).then(() => true, () => false))) {
+    return found
+  }
+  // git exits 128 for a missing and for a broken file alike, hence the lstat above.
+  const listed = await runner.run('git', ['config', '--file', configFile, '--list', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
+  if (listed.failed) {
+    found.push(`${prefix}datalad config (unreadable)`)
+  }
+  for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
+    const key = entry.split('\n')[0].toLowerCase()
+    if (/^datalad\.(procedures|locations)\./.test(key)) found.push(`${prefix}datalad config ${key}`)
+  }
+  return found
 }
 
 export function findExecVectors(projectPath, { runner = new ProcessRunner() } = {}) {
