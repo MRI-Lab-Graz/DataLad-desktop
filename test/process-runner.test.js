@@ -5,7 +5,8 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'nod
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { HOOKS_DIR, ProcessRunner } from '../src/datalad/process-runner.js'
+import { HOOKS_DIR, ProcessRunner, resolveHooksDir } from '../src/datalad/process-runner.js'
+import { taskkillPath } from '../src/datalad/kill-tree.js'
 import { QUIT_ABORT_REASON } from '../src/datalad/kill-tree.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
@@ -542,4 +543,16 @@ test('the git hooks keep LF line endings on every checkout', () => {
   for (const name of readdirSync(HOOKS_DIR)) {
     assert.doesNotMatch(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\r/, `${name} has CRLF line endings`)
   }
+})
+
+test('the hooks folder is resources/git-hooks in a packaged app and build/git-hooks otherwise', () => {
+  assert.equal(resolveHooksDir({ resourcesPath: join('res'), exists: () => true }), join('res', 'git-hooks'))
+  assert.match(resolveHooksDir({ resourcesPath: join('res'), exists: () => false }), /build[\\/]git-hooks$/)
+  assert.match(resolveHooksDir({ resourcesPath: undefined, exists: () => true }), /build[\\/]git-hooks$/)
+})
+
+test('taskkill comes from the Windows system folder, wherever Windows lives', () => {
+  assert.ok(taskkillPath({ SystemRoot: 'D:\\Win' }).startsWith('D:\\Win'))
+  assert.match(taskkillPath({ SystemRoot: 'D:\\Win' }), /System32[\\/]taskkill\.exe$/)
+  assert.ok(taskkillPath({}).startsWith('C:\\Windows'))
 })

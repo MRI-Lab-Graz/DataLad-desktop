@@ -5,6 +5,9 @@ import { join } from 'node:path'
 // escalate to SIGKILL, so the kill must be immediate.
 export const QUIT_ABORT_REASON = 'app-quit'
 
+// By absolute path: a bare name would be looked up in places a dataset can write to.
+export const taskkillPath = (env = process.env) => join(env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe')
+
 // Kills `child` and everything it spawned.
 // POSIX: the child was spawned `detached`, so it leads its own process group.
 // SIGTERM the group first (git and git-annex remove their own .git/index.lock on
@@ -16,9 +19,7 @@ export function killProcessTree(child, graceMs = 3000) {
   }
 
   if (process.platform === 'win32') {
-    // By absolute path: a bare name would be looked up in places a dataset can write to.
-    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe')
-    spawn(taskkill, ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {})
+    spawn(taskkillPath(), ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {})
     return
   }
 

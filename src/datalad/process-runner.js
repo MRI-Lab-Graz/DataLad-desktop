@@ -24,10 +24,11 @@ const OUTPUT_LIMIT_EXIT_CODE = 125
 // Only the stock git-annex hooks ever run: a repository's own hooks (from a zip, a USB stick,
 // a nested repo the scanner never saw) are ignored. Packaged: resources/git-hooks (git cannot
 // run a script inside app.asar); dev/tests: build/git-hooks.
-const packagedHooks = process.resourcesPath ? join(process.resourcesPath, 'git-hooks') : null
-export const HOOKS_DIR = packagedHooks && existsSync(packagedHooks)
-  ? packagedHooks
-  : fileURLToPath(new URL('../../build/git-hooks', import.meta.url))
+export function resolveHooksDir({ resourcesPath = process.resourcesPath, exists = existsSync } = {}) {
+  const packaged = resourcesPath ? join(resourcesPath, 'git-hooks') : null
+  return packaged && exists(packaged) ? packaged : fileURLToPath(new URL('../../build/git-hooks', import.meta.url))
+}
+export const HOOKS_DIR = resolveHooksDir()
 
 // Hardening applied to every child: file names are never git pathspec patterns,
 // a repo's own .git/config cannot make `git status` run a program, only the stock git-annex
