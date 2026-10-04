@@ -19,7 +19,8 @@ const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 const OUTPUT_LIMIT_EXIT_CODE = 125
 
 // Hardening applied to every child: file names are never git pathspec patterns,
-// and a repo's own .git/config cannot make `git status` run a program.
+// a repo's own .git/config cannot make `git status` run a program, and datalad never
+// runs procedures a dataset ships.
 function childEnv(extra = {}) {
   const env = { ...process.env, ...extra }
   const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
@@ -27,6 +28,10 @@ function childEnv(extra = {}) {
   env[`GIT_CONFIG_KEY_${n}`] = 'core.fsmonitor'
   env[`GIT_CONFIG_VALUE_${n}`] = 'false'
   env.GIT_LITERAL_PATHSPECS = '1'
+  // A dataset can ship .datalad/procedures/cfg_<name> that datalad prefers over its own
+  // (create -c text2git --force on an adopted dataset ran it). Point the dataset-procedures
+  // location at a file: nothing can be found "inside" it.
+  env.DATALAD_LOCATIONS_DATASET__PROCEDURES = process.execPath
   env.NoDefaultCurrentDirectoryInExePath = '1'
   return env
 }

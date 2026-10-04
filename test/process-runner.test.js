@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync } from 'node:fs'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -451,4 +453,33 @@ test('ProcessRunner refuses an unresolvable bare name on every platform, not jus
   assert.equal(result.failed, true)
   assert.equal(result.exitCode, 127)
   assert.match(result.stderr, /not found on PATH/i)
+})
+
+test('ProcessRunner tells datalad to ignore procedures shipped inside a dataset', async () => {
+  const runner = new ProcessRunner()
+  const result = await runner.run(process.execPath, ['-e', 'process.stdout.write(process.env.DATALAD_LOCATIONS_DATASET__PROCEDURES ?? "")'])
+  assert.equal(result.stdout, process.execPath)
+})
+
+const hasDatalad = (() => { try { execFileSync('datalad', ['--version'], { stdio: 'ignore' }); return true } catch { return false } })()
+
+// Regression for the 2026-10-03 finding: adopting a folder that is already a dataset ran its own cfg_text2git.
+test("create -c text2git --force on an existing dataset runs datalad's procedure, not the dataset's", { skip: !hasDatalad && 'datalad not installed' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'proc-'))
+  const ds = join(dir, 'adopted')
+  const marker = join(dir, 'shipped-procedure-ran')
+  execFileSync('datalad', ['create', '-c', 'text2git', ds], { stdio: 'ignore' })
+  mkdirSync(join(ds, '.datalad', 'procedures'), { recursive: true })
+  const script = process.platform === 'win32'
+    ? ['cfg_text2git.py', `open(r"${marker}", "w").close()\n`]
+    : ['cfg_text2git.sh', `#!/bin/sh\ntouch '${marker}'\n`]
+  await writeFile(join(ds, '.datalad', 'procedures', script[0]), script[1])
+  execFileSync('datalad', ['save', '-d', ds, '-m', 'ship procedure'], { stdio: 'ignore' })
+
+  const runner = new ProcessRunner()
+  const result = await runner.run('datalad', ['create', '-c', 'text2git', '--force', '--', ds])
+
+  assert.equal(result.failed, false, result.stderr)
+  assert.equal(existsSync(marker), false, 'the dataset-shipped procedure ran')
+  assert.match(await readFile(join(ds, '.gitattributes'), 'utf8'), /annex\.largefiles/) // built-in text2git still applied
 })

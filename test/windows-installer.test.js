@@ -50,9 +50,8 @@ test('installer calls PowerShell by absolute path, downloads into $PLUGINSDIR an
 test('DataLad is installed into a private venv from the hash-locked requirements file', () => {
   const install = nsh.split('Installing DataLad into its own environment...')[1]?.split('Checking for git-annex...')[0]
   assert.ok(install, 'expected a DataLad environment step')
-  assert.match(install, /Get-Command py/)
-  assert.match(install, /Get-Command python/)
-  assert.match(install, /-m venv/)
+  assert.match(install, /uv\.exe/)
+  assert.match(install, /venv --clear --no-config --managed-python/)
   assert.match(install, /\$INSTDIR\\datalad-env/)
   assert.match(install, /--require-hashes/)
   assert.match(install, /--only-binary :all:/, 'no sdist builds: their build tools are not hash-checked')
@@ -103,15 +102,13 @@ test('uninstaller leaves the DataLad env alone during an update', () => {
 })
 
 // The lock file is compiled for Python 3.12; any other interpreter may lack a pinned wheel.
-test('the private env is built with Python 3.12 only, and a missing 3.12 triggers the pinned installer', () => {
-  const python = nsh.split('Checking for Python 3.12...')[1]?.split('Installing DataLad into its own environment...')[0]
-  assert.ok(python, 'expected a "Checking for Python 3.12" step before the DataLad step')
-  assert.match(python, /py -3\.12/)
-  assert.match(python, /version_info/)
+test('a machine without Python gets the pinned python.org installer, found by lookup alone', () => {
+  const python = nsh.split('Checking for Python...')[1]?.split('Installing DataLad into its own environment...')[0]
+  assert.ok(python, 'expected a "Checking for Python" step before the DataLad step')
+  assert.match(python, /Get-Command python, py -ErrorAction SilentlyContinue\) \{ exit 0 \}/)
   assert.match(python, /python-3\.12\.\d+-amd64\.exe/)
   const install = nsh.split('Installing DataLad into its own environment...')[1]?.split('Checking for git-annex...')[0]
-  assert.match(install, /py -3\.12 -m venv/)
-  assert.doesNotMatch(install, /py -3 -m venv/)
+  assert.match(install, /--python 3\.12 /)
 })
 
 // A machine-wide PATH entry is only safe if the folder is admin-writable: Program Files, not a data drive.
@@ -128,4 +125,16 @@ test('the installer records what it did and why a step failed in install.log', (
   for (const needle of ['git-annex download', 'git-annex hash', 'git-annex installer exit', 'DataLad install exit']) {
     assert.ok(install.includes(needle), `no log line for: ${needle}`)
   }
+})
+
+test('the installer never runs a pre-existing system Python with admin rights', () => {
+  assert.doesNotMatch(nsh, /\bpy -3|python -m venv|python -c|-m pip/)
+})
+
+test('the DataLad env is built by the bundled uv with its own managed Python inside the install folder', () => {
+  assert.match(nsh, /\$INSTDIR\\resources\\uv\\uv\.exe/)
+  assert.match(nsh, /UV_PYTHON_INSTALL_DIR = '\$INSTDIR\\python'/)
+  assert.match(nsh, /venv --clear --no-config --managed-python --python 3\.12/, "an update reuses the folder; uv refuses an existing venv without --clear")
+  assert.match(nsh, /pip install --no-config .*--require-hashes --only-binary :all: --no-deps/)
+  assert.match(nsh, /RMDir \/r "\$INSTDIR\\python"/)
 })

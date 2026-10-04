@@ -8,7 +8,9 @@
 ;    upstream releases a new version the check fails and git-annex is skipped
 ;    until the pin below is bumped);
 ;  - DataLad is installed into a private environment under the install folder
-;    from a hash-locked requirements file, never into a shared Python;
+;    from a hash-locked requirements file, by the bundled uv on its own
+;    checksum-verified Python (also under the install folder); an existing
+;    system Python is never run;
 ;  - PowerShell is called by absolute path, downloads go into the random
 ;    $PLUGINSDIR, and tools are looked up on the machine PATH only.
 ; If a download, hash check, or sub-installer fails, we log it and continue
@@ -60,12 +62,14 @@
     DetailPrint "Git already present."
   ${EndIf}
 
-  ; The DataLad lock file is compiled for Python 3.12; another interpreter may lack a pinned wheel.
-  DetailPrint "Checking for Python 3.12..."
-  nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -c 'import sys'; exit $$LASTEXITCODE } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -c 'import sys; sys.exit(0 if sys.version_info[:2] == (3, 12) else 1)'; exit $$LASTEXITCODE } else { exit 1 }"`
+  ; Only for the app's environment check: DataLad itself runs on uv's own Python (below).
+  ; An existing Python is looked up, never run: this runs elevated, and a Python in a
+  ; user-writable folder (C:\Python312) would run their code as admin.
+  DetailPrint "Checking for Python..."
+  nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (Get-Command python, py -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }"`
   Pop $0
   ${If} $0 != 0
-    DetailPrint "Python 3.12 not found - downloading installer..."
+    DetailPrint "Python not found - downloading installer..."
     nsExec::ExecToLog `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' -OutFile '$PLUGINSDIR\python-installer.exe'"`
     Pop $0
     ${If} $0 == 0
@@ -85,11 +89,11 @@
     ${EndIf}
     Delete "$PLUGINSDIR\python-installer.exe"
   ${Else}
-    DetailPrint "Python 3.12 already present."
+    DetailPrint "Python already present."
   ${EndIf}
 
   DetailPrint "Installing DataLad into its own environment..."
-  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$venv = '$INSTDIR\datalad-env'; if (Get-Command py -ErrorAction SilentlyContinue) { py -3.12 -m venv $$venv } elseif (Get-Command python -ErrorAction SilentlyContinue) { python -m venv $$venv } else { exit 1 }; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & (Join-Path $$venv 'Scripts\python.exe') -m pip install --require-hashes --only-binary :all: --no-deps --disable-pip-version-check -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
+  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$env:UV_PYTHON_INSTALL_DIR = '$INSTDIR\python'; $$env:UV_CACHE_DIR = '$PLUGINSDIR\uv-cache'; $$uv = '$INSTDIR\resources\uv\uv.exe'; $$venv = '$INSTDIR\datalad-env'; & $$uv venv --clear --no-config --managed-python --python 3.12 $$venv; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & $$uv pip install --no-config --python $$venv --link-mode copy --index-url https://pypi.org/simple --require-hashes --only-binary :all: --no-deps -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
   Pop $0
   !insertmacro Log "DataLad install exit $0"
   ${If} $0 != 0
@@ -151,5 +155,6 @@
     nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); [Environment]::SetEnvironmentVariable('Path', (($$machine -split ';' | Where-Object { $$_ -and $$_ -ne $$scripts }) -join ';'), 'Machine')"`
     Pop $0
     RMDir /r "$INSTDIR\datalad-env"
+    RMDir /r "$INSTDIR\python"
   ${endIf}
 !macroend

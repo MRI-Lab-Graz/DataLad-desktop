@@ -46,3 +46,10 @@ test('SECURITY.md says releases are currently unsigned and how to verify them', 
   assert.match(doc, /SHA256SUMS/)
   assert.match(doc, /gh attestation verify/)
 })
+
+test('SECURITY.md documents that dataset-shipped datalad procedures are neutralised', () => {
+  assert.match(doc, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
+  assert.match(doc, /\.datalad\/procedures/)
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  assert.match(runner, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
+})
