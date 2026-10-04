@@ -46,3 +46,15 @@ Tests: `include.path` target contents are visible (`config --local --list --incl
 
 ### Task 6: Gate
 Unit + e2e suites, `npm audit`, timing of a scan on a dataset with 3 remotes and 1000 files (<500 ms), push, Smoke Cross Platform (read the Windows log), installer-smoke, then a FOURTH fresh independent review (any High → stop and ask).
+
+## Addendum after review 4 (verified by reproduction: a push over a local path ran the remote's ordinary git hooks and annex.*-command config)
+
+Root cause: git clears `GIT_CONFIG_COUNT`/`GIT_CONFIG_PARAMETERS` for the `git-receive-pack` it starts on a local path, so none of the app's environment overrides apply inside the remote. A local remote must therefore be judged like an opened repository.
+
+### Task 7: Judge a local remote fully (R-H1)
+Tests: every ordinary git hook in the remote's hooks folder (including the receive-side ones `pre-receive`, `update`, `proc-receive`, `post-receive`, `post-update`, `reference-transaction`, `push-to-checkout`, `pre-auto-gc`) is reported with a fingerprint, `.sample` files are not; the remote's `config` goes through the same allowlist as an opened repository (`annex.freezecontent-command`, `core.hooksPath`, `receive.denyCurrentBranch`, ... reported; `core.bare`, `annex.uuid` not); a bare remote and a work-tree remote both work; an unlistable remote hooks folder is a not-fully-scanned finding; a real datalad dataset as remote reports nothing beyond what it really has.
+Implement: `annexHooksIn(dir, prefix, { all })` (all = also every non-sample file and the receive-side names), and a `judgeConfig` shared with `scanRepo`, applied to `<gitdir>/config` of each remote (read with `git config --file ... --list --includes`).
+
+### Task 8: file:// URLs as git reads them (R-H2)
+Tests: `file://somehost/<abs>` is local (git ignores the host); `?` and `#` are part of the path; `%`-escapes are decoded; Windows `file:///C:/x` keeps its drive.
+Implement: strip `^file://[^/]*`, percent-decode the rest, no WHATWG URL parsing.
