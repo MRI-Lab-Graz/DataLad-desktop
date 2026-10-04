@@ -508,3 +508,23 @@ test('the app-owned hooks folder holds exactly the stock git-annex hooks', () =>
     assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /^#!\/bin\/sh\n# automatically configured by git-annex\n/, name)
   }
 })
+
+test('ProcessRunner blanks datalad.clone.reckless for every child', async () => {
+  const r = await new ProcessRunner().run(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(process.env.DATALAD_CLONE_RECKLESS))'])
+  assert.equal(r.stdout, '""')
+})
+
+test("a cloned dataset's committed reckless setting does not loosen its subdatasets' permissions", { skip: (!hasDatalad || process.platform === 'win32') && 'needs datalad on POSIX' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'reckless-'))
+  const src = join(dir, 'src')
+  execFileSync('datalad', ['create', src], { stdio: 'ignore' })
+  execFileSync('datalad', ['create', '-d', src, join(src, 'sub')], { stdio: 'ignore' })
+  execFileSync('git', ['config', '--file', join(src, '.datalad', 'config'), 'datalad.clone.reckless', 'shared-0777'])
+  execFileSync('datalad', ['save', '-d', src, '-m', 'x'], { stdio: 'ignore' })
+  const dest = join(dir, 'dest')
+  const r = await new ProcessRunner().run('datalad', ['install', '-r', '-s', src, '--', dest])
+  assert.equal(r.failed, false, r.stderr)
+  let shared = ''
+  try { shared = execFileSync('git', ['-C', join(dest, 'sub'), 'config', '--get', 'core.sharedrepository']).toString().trim() } catch { /* unset: the passing case */ }
+  assert.notEqual(shared, '0666')
+})

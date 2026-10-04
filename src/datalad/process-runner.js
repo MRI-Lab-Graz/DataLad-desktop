@@ -45,6 +45,9 @@ function childEnv(extra = {}) {
   // (create -c text2git --force on an adopted dataset ran it). Point the dataset-procedures
   // location at a file: nothing can be found "inside" it.
   env.DATALAD_LOCATIONS_DATASET__PROCEDURES = process.execPath
+  // A dataset's committed .datalad/config can name datalad.clone.reckless (e.g. shared-0777, which
+  // makes every subdataset's .git world-writable); an empty environment value overrides it.
+  env.DATALAD_CLONE_RECKLESS = ''
   env.NoDefaultCurrentDirectoryInExePath = '1'
   return env
 }
