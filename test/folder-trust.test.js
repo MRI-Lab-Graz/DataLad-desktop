@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findExecVectors, createTrustStore, describeVectors, localPath } from '../src/gui/folder-trust.js'
+import { findExecVectors, describeVectors, localPath } from '../src/gui/folder-trust.js'
 import { ProcessRunner } from '../src/datalad/process-runner.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
@@ -124,23 +124,6 @@ test('a registered subdataset is scanned too, and reported with its path', async
 
 test('a folder that is not a repository has no vectors', async () => {
   assert.deepEqual(await findExecVectors(await mkdtemp(join(tmpdir(), 'trust-none-'))), [])
-})
-
-test('trust covers the findings the user saw, and a new finding asks again', async () => {
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  const target = await repo()
-  createTrustStore(file).add(target, ['config a'])
-  assert.equal(createTrustStore(file).accepts(target, ['config a']), true)
-  assert.equal(createTrustStore(file).accepts(target, ['config a', 'config b']), false)
-  assert.equal(createTrustStore(file).accepts(target, []), true)
-  assert.equal(createTrustStore(file).accepts(await repo(), ['config a']), false)
-})
-
-test('an old path-only trust file trusts nothing', async () => {
-  const target = await repo()
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  writeFileSync(file, JSON.stringify([target]))
-  assert.equal(createTrustStore(file).accepts(target, ['config a']), false)
 })
 
 // The ground truth: what `datalad create` really writes on this OS must not be flagged
@@ -319,17 +302,6 @@ test('the dialog text lists "not fully scanned" first, caps the rest, and flatte
   assert.match(lines.at(-1), /and 2 more/)
   assert.ok(!describeVectors(['config x = ' + 'y'.repeat(500)]).includes('y'.repeat(200)))
   assert.ok(!describeVectors(vectors).includes('1\n2'))
-})
-
-test('"not fully scanned" is accepted for this session only, never remembered across launches', async () => {
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  const target = await repo()
-  const vectors = ['config a = 1', 'not fully scanned (more than 3 repositories)']
-  const store = createTrustStore(file)
-  store.add(target, vectors)
-  assert.equal(store.accepts(target, vectors), true)
-  assert.equal(createTrustStore(file).accepts(target, vectors), false)
-  assert.equal(createTrustStore(file).accepts(target, ['config a = 1']), true)
 })
 
 const ANNEX_HOOK_NAMES = ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']

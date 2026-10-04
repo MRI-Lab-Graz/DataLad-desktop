@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { lstat, readdir, readFile } from 'node:fs/promises'
-import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { ProcessRunner } from '../datalad/process-runner.js'
 
@@ -326,38 +326,6 @@ const canonical = (path) => {
     return realpathSync(path)
   } catch {
     return resolve(path)
-  }
-}
-
-// Remembers, per folder, the findings the user accepted. The folder is re-scanned on every open,
-// so a finding that was not there when the user said yes (a new setting, a changed command, a nested
-// repo that appeared) asks again. A file in the old format (a plain list of paths) accepts nothing.
-// "Not fully scanned" is accepted for this launch only: remembering it would turn everything past
-// the scan limit into a permanent pass.
-export function createTrustStore(file) {
-  let accepted = {}
-  try {
-    const parsed = JSON.parse(readFileSync(file, 'utf8'))
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      accepted = parsed
-    }
-  } catch {
-    // first run, or unreadable: start empty (fail closed: ask again)
-  }
-  const thisLaunch = new Map()
-  const unscanned = (vector) => vector.startsWith(NOT_FULLY_SCANNED)
-  return {
-    accepts(path, vectors) {
-      const key = canonical(path)
-      const known = accepted[key]
-      return vectors.every((vector) => (Array.isArray(known) && known.includes(vector)) || thisLaunch.get(key)?.has(vector))
-    },
-    add(path, vectors) {
-      const key = canonical(path)
-      accepted[key] = vectors.filter((vector) => !unscanned(vector))
-      thisLaunch.set(key, new Set(vectors.filter(unscanned)))
-      writeFileSync(file, JSON.stringify(accepted))
-    }
   }
 }
 
