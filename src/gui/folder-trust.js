@@ -1,20 +1,14 @@
-import { lstat, readdir, readFile } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { ProcessRunner } from '../datalad/process-runner.js'
-import { isSafeRelativeSubdatasetPath } from '../datalad/adapter.js'
 
-// A repo copied from a zip, USB stick or shared folder brings its own .git/config
-// and hooks, and git runs programs named there. Anything that can do that, other
-// than what git-annex itself installs, needs the user's explicit OK before we open it.
+// A repo copied from a zip, USB stick or shared folder brings its own .git/config, and git runs
+// programs named there (filters, ssh commands, ...). Hooks are not part of this: every command the app
+// starts uses only the stock git-annex hooks (process-runner.js), so a repository's own hooks never run.
+// Anything else that can run a program, other than what git-annex itself installs, needs the user's
+// explicit OK before we open the folder. Every repository under the folder is judged, wherever it hides.
 
-const ANNEX_HOOKS = new Set(
-  [
-    'git annex pre-commit .',
-    'git annex smudge --update',
-    'if git annex post-receive --help >/dev/null 2>&1; then git annex post-receive; fi'
-  ].map((cmd) => `#!/bin/sh\n# automatically configured by git-annex\n${cmd}`)
-)
 const ANNEX_FILTER = {
   smudge: 'git-annex smudge -- %f',
   clean: 'git-annex smudge --clean -- %f',
@@ -38,8 +32,8 @@ const HARMLESS_KEYS = [
 const ANNEX_HARMLESS = new Set(['uuid', 'version', 'crippledfilesystem', 'adjustedbranchrefresh', 'backend', 'freezecontent', 'sshcaching'])
 const REMOTE_ANNEX_HARMLESS = new Set(['uuid', 'ignore', 'cost', 'sync', 'readonly', 'bare', 'config-uuid'])
 
-const MAX_SUBDATASETS = 100
-const MAX_DEPTH = 3
+const MAX_REPOS = 200
+const MAX_ENTRIES = 200000
 const GIT_TIMEOUT_MS = 15000
 
 function isHarmless(key, value) {
@@ -61,15 +55,9 @@ function isHarmless(key, value) {
   return HARMLESS_KEYS.some((pattern) => pattern.test(key))
 }
 
-// git itself locates the repository (subfolders, linked worktrees) and parses its config.
-// `rev-parse` and `config --list` run no hooks and no configured programs.
-async function scan(runner, projectPath, depth, state, prefix = '') {
-  const git = (args) => runner.run('git', ['-C', projectPath, ...args], { timeoutMs: GIT_TIMEOUT_MS })
-  const dirs = await git(['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'])
-  if (dirs.failed) {
-    return []
-  }
-  const [gitDir, commonDir] = dirs.stdout.split(/\r?\n/)
+// `config --list` and `ls-files` run no hooks and no configured programs.
+async function scanRepo(runner, repo, prefix) {
+  const git = (args) => runner.run('git', ['-C', repo, ...args], { timeoutMs: GIT_TIMEOUT_MS })
   const found = []
 
   for (const scope of ['--local', '--worktree']) {
@@ -81,54 +69,45 @@ async function scan(runner, projectPath, depth, state, prefix = '') {
       }
     }
   }
+  found.push(...(await scanDataladProcedures(runner, repo, prefix)))
+  return found
+}
 
-  let hooks = []
-  try {
-    hooks = await readdir(join(commonDir, 'hooks'), { withFileTypes: true })
-  } catch {
-    // no hooks directory
-  }
-  for (const entry of hooks) {
-    if (entry.name.endsWith('.sample')) {
-      continue
-    }
+// Gitlinks (mode 160000) in the index name nested repositories whether or not .gitmodules lists them.
+async function gitlinks(runner, repo) {
+  const staged = await runner.run('git', ['-C', repo, 'ls-files', '--stage', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
+  return (staged.failed ? [] : staged.stdout.split('\0'))
+    .filter((entry) => entry.startsWith('160000 '))
+    .map((entry) => join(repo, entry.slice(entry.indexOf('\t') + 1)))
+}
+
+// Every directory under `root` that holds a .git entry (folder or gitfile). Symlinks are not followed
+// and .git folders are not entered. Stops after `maxEntries` directory entries.
+async function findRepoDirs(root, maxEntries) {
+  const repos = []
+  const queue = [root]
+  let seen = 0
+  while (queue.length > 0) {
+    const dir = queue.pop()
+    let entries
     try {
-      const body = (await readFile(join(commonDir, 'hooks', entry.name), 'utf8')).replace(/\r\n/g, '\n').trimEnd()
-      if (!entry.isFile() || !ANNEX_HOOKS.has(body)) {
-        found.push(`${prefix}hook ${entry.name}`)
-      }
+      entries = await readdir(dir, { withFileTypes: true })
     } catch {
-      found.push(`${prefix}hook ${entry.name}`) // unreadable is not "safe"
+      continue // unreadable: git cannot read it either
     }
-  }
-
-  const top = await git(['rev-parse', '--show-toplevel'])
-  if (!top.failed) {
-    found.push(...(await scanDataladProcedures(runner, top.stdout.trim(), prefix)))
-  }
-  if (depth < MAX_DEPTH && !top.failed) {
-    const root = top.stdout.trim()
-    const paths = await runner.run('git', ['config', '--file', join(root, '.gitmodules'), '--get-regexp', '^submodule\\..*\\.path$'])
-    for (const line of paths.failed ? [] : paths.stdout.split(/\r?\n/).filter(Boolean)) {
-      const rel = line.slice(line.indexOf(' ') + 1).trim()
-      if (state.count >= MAX_SUBDATASETS || !isSafeRelativeSubdatasetPath(rel)) {
-        continue
+    for (const entry of entries) {
+      seen += 1
+      if (seen > maxEntries) {
+        return { repos, truncated: true }
       }
-      state.count += 1
-      const sub = join(root, rel)
-      try {
-        const info = await lstat(sub)
-        if (info.isSymbolicLink()) {
-          found.push(`${prefix}${rel}: path is a symlink`)
-        } else if (info.isDirectory()) {
-          found.push(...(await scan(runner, sub, depth + 1, state, `${prefix}${rel}: `)))
-        }
-      } catch {
-        // subdataset not installed
+      if (entry.name === '.git') {
+        repos.push(dir)
+      } else if (entry.isDirectory()) {
+        queue.push(join(dir, entry.name))
       }
     }
   }
-  return [...new Set(found)]
+  return { repos, truncated: false }
 }
 
 // datalad prefers a dataset's own .datalad/procedures over its built-in ones, and reads
@@ -159,10 +138,6 @@ async function scanDataladProcedures(runner, root, prefix) {
   return found
 }
 
-export function findExecVectors(projectPath, { runner = new ProcessRunner() } = {}) {
-  return scan(runner, projectPath, 0, { count: 0 })
-}
-
 const canonical = (path) => {
   try {
     return realpathSync(path)
@@ -185,4 +160,54 @@ export function createTrustStore(file) {
       writeFileSync(file, JSON.stringify([...trusted]))
     }
   }
+}
+
+export async function findExecVectors(projectPath, { runner = new ProcessRunner(), maxRepos = MAX_REPOS, maxEntries = MAX_ENTRIES } = {}) {
+  const root = resolve(projectPath)
+  const found = []
+  const queued = new Set()
+  const queue = []
+  let limit = null
+  const enqueue = (dir) => {
+    const key = canonical(dir)
+    if (queued.has(key)) {
+      return
+    }
+    if (queued.size >= maxRepos) {
+      limit = `more than ${maxRepos} repositories`
+      return
+    }
+    queued.add(key)
+    queue.push(dir)
+  }
+
+  const top = await runner.run('git', ['-C', root, 'rev-parse', '--show-toplevel'], { timeoutMs: GIT_TIMEOUT_MS })
+  if (!top.failed) {
+    enqueue(top.stdout.trim())
+  }
+  const walked = await findRepoDirs(root, maxEntries)
+  walked.repos.forEach(enqueue)
+  if (walked.truncated) {
+    limit = `more than ${maxEntries} files and folders`
+  }
+
+  while (queue.length > 0) {
+    const repo = queue.shift()
+    const rel = relative(root, repo)
+    const prefix = rel && !rel.startsWith('..') ? `${rel}: ` : ''
+    found.push(...(await scanRepo(runner, repo, prefix)))
+    for (const link of await gitlinks(runner, repo)) {
+      const info = await lstat(link).catch(() => null)
+      if (info?.isSymbolicLink()) {
+        found.push(`${prefix}${relative(repo, link)}: path is a symlink`)
+      } else if (info?.isDirectory() && (await lstat(join(link, '.git')).catch(() => null))) {
+        enqueue(link)
+      }
+    }
+  }
+
+  if (limit) {
+    found.push(`not fully scanned (${limit})`)
+  }
+  return [...new Set(found)]
 }
