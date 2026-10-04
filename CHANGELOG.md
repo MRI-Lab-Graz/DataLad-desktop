@@ -9,6 +9,8 @@ Result of an independent security review (see `SECURITY.md` for what is protecte
 - **Windows:** `git`/`datalad` are resolved to absolute paths from absolute `PATH` entries, so a program of the same name inside a dataset is never run.
 - Every child process gets literal pathspecs (a file named `*` can no longer widen Discard/Restore) and `core.fsmonitor` forced off.
 - **Folder trust:** opening a folder whose git config or hooks can run programs now asks first.
+- **Dataset procedures:** datalad never runs procedures a dataset ships in `.datalad/procedures` (adopting an existing BIDS dataset via Create Project used to run its `cfg_text2git`); folder trust reports them too.
+- **Windows installer:** the DataLad environment is built by the bundled uv on its own Python; an existing system Python is never run with admin rights.
 - Clone sources starting with `-` or using `ext::` are refused; branch checkout ends with `--`; `.gitignore` handlers confine their paths and refuse symlinks.
 - Packaged builds no longer authorize the launch directory (it was `/` for apps started from Finder); only the app's own page can call IPC handlers; DevTools are off; the CSP forbids frames.
 - Electron fuses locked (no run-as-node, `NODE_OPTIONS`, `--inspect`; ASAR integrity on); minimal macOS entitlements; only runtime sources are packaged.
