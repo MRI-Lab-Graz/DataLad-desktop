@@ -258,6 +258,11 @@ const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'
 handle('adapter:runCommand', async (event, payload) => {
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
+    // A push to a local-path remote (a share, a USB stick) makes git-annex run that remote's own hooks, and
+    // the remote may have changed since the folder was opened: look again right before.
+    if (payload.commandName === 'push') {
+      await requireTrustedFolder(event, payload.request.projectPath)
+    }
   } else {
     // `create --force` over an existing folder runs that folder's own hooks.
     const target = payload.request?.targetPath

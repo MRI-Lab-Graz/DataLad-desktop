@@ -65,6 +65,9 @@ async function scanRepo(runner, repo, prefix) {
 
   for (const scope of ['--local', '--worktree']) {
     const listed = await git(['config', scope, '--list', '-z'])
+    if (listed.failed && scope === '--local') {
+      found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${prefix || 'the folder'})`)
+    }
     for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
       const [key, ...rest] = entry.split('\n')
       if (!isHarmless(key, rest.join('\n'))) {
@@ -188,9 +191,16 @@ async function annexHooksIn(gitDir, prefix) {
 // Gitlinks (mode 160000) in the index name nested repositories whether or not .gitmodules lists them.
 async function gitlinks(runner, repo) {
   const staged = await runner.run('git', ['-C', repo, 'ls-files', '--stage', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
-  return (staged.failed ? [] : staged.stdout.split('\0'))
-    .filter((entry) => entry.startsWith('160000 '))
-    .map((entry) => join(repo, entry.slice(entry.indexOf('\t') + 1)))
+  if (staged.failed) {
+    return { links: [], failed: true }
+  }
+  return {
+    links: staged.stdout
+      .split('\0')
+      .filter((entry) => entry.startsWith('160000 '))
+      .map((entry) => join(repo, entry.slice(entry.indexOf('\t') + 1))),
+    failed: false
+  }
 }
 
 // Every directory under `root` that holds a .git entry (folder or gitfile). Symlinks are not followed
@@ -342,7 +352,11 @@ export async function findExecVectors(projectPath, { runner = new ProcessRunner(
     const rel = relative(root, repo)
     const prefix = rel && !rel.startsWith('..') ? `${rel}: ` : ''
     found.push(...(await scanRepo(runner, repo, prefix)))
-    for (const link of await gitlinks(runner, repo)) {
+    const { links, failed } = await gitlinks(runner, repo)
+    if (failed) {
+      found.push(`${NOT_FULLY_SCANNED} (cannot list the nested repositories of ${prefix || 'the folder'})`)
+    }
+    for (const link of links) {
       const info = await lstat(link).catch(() => null)
       if (info?.isSymbolicLink()) {
         found.push(`${prefix}${relative(repo, link)}: path is a symlink`)

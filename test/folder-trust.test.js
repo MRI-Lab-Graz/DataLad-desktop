@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { findExecVectors, createTrustStore, describeVectors } from '../src/gui/folder-trust.js'
+import { ProcessRunner } from '../src/datalad/process-runner.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
 const ANNEX_FILTER = `[filter "annex"]
@@ -435,4 +436,34 @@ test("a remote that git itself will not open is still checked by looking at its 
   git(clone, 'init', '-q')
   appendFileSync(join(clone, '.git', 'config'), `[remote "origin"]\n\turl = ${remote}\n`)
   assert.match(await flagged(clone), /hook post-update-annex [0-9a-f]{64}/)
+})
+
+// A scanner that cannot do its job must say so: a failed git call is never "nothing found".
+test('a failed scanner git call is reported as not fully scanned', async () => {
+  for (const [what, matches] of [
+    ['config', (args) => args.includes('config') && args.includes('--local')],
+    ['ls-files', (args) => args.includes('ls-files')],
+    ['remote', (args) => args[2] === 'remote' && args.length === 3]
+  ]) {
+    const real = new ProcessRunner()
+    const runner = { run: (command, args, options) => (matches(args) ? Promise.resolve({ failed: true, exitCode: 1, stdout: '', stderr: 'boom' }) : real.run(command, args, options)) }
+    assert.match((await findExecVectors(await repo(), { runner })).join('\n'), /not fully scanned/, what)
+  }
+})
+
+test('datalad push to a local-path dataset still works, and its hooks were reported first', { skip: !hasDatalad && 'datalad not installed' }, async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-push-')))
+  const runner = new ProcessRunner()
+  const remote = join(base, 'share')
+  execFileSync('datalad', ['create', remote], { stdio: 'ignore' })
+  await hook(join(remote, '.git'), 'post-update-annex', '#!/bin/sh\n:\n')
+  git(remote, 'config', 'receive.denyCurrentBranch', 'updateInstead') // a share that accepts pushes to its checked-out branch
+  const clone = join(base, 'mine')
+  execFileSync('datalad', ['install', '-s', remote, clone], { stdio: 'ignore' })
+  await writeFile(join(clone, 'f.txt'), 'x')
+  await runner.run('datalad', ['-C', clone, 'save', '-m', 'x'], { cwd: clone })
+
+  assert.match(await flagged(clone), /remote origin .*hook post-update-annex [0-9a-f]{64}/)
+  const pushed = await runner.run('datalad', ['-C', clone, 'push'], { cwd: clone })
+  assert.equal(pushed.failed, false, pushed.stderr)
 })

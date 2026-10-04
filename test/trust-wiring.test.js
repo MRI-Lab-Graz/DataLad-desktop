@@ -59,3 +59,10 @@ test('create/clone into a folder outside every opened folder asks in a native di
 test('the e2e auto-confirm seam is never active in a packaged app', () => {
   assert.match(main, /!app\.isPackaged && process\.env\.DATALAD_DESKTOP_E2E_CONFIRM === '1'/)
 })
+
+test('a push re-checks the folder and its local remotes at the moment of the push', () => {
+  const body = block("handle('adapter:runCommand'")
+  const check = body.search(/commandName === 'push'[\s\S]{0,120}await requireTrustedFolder\(event, payload\.request\.projectPath\)/)
+  assert.ok(check !== -1, 'push no longer re-checks trust')
+  assert.ok(check < body.indexOf('adapter.runCommand('), 'the check must run before the push')
+})

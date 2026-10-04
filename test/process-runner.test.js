@@ -418,10 +418,10 @@ test('ProcessRunner makes git treat pathspecs literally', async () => {
 test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
   const result = await new ProcessRunner().run(
     process.execPath,
-    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_0]))'],
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_3, e.GIT_CONFIG_KEY_0]))'],
     { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
   )
-  assert.deepEqual(JSON.parse(result.stdout), ['3', 'core.fsmonitor', 'false', 'core.hooksPath', 'user.name'])
+  assert.deepEqual(JSON.parse(result.stdout), ['4', 'core.fsmonitor', 'false', 'core.hooksPath', 'safe.bareRepository', 'user.name'])
 })
 
 test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
@@ -573,4 +573,39 @@ test('every shipped hook does nothing in a repository that has no git-annex uuid
   for (const name of readdirSync(HOOKS_DIR)) {
     assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\ngit config --get annex\.uuid >\/dev\/null 2>&1 \|\| exit 0\n/, name)
   }
+})
+
+// A folder laid out like a bare git directory (HEAD, objects, refs, config) can name a work tree elsewhere
+// and carry its own filters and attributes. Git must only use a repository it finds as `.git`.
+test('git refuses a bare-format folder it would find by looking at the current directory', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bare-format-'))
+  const proj = join(dir, 'proj')
+  execFileSync('git', ['init', '-q', '--bare', proj])
+  mkdirSync(join(dir, 'data'))
+  await writeFile(join(proj, 'config'), '[core]\n\tbare = false\n\tworktree = ../data\n\trepositoryformatversion = 0\n')
+  const result = await new ProcessRunner().run('git', ['-C', proj, 'status', '--porcelain'])
+  assert.equal(result.failed, true)
+  assert.match(result.stderr, /bare repository/i)
+})
+
+test('pushing to, cloning from and fetching from local bare and work-tree remotes still works', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'remotes-'))
+  const runner = new ProcessRunner()
+  const git = (...args) => runner.run('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.t', ...args])
+  execFileSync('git', ['init', '-q', '--bare', join(dir, 'bare.git')])
+  const clone = join(dir, 'clone')
+  assert.equal((await git('clone', '-q', join(dir, 'bare.git'), clone)).failed, false)
+  await writeFile(join(clone, 'a.txt'), 'x')
+  await git('-C', clone, 'add', 'a.txt')
+  assert.equal((await git('-C', clone, 'commit', '-q', '-m', 'x')).failed, false)
+  const pushed = await git('-C', clone, 'push', '-q', 'origin', 'HEAD')
+  assert.equal(pushed.failed, false, pushed.stderr)
+  const second = join(dir, 'second')
+  assert.equal((await git('clone', '-q', join(dir, 'bare.git'), second)).failed, false)
+  assert.equal((await git('-C', second, 'fetch', '-q')).failed, false)
+  // a work-tree remote
+  const work = join(dir, 'work')
+  execFileSync('git', ['init', '-q', work])
+  execFileSync('git', ['-C', work, 'config', 'receive.denyCurrentBranch', 'updateInstead'])
+  assert.equal((await git('-C', clone, 'push', '-q', work, 'HEAD:refs/heads/main')).failed, false)
 })

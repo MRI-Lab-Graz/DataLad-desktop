@@ -30,12 +30,15 @@ export function resolveHooksDir({ resourcesPath = process.resourcesPath, exists 
 }
 export const HOOKS_DIR = resolveHooksDir()
 
+// safe.bareRepository=explicit: git only uses a repository it finds as `.git` (or is told about). A folder
+// that merely looks like a bare git directory could otherwise name a work tree elsewhere and bring its own
+// filters and attributes. Pushing to or cloning from bare remotes does not go through discovery.
 // Hardening applied to every child: file names are never git pathspec patterns,
 // a repo's own .git/config cannot make `git status` run a program, only the stock git-annex
 // hooks run, and datalad never runs procedures a dataset ships.
 function childEnv(extra = {}) {
   const env = { ...process.env, ...extra }
-  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR]]) {
+  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit']]) {
     const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
     env[`GIT_CONFIG_KEY_${n}`] = key
     env[`GIT_CONFIG_VALUE_${n}`] = value
