@@ -197,3 +197,33 @@ test('an unparseable .datalad/config is flagged, not ignored', async () => {
   await writeFile(join(dir, '.datalad', 'config'), '[broken\n')
   assert.match(await flagged(dir), /datalad config \(unreadable\)/)
 })
+
+test('annex and remote settings outside the exact allowlist are flagged', async () => {
+  for (const snippet of [
+    '[remote "o"]\n\tannex-rsync-download-options = x\n',
+    '[remote "o"]\n\tannex-rsync-upload-options = x\n',
+    '[remote "o"]\n\tannex-rsync-transport = x\n',
+    '[annex]\n\tweb-options = x\n',
+    '[remote "o"]\n\tannex-gnupg-options = x\n',
+    '[annex]\n\tsomething-new = x\n'
+  ]) {
+    assert.ok((await findExecVectors(await repo({ config: snippet }))).length > 0, `not flagged: ${snippet}`)
+  }
+})
+
+test('a shared-repository setting is flagged', async () => {
+  assert.match(await flagged(await repo({ config: '[core]\n\tsharedrepository = 0666\n' })), /core\.sharedrepository/)
+})
+
+test('a pushurl with a program transport is flagged like url', async () => {
+  assert.match(await flagged(await repo({ config: '[remote "o"]\n\tpushurl = ext::x\n' })), /remote\.o\.pushurl/)
+})
+
+test('.datalad/config clone and get settings are flagged', async () => {
+  const dir = await repo()
+  await mkdir(join(dir, '.datalad'), { recursive: true })
+  await writeFile(join(dir, '.datalad', 'config'), '[datalad "clone"]\n\treckless = shared-0777\n[datalad "get"]\n\tsubdataset-source-candidate-x = y\n')
+  const out = await flagged(dir)
+  assert.match(out, /datalad\.clone\.reckless/)
+  assert.match(out, /datalad\.get\.subdataset-source-candidate-x/)
+})

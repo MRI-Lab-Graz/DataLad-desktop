@@ -24,18 +24,19 @@ const ANNEX_FILTER = {
 // is reported. (A blocklist of "keys that run programs" misses new ones: gpg.ssh.defaultKeyCommand,
 // annex.*-command, diff.*.command, datalad result hooks ...)
 const HARMLESS_KEYS = [
-  /^core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks|autocrlf|eol|safecrlf|quotepath|untrackedcache|sharedrepository|longpaths|protectntfs|protecthfs|hidedotfiles|trustctime|checkstat|preloadindex|fscache)$/,
+  /^core\.(repositoryformatversion|filemode|bare|logallrefupdates|ignorecase|precomposeunicode|symlinks|autocrlf|eol|safecrlf|quotepath|untrackedcache|longpaths|protectntfs|protecthfs|hidedotfiles|trustctime|checkstat|preloadindex|fscache)$/,
   /^extensions\.[a-z]+$/,
   /^user\.(name|email)$/,
   /^branch\..+\.(remote|merge|rebase|description)$/,
-  /^remote\..+\.(pushurl|fetch|push|tagopt)$/,
+  /^remote\..+\.(fetch|push|tagopt)$/,
   /^datalad\.dataset\.id$/,
   /^submodule\.(active|.+\.(url|active|branch|datalad-id|datalad-url))$/
 ]
-// git-annex writes many settings (more on Windows, where it runs in "crippled filesystem" mode), so
-// annex.* and remote.*.annex-* are allowed as a family, minus the ones that name a program to run.
-const ANNEX_KEY = /^(annex\.[a-z0-9.-]+|remote\..+\.annex-[a-z0-9-]+)$/
-const ANNEX_RUNS_PROGRAMS = /(command|shell|externaltype|ssh-options|rsync-options|program|hook)/
+// Exactly the keys git-annex writes itself (macOS/Linux, and Windows "crippled filesystem" mode),
+// plus inert booleans/numbers. Anything else is reported: new option families keep appearing
+// (rsync-*-options, web-options, gnupg-*options all name programs or their arguments).
+const ANNEX_HARMLESS = new Set(['uuid', 'version', 'crippledfilesystem', 'adjustedbranchrefresh', 'backend', 'freezecontent', 'sshcaching'])
+const REMOTE_ANNEX_HARMLESS = new Set(['uuid', 'ignore', 'cost', 'sync', 'readonly', 'bare', 'config-uuid'])
 
 const MAX_SUBDATASETS = 100
 const MAX_DEPTH = 3
@@ -46,11 +47,16 @@ function isHarmless(key, value) {
   if (filter) {
     return ANNEX_FILTER[filter[1]] === value
   }
-  if (/^remote\..+\.url$/.test(key)) {
+  if (/^remote\..+\.(url|pushurl)$/.test(key)) {
     return !/^(ext|fd)::/i.test(value)
   }
-  if (ANNEX_KEY.test(key)) {
-    return !ANNEX_RUNS_PROGRAMS.test(key.replace(/^remote\..+?\.annex-/, 'annex.'))
+  const annex = /^annex\.(.+)$/.exec(key)
+  if (annex) {
+    return ANNEX_HARMLESS.has(annex[1])
+  }
+  const remoteAnnex = /^remote\..+\.annex-(.+)$/.exec(key)
+  if (remoteAnnex) {
+    return REMOTE_ANNEX_HARMLESS.has(remoteAnnex[1])
   }
   return HARMLESS_KEYS.some((pattern) => pattern.test(key))
 }
@@ -148,7 +154,7 @@ async function scanDataladProcedures(runner, root, prefix) {
   }
   for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
     const key = entry.split('\n')[0].toLowerCase()
-    if (/^datalad\.(procedures|locations)\./.test(key)) found.push(`${prefix}datalad config ${key}`)
+    if (/^datalad\.(procedures|locations|clone|get)\./.test(key)) found.push(`${prefix}datalad config ${key}`)
   }
   return found
 }
