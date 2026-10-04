@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, writeFileSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -372,7 +373,9 @@ test('a hook that cannot be read is a not-fully-scanned finding, not a fingerpri
 })
 
 // Push (datalad push) makes git-annex run the REMOTE repository's own hooks when the remote is a local path.
-const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' }, bare = false, url = (path) => path, config = '' } = {}) => {
+// Remote URLs are set with `git config` (which escapes them): a Windows path written by hand into the
+// config file has backslashes, which git reads as escape sequences and rejects.
+const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' }, bare = false, url = (path) => path } = {}) => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-remote-')))
   const remote = join(base, 'R')
   if (bare) {
@@ -386,7 +389,8 @@ const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' },
   const clone = join(base, 'C')
   await mkdir(clone)
   git(clone, 'init', '-q')
-  appendFileSync(join(clone, '.git', 'config'), `${config}[remote "origin"]\n\turl = ${url(remote)}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`)
+  git(clone, 'config', 'remote.origin.url', url(remote))
+  git(clone, 'config', 'remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*')
   return { base, remote, clone }
 }
 
@@ -399,7 +403,7 @@ test("a local-path remote's git-annex hooks are reported before a push", async (
 })
 
 test('file:// and relative remote URLs are local paths too', async () => {
-  for (const url of [(path) => `file://${path}`, () => '../R']) {
+  for (const url of [(path) => pathToFileURL(path).href, () => '../R']) {
     const { clone } = await withRemote({ url })
     assert.match(await flagged(clone), /hook freezecontent-annex/, String(url))
   }
@@ -412,7 +416,7 @@ test('a bare remote is checked', async () => {
 
 test('a url.insteadOf rewrite to a local path is followed', async () => {
   const { clone, base } = await withRemote({ url: () => 'lab:R' })
-  appendFileSync(join(clone, '.git', 'config'), `[url "${base}/"]\n\tinsteadOf = lab:\n`)
+  git(clone, 'config', `url.${base}/.insteadOf`, 'lab:')
   assert.match(await flagged(clone), /hook freezecontent-annex/)
 })
 
@@ -434,7 +438,7 @@ test("a remote that git itself will not open is still checked by looking at its 
   const clone = join(base, 'C')
   await mkdir(clone)
   git(clone, 'init', '-q')
-  appendFileSync(join(clone, '.git', 'config'), `[remote "origin"]\n\turl = ${remote}\n`)
+  git(clone, 'config', 'remote.origin.url', remote)
   assert.match(await flagged(clone), /hook post-update-annex [0-9a-f]{64}/)
 })
 
@@ -455,11 +459,11 @@ test('datalad push to a local-path dataset still works, and its hooks were repor
   const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-push-')))
   const runner = new ProcessRunner()
   const remote = join(base, 'share')
-  execFileSync('datalad', ['create', remote], { stdio: 'ignore' })
+  execFileSync('datalad', ['create', remote], { stdio: 'pipe' })
   await hook(join(remote, '.git'), 'post-update-annex', '#!/bin/sh\n:\n')
   git(remote, 'config', 'receive.denyCurrentBranch', 'updateInstead') // a share that accepts pushes to its checked-out branch
   const clone = join(base, 'mine')
-  execFileSync('datalad', ['install', '-s', remote, clone], { stdio: 'ignore' })
+  execFileSync('datalad', ['install', '-s', remote, clone], { stdio: 'pipe' })
   await writeFile(join(clone, 'f.txt'), 'x')
   await runner.run('datalad', ['-C', clone, 'save', '-m', 'x'], { cwd: clone })
 
