@@ -14,14 +14,15 @@ test(
   'packaged app boots from its asar and opens a real git project',
   { skip: !executable && 'set DLAD_APP_EXECUTABLE to the packaged binary to run' },
   async () => {
-    const app = await launchApp()
+    // The folder is trusted up front: a packaged app asks before opening any folder it did not create.
+    const projectPath = await createPlainGitRepo(await createTempRoot())
+    const app = await launchApp({ trustedPaths: [projectPath] })
     try {
       const href = await app.page.evaluate(() => location.href)
       assert.match(href, /app\.asar/, `renderer was not loaded from app.asar: ${href}`)
 
       // Opening a project makes the packaged main process spawn git and answer
       // over IPC; openProject only returns once the health card has rendered.
-      const projectPath = await createPlainGitRepo(await createTempRoot())
       await app.openProject(projectPath)
     } finally {
       await app.close()

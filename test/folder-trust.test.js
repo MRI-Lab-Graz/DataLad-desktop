@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findExecVectors, createTrustStore, describeVectors, localPath } from '../src/gui/folder-trust.js'
+import { findExecVectors, describeVectors, findRemoteVectors, localPath, localRemotePaths } from '../src/gui/folder-trust.js'
 import { ProcessRunner } from '../src/datalad/process-runner.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
@@ -124,23 +124,6 @@ test('a registered subdataset is scanned too, and reported with its path', async
 
 test('a folder that is not a repository has no vectors', async () => {
   assert.deepEqual(await findExecVectors(await mkdtemp(join(tmpdir(), 'trust-none-'))), [])
-})
-
-test('trust covers the findings the user saw, and a new finding asks again', async () => {
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  const target = await repo()
-  createTrustStore(file).add(target, ['config a'])
-  assert.equal(createTrustStore(file).accepts(target, ['config a']), true)
-  assert.equal(createTrustStore(file).accepts(target, ['config a', 'config b']), false)
-  assert.equal(createTrustStore(file).accepts(target, []), true)
-  assert.equal(createTrustStore(file).accepts(await repo(), ['config a']), false)
-})
-
-test('an old path-only trust file trusts nothing', async () => {
-  const target = await repo()
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  writeFileSync(file, JSON.stringify([target]))
-  assert.equal(createTrustStore(file).accepts(target, ['config a']), false)
 })
 
 // The ground truth: what `datalad create` really writes on this OS must not be flagged
@@ -319,17 +302,6 @@ test('the dialog text lists "not fully scanned" first, caps the rest, and flatte
   assert.match(lines.at(-1), /and 2 more/)
   assert.ok(!describeVectors(['config x = ' + 'y'.repeat(500)]).includes('y'.repeat(200)))
   assert.ok(!describeVectors(vectors).includes('1\n2'))
-})
-
-test('"not fully scanned" is accepted for this session only, never remembered across launches', async () => {
-  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
-  const target = await repo()
-  const vectors = ['config a = 1', 'not fully scanned (more than 3 repositories)']
-  const store = createTrustStore(file)
-  store.add(target, vectors)
-  assert.equal(store.accepts(target, vectors), true)
-  assert.equal(createTrustStore(file).accepts(target, vectors), false)
-  assert.equal(createTrustStore(file).accepts(target, ['config a = 1']), true)
 })
 
 const ANNEX_HOOK_NAMES = ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']
@@ -593,4 +565,68 @@ test('the dialog shortens fingerprints so the hook name stays visible', () => {
   const shown = describeVectors([`remote origin (/a/very/long/path/to/a/lab/share/with/many/folders/that/goes/on/and/on/R): hook pre-receive ${'ab12'.repeat(16)}`])
   assert.match(shown, /hook pre-receive ab12ab12$/)
   assert.ok(!shown.includes('ab12'.repeat(3)))
+})
+
+test('localRemotePaths lists the remotes that are existing local paths', async () => {
+  const { clone, remote } = await withRemote()
+  assert.deepEqual(await localRemotePaths(new ProcessRunner(), clone), [{ name: 'origin', path: remote }])
+})
+
+test('localRemotePaths skips network remotes and a remote that is not there', async () => {
+  const runner = new ProcessRunner()
+  const network = await withRemote({ url: () => 'git@example.invalid:lab/ds.git' })
+  assert.deepEqual(await localRemotePaths(runner, network.clone), [])
+  const gone = await withRemote({ url: () => join(tmpdir(), 'trust-no-such-share', 'ds') })
+  assert.deepEqual(await localRemotePaths(runner, gone.clone), [])
+})
+
+test('findRemoteVectors judges one remote path like a repository, with the label in front', async () => {
+  const { remote } = await withRemote({ hooks: { 'post-receive': '#!/bin/sh\n:\n' } })
+  const out = await findRemoteVectors(new ProcessRunner(), remote, 'R: ')
+  assert.equal(out.length, 1)
+  assert.match(out[0], /^R: hook post-receive [0-9a-f]{64}$/)
+  const clean = await withRemote({ hooks: {} })
+  assert.deepEqual(await findRemoteVectors(new ProcessRunner(), clean.remote), [])
+})
+
+// The same git directory can be reached under two spellings (a symlinked path, `C:/x` and `C:\x` on Windows):
+// a finding must come back once.
+test('findRemoteVectors reports a finding once when the remote is reached under two spellings of its path', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const { base, remote } = await withRemote({ hooks: { 'post-receive': '#!/bin/sh\n:\n' } })
+  const alias = join(base, 'alias')
+  await symlink(remote, alias)
+  const out = await findRemoteVectors(new ProcessRunner(), alias, 'R: ')
+  assert.equal(out.length, 1, out.join('\n'))
+})
+
+// Review 5: the push check listed remotes differently from how git and git-annex find them.
+test('a remote reached only through annexUrl is listed (git-annex pushes there)', async () => {
+  const clean = await withRemote({ hooks: {} })
+  const hooked = await withRemote({ hooks: { 'freezecontent-annex': '#!/bin/sh\n:\n' } })
+  git(clean.clone, 'config', 'remote.origin.annexUrl', hooked.remote)
+  const paths = (await localRemotePaths(new ProcessRunner(), clean.clone)).map((remote) => remote.path)
+  assert.ok(paths.includes(hooked.remote), paths.join(', '))
+  assert.match(await flagged(clean.clone), /hook freezecontent-annex/)
+})
+
+test('a remote URL with a control character cannot be read safely: the push is refused and the scan says so', async () => {
+  const { clone, remote } = await withRemote()
+  git(clone, 'config', 'remote.origin.url', `${remote}x\n${remote}`)
+  await assert.rejects(localRemotePaths(new ProcessRunner(), clone), /cannot read safely/)
+  assert.match(await flagged(clone), /not fully scanned \(a remote URL cannot be read safely/)
+})
+
+test('a relative remote URL is resolved from the work tree root even when the project path is a subfolder', async () => {
+  const { clone, remote } = await withRemote({ url: () => '../R' })
+  const sub = join(clone, 'sub')
+  await mkdir(sub)
+  const paths = (await localRemotePaths(new ProcessRunner(), sub)).map((entry) => entry.path)
+  assert.deepEqual(paths, [remote])
+})
+
+test('an insteadOf rewrite that adds a control character is refused too', async () => {
+  const { clone, base } = await withRemote({ url: () => 'lab:R' })
+  git(clone, 'config', `url.${base}/.insteadOf`, 'lab:')
+  git(clone, 'config', 'url.x.insteadOf', 'a\nb')
+  await assert.rejects(localRemotePaths(new ProcessRunner(), clone), /cannot read safely/)
 })

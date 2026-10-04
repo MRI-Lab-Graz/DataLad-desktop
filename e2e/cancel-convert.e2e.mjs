@@ -7,6 +7,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { launchApp } from './electron-driver.mjs'
 import { createTempRoot, createPlainGitRepo } from './fixtures.mjs'
 
@@ -57,6 +58,12 @@ test('Stop on the busy overlay ends a convert flow as Stopped without starting t
     { timeout: 15_000 }
   )
   await app.page.waitForSelector('#running-commands [data-cancel-run]', { state: 'attached', timeout: 15_000 })
+
+  // The step is stopped while it RUNS: nesting re-checks the project's trust first (a scan), and a Stop pressed during
+  // that cancels before the command starts, so wait until the fake datalad has really been asked to create.
+  for (let waited = 0; waited < 15_000 && !(await readFile(logFile, 'utf8')).includes('create'); waited += 100) {
+    await sleep(100)
+  }
 
   await app.page.evaluate(() => document.getElementById('global-busy-stop').click())
 

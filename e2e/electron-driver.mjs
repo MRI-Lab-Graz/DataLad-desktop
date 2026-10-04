@@ -6,14 +6,16 @@ import { chromium } from 'playwright-core'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import electronPath from 'electron'
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 // `identity: false` launches against an empty global git config, like a fresh Windows machine.
-export async function launchApp({ identity = true, env = {} } = {}) {
+// `trustedPaths`: folders the app already trusts at launch, like a user who confirmed them before. A packaged app
+// never auto-answers its trust dialog (only an unpackaged one started by this driver does), so its tests need this.
+export async function launchApp({ identity = true, env = {}, trustedPaths = [] } = {}) {
   // Setting this to '' (rather than deleting it) does NOT reliably clear it
   // on Windows: empty-string env vars get dropped when child_process builds
   // the Windows environment block, so the parent's truthy value (if any)
@@ -39,6 +41,10 @@ export async function launchApp({ identity = true, env = {} } = {}) {
   // Same idea for git: never read or write the developer's real ~/.gitconfig (the
   // app now manages user.name/user.email there). CI runners have no identity, so by
   // default this one has one; the identity e2e launches without it.
+  if (trustedPaths.length > 0) {
+    const records = Object.fromEntries(await Promise.all(trustedPaths.map(async (path) => [await realpath(path), []])))
+    await writeFile(join(userDataDir, 'trusted-folders.json'), JSON.stringify(records)) // version 1 format: folder trust
+  }
   const gitConfigGlobal = join(userDataDir, 'gitconfig')
   await writeFile(gitConfigGlobal, identity ? '[user]\n\tname = E2E Test\n\temail = e2e@example.org\n' : '')
   childEnv.GIT_CONFIG_GLOBAL = gitConfigGlobal

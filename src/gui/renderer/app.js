@@ -239,7 +239,8 @@ wireFolderPicker(elements.pickCommandProjectPathButton, elements.commandProjectP
 })
 
 wireFolderPicker(elements.pickGetRemoteNetworkPathButton, elements.getRemoteSourceNetwork, {
-  title: 'Select network or local source folder'
+  title: 'Select network or local source folder',
+  purpose: 'source' // read from, never opened as a project: no trust prompt
 })
 
 wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
@@ -2303,7 +2304,8 @@ function wireFolderPicker(button, input, options) {
     try {
       selectedPath = await api.pickDirectory({
         title: options.title,
-        defaultPath: input.value.trim()
+        defaultPath: input.value.trim(),
+        purpose: options.purpose
       })
     } catch (error) {
       setLastActionState('Could not open folder picker.', 'error')
