@@ -1,4 +1,5 @@
-import { lstat, readdir } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { lstat, readdir, readFile } from 'node:fs/promises'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { ProcessRunner } from '../datalad/process-runner.js'
@@ -32,6 +33,7 @@ const HARMLESS_KEYS = [
 const ANNEX_HARMLESS = new Set(['uuid', 'version', 'crippledfilesystem', 'adjustedbranchrefresh', 'backend', 'freezecontent', 'sshcaching'])
 const REMOTE_ANNEX_HARMLESS = new Set(['uuid', 'ignore', 'cost', 'sync', 'readonly', 'bare', 'config-uuid'])
 
+export const NOT_FULLY_SCANNED = 'not fully scanned'
 const MAX_REPOS = 200
 const MAX_ENTRIES = 200000
 const GIT_TIMEOUT_MS = 15000
@@ -65,11 +67,33 @@ async function scanRepo(runner, repo, prefix) {
     for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
       const [key, ...rest] = entry.split('\n')
       if (!isHarmless(key, rest.join('\n'))) {
-        found.push(`${prefix}config ${key.toLowerCase()}`)
+        found.push(`${prefix}config ${key.toLowerCase()} = ${rest.join('\n')}`)
       }
     }
   }
   found.push(...(await scanDataladProcedures(runner, repo, prefix)))
+  const common = await git(['rev-parse', '--path-format=absolute', '--git-common-dir'])
+  if (!common.failed) {
+    found.push(...(await scanAnnexHooks(join(common.stdout.trim(), 'hooks'), prefix)))
+  }
+  return found
+}
+
+// git's own hooks never run (core.hooksPath, process-runner.js), but git-annex runs two hooks itself
+// from the repository's own hooks folder and ignores core.hooksPath. The fingerprint makes a changed
+// hook a new finding.
+async function scanAnnexHooks(hooksDir, prefix) {
+  let names = []
+  try {
+    names = await readdir(hooksDir)
+  } catch {
+    return []
+  }
+  const found = []
+  for (const name of names.filter((n) => /annex/i.test(n) && !n.endsWith('.sample'))) {
+    const body = await readFile(join(hooksDir, name)).catch(() => null)
+    found.push(`${prefix}hook ${name}${body ? ` ${createHash('sha256').update(body).digest('hex').slice(0, 8)}` : ''}`)
+  }
   return found
 }
 
@@ -95,14 +119,16 @@ async function findRepoDirs(root, maxEntries) {
     } catch {
       continue // unreadable: git cannot read it either
     }
+    // Ask the filesystem what git asks: on macOS and Windows a folder named .GIT (or .Git) is the repository.
+    if (await lstat(join(dir, '.git')).then(() => true, () => false)) {
+      repos.push(dir)
+    }
     for (const entry of entries) {
       seen += 1
       if (seen > maxEntries) {
         return { repos, truncated: true }
       }
-      if (entry.name === '.git') {
-        repos.push(dir)
-      } else if (entry.isDirectory()) {
+      if (entry.isDirectory() && entry.name.toLowerCase() !== '.git') {
         queue.push(join(dir, entry.name))
       }
     }
@@ -132,8 +158,9 @@ async function scanDataladProcedures(runner, root, prefix) {
     found.push(`${prefix}datalad config (unreadable)`)
   }
   for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
-    const key = entry.split('\n')[0].toLowerCase()
-    if (/^datalad\.(procedures|locations|clone|get)\./.test(key)) found.push(`${prefix}datalad config ${key}`)
+    const [name, ...rest] = entry.split('\n')
+    const key = name.toLowerCase()
+    if (/^datalad\.(procedures|locations|clone|get)\./.test(key)) found.push(`${prefix}datalad config ${key} = ${rest.join('\n')}`)
   }
   return found
 }
@@ -147,8 +174,10 @@ const canonical = (path) => {
 }
 
 // Remembers, per folder, the findings the user accepted. The folder is re-scanned on every open,
-// so a finding that was not there when the user said yes (a new hook-like setting, a nested repo that
-// appeared) asks again. A file in the old format (a plain list of paths) accepts nothing.
+// so a finding that was not there when the user said yes (a new setting, a changed command, a nested
+// repo that appeared) asks again. A file in the old format (a plain list of paths) accepts nothing.
+// "Not fully scanned" is accepted for this launch only: remembering it would turn everything past
+// the scan limit into a permanent pass.
 export function createTrustStore(file) {
   let accepted = {}
   try {
@@ -159,16 +188,36 @@ export function createTrustStore(file) {
   } catch {
     // first run, or unreadable: start empty (fail closed: ask again)
   }
+  const thisLaunch = new Map()
+  const unscanned = (vector) => vector.startsWith(NOT_FULLY_SCANNED)
   return {
     accepts(path, vectors) {
-      const known = accepted[canonical(path)]
-      return vectors.every((vector) => Array.isArray(known) && known.includes(vector))
+      const key = canonical(path)
+      const known = accepted[key]
+      return vectors.every((vector) => (Array.isArray(known) && known.includes(vector)) || thisLaunch.get(key)?.has(vector))
     },
     add(path, vectors) {
-      accepted[canonical(path)] = [...vectors]
+      const key = canonical(path)
+      accepted[key] = vectors.filter((vector) => !unscanned(vector))
+      thisLaunch.set(key, new Set(vectors.filter(unscanned)))
       writeFileSync(file, JSON.stringify(accepted))
     }
   }
+}
+
+// What the trust dialog shows: "not fully scanned" first (it must never hide behind the cap), each
+// finding flattened to one short line, and a count of whatever did not fit.
+export function describeVectors(vectors, { max = 5, width = 120 } = {}) {
+  const oneLine = (vector) => {
+    const flat = vector.replace(/\s+/g, ' ').trim()
+    return flat.length > width ? `${flat.slice(0, width - 1)}…` : flat
+  }
+  const ordered = [...vectors.filter((v) => v.startsWith(NOT_FULLY_SCANNED)), ...vectors.filter((v) => !v.startsWith(NOT_FULLY_SCANNED))]
+  const lines = ordered.slice(0, max).map(oneLine)
+  if (ordered.length > max) {
+    lines.push(`…and ${ordered.length - max} more`)
+  }
+  return lines.join('\n')
 }
 
 export async function findExecVectors(projectPath, { runner = new ProcessRunner(), maxRepos = MAX_REPOS, maxEntries = MAX_ENTRIES } = {}) {
@@ -216,7 +265,7 @@ export async function findExecVectors(projectPath, { runner = new ProcessRunner(
   }
 
   if (limit) {
-    found.push(`not fully scanned (${limit})`)
+    found.push(`${NOT_FULLY_SCANNED} (${limit})`)
   }
   return [...new Set(found)]
 }

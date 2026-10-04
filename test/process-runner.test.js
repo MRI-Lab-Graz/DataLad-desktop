@@ -556,3 +556,21 @@ test('taskkill comes from the Windows system folder, wherever Windows lives', ()
   assert.match(taskkillPath({ SystemRoot: 'D:\\Win' }), /System32[\\/]taskkill\.exe$/)
   assert.ok(taskkillPath({}).startsWith('C:\\Windows'))
 })
+
+// Regression from the review of the hooks design: the shipped hooks ran `git annex ...` in every
+// repository, so a plain git project (or `datalad create --no-annex`) could no longer commit.
+test('the app can commit in a repository that does not use git-annex', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plain-'))
+  execFileSync('git', ['init', '-q', dir])
+  await writeFile(join(dir, 'a.txt'), 'x')
+  const runner = new ProcessRunner()
+  await runner.run('git', ['-C', dir, 'add', 'a.txt'])
+  const result = await runner.run('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-q', '-m', 'x'])
+  assert.equal(result.failed, false, result.stderr)
+})
+
+test('every shipped hook does nothing in a repository that has no git-annex uuid', () => {
+  for (const name of readdirSync(HOOKS_DIR)) {
+    assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\ngit config --get annex\.uuid >\/dev\/null 2>&1 \|\| exit 0\n/, name)
+  }
+})

@@ -14,7 +14,7 @@ import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
-import { createTrustStore, findExecVectors } from './folder-trust.js'
+import { createTrustStore, describeVectors, findExecVectors } from './folder-trust.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -91,7 +91,7 @@ async function requireTrustedFolder(event, projectPath) {
     title: 'Only open folders you trust',
     message: 'This folder can run programs on your computer.',
     detail:
-      `${projectPath}\n\nIt contains settings that make Git run commands (${vectors.slice(0, 5).join(', ')}). ` +
+      `${projectPath}\n\nIt contains settings that make Git run commands:\n${describeVectors(vectors)}\n\n` +
       'Open it only if you know where it came from.'
   })
   if (response !== 1) {

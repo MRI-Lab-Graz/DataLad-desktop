@@ -2,10 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, writeFileSync } from 'node:fs'
-import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findExecVectors, createTrustStore } from '../src/gui/folder-trust.js'
+import { findExecVectors, createTrustStore, describeVectors } from '../src/gui/folder-trust.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
 const ANNEX_FILTER = `[filter "annex"]
@@ -267,4 +267,65 @@ test('hitting the scan limit is reported, never a silent pass', async () => {
 test("a repository's own hook is no longer reported: hooks never run", async () => {
   const dir = await repo({ hooks: { 'pre-commit': '#!/bin/sh\necho hi\n' } })
   assert.deepEqual(await findExecVectors(dir), [])
+})
+
+// git-annex runs these two hooks itself, from the repository's own .git/hooks, and ignores core.hooksPath.
+test("git-annex's own per-repository hooks are reported, with a fingerprint of their content", async () => {
+  const dir = await repo({ hooks: { 'pre-commit-annex': '#!/bin/sh\nevil\n', 'post-update-annex': '#!/bin/sh\nevil\n' } })
+  const out = await flagged(dir)
+  assert.match(out, /hook pre-commit-annex [0-9a-f]{8}/)
+  assert.match(out, /hook post-update-annex [0-9a-f]{8}/)
+  const changed = await repo({ hooks: { 'pre-commit-annex': '#!/bin/sh\nsomething else\n' } })
+  assert.notEqual((await flagged(changed)).match(/hook pre-commit-annex ([0-9a-f]{8})/)[1], out.match(/hook pre-commit-annex ([0-9a-f]{8})/)[1])
+})
+
+test('the stock git-annex hooks and other hooks (which never run) are not reported', async () => {
+  const dir = await repo({ hooks: { 'pre-commit': ANNEX_PRE_COMMIT, 'post-commit': '#!/bin/sh\necho hi\n' } })
+  assert.deepEqual(await findExecVectors(dir), [])
+})
+
+// On a case-insensitive filesystem (macOS, Windows) git uses a folder named .GIT or .Git as the repository.
+test('a nested repository whose git folder is named .GIT is scanned', async () => {
+  const top = await realpath(await mkdtemp(join(tmpdir(), 'trust-')))
+  const sub = join(top, 'sub-01')
+  await mkdir(sub)
+  git(sub, 'init', '-q')
+  appendFileSync(join(sub, '.git', 'config'), '[filter "x"]\n\tclean = y\n')
+  await rename(join(sub, '.git'), join(sub, '.GIT'))
+  let gitSeesIt = true
+  try {
+    git(sub, 'rev-parse', '--git-dir')
+  } catch {
+    gitSeesIt = false // case-sensitive filesystem: git ignores .GIT too, so there is nothing to find
+  }
+  if (!gitSeesIt) return
+  assert.match(await flagged(top), /sub-01: config filter\.x\.clean/)
+})
+
+test('a finding names the value, so a changed command is a new finding', async () => {
+  const one = await flagged(await repo({ config: '[core]\n\tsshCommand = evil one\n' }))
+  const two = await flagged(await repo({ config: '[core]\n\tsshCommand = evil two\n' }))
+  assert.match(one, /config core\.sshcommand = evil one/)
+  assert.notEqual(one, two)
+})
+
+test('the dialog text lists "not fully scanned" first, caps the rest, and flattens each finding to one line', () => {
+  const vectors = ['config a = 1\n2', 'config b', 'config c', 'config d', 'config e', 'config f', 'not fully scanned (more than 3 repositories)']
+  const lines = describeVectors(vectors).split('\n')
+  assert.match(lines[0], /not fully scanned/)
+  assert.equal(lines.length, 6)
+  assert.match(lines.at(-1), /and 2 more/)
+  assert.ok(!describeVectors(['config x = ' + 'y'.repeat(500)]).includes('y'.repeat(200)))
+  assert.ok(!describeVectors(vectors).includes('1\n2'))
+})
+
+test('"not fully scanned" is accepted for this session only, never remembered across launches', async () => {
+  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
+  const target = await repo()
+  const vectors = ['config a = 1', 'not fully scanned (more than 3 repositories)']
+  const store = createTrustStore(file)
+  store.add(target, vectors)
+  assert.equal(store.accepts(target, vectors), true)
+  assert.equal(createTrustStore(file).accepts(target, vectors), false)
+  assert.equal(createTrustStore(file).accepts(target, ['config a = 1']), true)
 })

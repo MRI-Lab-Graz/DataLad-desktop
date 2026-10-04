@@ -64,3 +64,8 @@ test('SECURITY.md documents the execution layer: app-owned hooks, no reckless cl
   assert.match(runner, /DATALAD_CLONE_RECKLESS/)
   assert.ok(existsSync(new URL('../build/git-hooks/pre-commit', import.meta.url)))
 })
+
+test('SECURITY.md documents the git-annex own hooks and the per-launch "not fully scanned" acceptance', () => {
+  assert.match(doc, /pre-commit-annex/)
+  assert.match(doc, /this launch|current launch|this session/i)
+})
