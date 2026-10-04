@@ -92,9 +92,10 @@ the path itself (findings subset and identity match), otherwise ask.
 ## Where it is enforced
 
 - `adapter:detectProject` and `dialog:pickDirectory`: `requireTrust(path, 'folder')` then `authorizeRoot`.
-- `adapter:runCommand` create/clone: a missing or empty target is trusted and authorized after success; an
-  existing non-empty target (adopt) goes through `requireTrust` before the command; a clone is not authorized
-  afterwards (its first open asks).
+- `adapter:runCommand` `createProject`: a missing or empty target is trusted and authorized after success; an
+  existing non-empty target (adopt) goes through `requireTrust` before the command.
+- `adapter:runCommand` `cloneInstall`: the target is never trusted automatically, because the content comes from
+  elsewhere. It is not authorized after the clone; its first open asks.
 - `adapter:runCommand` `push`: `requireTrust` for the project and for every local-path remote of it
   (`kind: 'remote'`), right before the command.
 - All other handlers keep `requireAuthorizedRoot`, which now implies trust.
