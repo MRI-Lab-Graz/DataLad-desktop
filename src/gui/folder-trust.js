@@ -181,7 +181,8 @@ export async function findRemoteVectors(runner, path, label = '') {
   // Git may refuse the folder (it belongs to someone else), so the usual layouts are also read directly.
   const asked = await runner.run('git', ['-C', path, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
   const askedDirs = new Set(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))
-  for (const dir of new Set([join(path, '.git'), path, ...askedDirs])) {
+  // The same git dir can be spelled two ways (a symlinked path; `C:/x` and `C:\x` on Windows): scan it once.
+  for (const dir of new Set([join(path, '.git'), path, ...askedDirs].map((dir) => resolve(dir)))) {
     // A folder with a HEAD (or one git itself named) is a git dir: its config and every hook are judged.
     // Otherwise only git-annex's own hook names are looked up (a plain "hooks" folder is just a folder).
     const isGitDir = askedDirs.has(dir) || (await exists(join(dir, 'HEAD')))
@@ -200,7 +201,7 @@ export async function findRemoteVectors(runner, path, label = '') {
       found.push(...judgeConfig(listed.stdout, label))
     }
   }
-  return found
+  return [...new Set(found)]
 }
 
 async function scanLocalRemotes(runner, repo, prefix) {

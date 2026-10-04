@@ -588,3 +588,13 @@ test('findRemoteVectors judges one remote path like a repository, with the label
   const clean = await withRemote({ hooks: {} })
   assert.deepEqual(await findRemoteVectors(new ProcessRunner(), clean.remote), [])
 })
+
+// The same git directory can be reached under two spellings (a symlinked path, `C:/x` and `C:\x` on Windows):
+// a finding must come back once.
+test('findRemoteVectors reports a finding once when the remote is reached under two spellings of its path', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const { base, remote } = await withRemote({ hooks: { 'post-receive': '#!/bin/sh\n:\n' } })
+  const alias = join(base, 'alias')
+  await symlink(remote, alias)
+  const out = await findRemoteVectors(new ProcessRunner(), alias, 'R: ')
+  assert.equal(out.length, 1, out.join('\n'))
+})
