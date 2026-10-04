@@ -533,3 +533,13 @@ test('taskkill is started by absolute path, not looked up in a dataset-controlle
   const src = readFileSync(new URL('../src/datalad/kill-tree.js', import.meta.url), 'utf8')
   assert.match(src, /SystemRoot[^\n]*System32[^\n]*taskkill\.exe/)
 })
+
+// A Windows checkout converts line endings by default, and `#!/bin/sh\r` fails under git's shell:
+// every git-annex hook would break. The hooks must be checked out (and packaged) with LF.
+test('the git hooks keep LF line endings on every checkout', () => {
+  const attributes = readFileSync(new URL('../.gitattributes', import.meta.url), 'utf8')
+  assert.match(attributes, /^build\/git-hooks\/\*\s+text\s+eol=lf\s*$/m)
+  for (const name of readdirSync(HOOKS_DIR)) {
+    assert.doesNotMatch(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\r/, `${name} has CRLF line endings`)
+  }
+})
