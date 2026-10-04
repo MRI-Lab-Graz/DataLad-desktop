@@ -14,7 +14,9 @@ import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
-import { createTrustStore, describeVectors, findExecVectors } from './folder-trust.js'
+import { findExecVectors, findRemoteVectors, localRemotePaths } from './folder-trust.js'
+import { createTrustStore } from './trust-store.js'
+import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -69,36 +71,38 @@ async function runWithHandle(event, runId, run) {
   }
 }
 
-let trustStore
-const folderTrust = () => (trustStore ??= createTrustStore(join(app.getPath('userData'), 'trusted-folders.json')))
+// Folders the user picked in the native dialog that were empty: only a place for a new project, never a root.
+const pickedLocations = new Set()
 
-// Opening a folder runs git in it, and a folder from elsewhere can name programs for git
-// to run (config, filters). The folder is re-scanned on every open; the user is asked about
-// each finding once and a new finding asks again.
-async function requireTrustedFolder(event, projectPath) {
-  if (typeof projectPath !== 'string') {
-    return
+// E2E has no human: an unpackaged app started by the e2e driver answers "this folder" itself;
+// a packaged app never does.
+async function askToTrust({ path, kind, vectors, event }) {
+  if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
+    return 'folder'
   }
-  const vectors = await findExecVectors(projectPath)
-  if (vectors.length === 0 || folderTrust().accepts(projectPath, vectors)) {
-    return
-  }
+  const prompt = describeTrustPrompt({ path, kind, vectors })
   const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
     type: 'warning',
-    buttons: ['Cancel', 'Open and trust this folder'],
+    buttons: prompt.buttons,
     defaultId: 0,
     cancelId: 0,
-    title: 'Only open folders you trust',
-    message: 'This folder can run programs on your computer.',
-    detail:
-      `${projectPath}\n\nIt contains settings that make Git run commands:\n${describeVectors(vectors)}\n\n` +
-      'Open it only if you know where it came from.'
+    title: prompt.title,
+    message: prompt.message,
+    detail: prompt.detail
   })
-  if (response !== 1) {
-    throw new Error('Folder not opened: it was not trusted.')
-  }
-  folderTrust().add(projectPath, vectors)
+  return ['cancel', 'folder', 'tree'][response]
 }
+
+// The only way a folder becomes a project root: the user said yes, an administrator listed its location,
+// or the app created it empty. What the scan finds is advice for the prompt and change detection.
+let gate
+const trustGate = () =>
+  (gate ??= createTrustGate({
+    store: createTrustStore({ file: join(app.getPath('userData'), 'trusted-folders.json'), adminRoots: policy.trustedRoots }),
+    scan: (path, kind) => (kind === 'remote' ? findRemoteVectors(consoleRunner, path) : findExecVectors(path)),
+    ask: askToTrust,
+    authorize: authorizeRoot
+  }))
 
 // Native yes/no the renderer cannot answer. E2E drives the real app without a human, so an
 // unpackaged build started by the e2e driver answers yes itself; a packaged app never does.
@@ -223,12 +227,8 @@ handle('adapter:checkEnvironment', async () => {
 })
 
 handle('adapter:detectProject', async (event, projectPath) => {
-  await requireTrustedFolder(event, projectPath)
-  const result = await adapter.detectProject(projectPath)
-  if (result?.classification) {
-    authorizeRoot(projectPath)
-  }
-  return result
+  await trustGate().require(projectPath, { event })
+  return adapter.detectProject(projectPath)
 })
 
 // Read-only probe of a folder that isn't (and may never become) a project —
@@ -252,27 +252,37 @@ handle('adapter:untrackPath', async (_event, payload = {}) => {
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
 })
 
-// clone/create targets don't exist yet; they are authorized after they succeed.
+// create/clone targets do not exist yet (or are empty); see the trust rules in the handler below.
 const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
 
 handle('adapter:runCommand', async (event, payload) => {
+  const target = payload.request?.targetPath
+  let createdEmpty = false
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
-    // A push to a local-path remote (a share, a USB stick) makes git-annex run that remote's own hooks, and
-    // the remote may have changed since the folder was opened: look again right before.
+    // A push to a local-path remote (a share, a USB stick) runs that remote's own hooks and uses its config, and
+    // the project or the remote may have changed since it was trusted: look again, right before.
     if (payload.commandName === 'push') {
-      await requireTrustedFolder(event, payload.request.projectPath)
+      await trustGate().require(payload.request.projectPath, { event })
+      for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
+        await trustGate().require(remote.path, { kind: 'remote', event })
+      }
     }
   } else {
-    // `create --force` over an existing folder runs that folder's own hooks.
-    const target = payload.request?.targetPath
     if (typeof target !== 'string' || !target.trim()) {
       throw new Error('Choose a folder first.')
     }
-    if (!isWithinAuthorizedRoot(target)) {
+    if (!isWithinAuthorizedRoot(target) && !isWithinRoots(target, pickedLocations)) {
       await confirmNewProjectLocation(event, target)
     }
-    await requireTrustedFolder(event, target)
+    // Only a new, empty project is the app's own. Adopting an existing folder (`create --force`) runs that
+    // folder's own settings, and a clone brings content from elsewhere: those are asked about, a clone on its first open.
+    if (payload.commandName === 'createProject') {
+      createdEmpty = await isEmptyOrMissing(target)
+      if (!createdEmpty) {
+        await trustGate().require(target, { event })
+      }
+    }
   }
 
   let request = payload.request
@@ -298,11 +308,8 @@ handle('adapter:runCommand', async (event, payload) => {
   const result = await runWithHandle(event, payload.runId, (runOptions) =>
     adapter.runCommand(payload.commandName, request, runOptions)
   )
-  if (
-    result?.ok &&
-    (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
-  ) {
-    authorizeRoot(request?.targetPath)
+  if (result?.ok && createdEmpty) {
+    trustGate().createdByApp(request.targetPath)
   }
   return result
 })
@@ -480,13 +487,18 @@ handle('dialog:pickDirectory', async (_event, options = {}) => {
     return null
   }
 
+  const picked = result.filePaths[0]
+  // An empty folder has nothing to trust yet: it is only a place to create a project in.
+  if (await isEmptyOrMissing(picked)) {
+    pickedLocations.add(resolve(picked))
+    return picked
+  }
   try {
-    await requireTrustedFolder(_event, result.filePaths[0])
+    await trustGate().require(picked, { event: _event })
   } catch {
     return null // the user declined to trust it: it is not authorized
   }
-  authorizeRoot(result.filePaths[0])
-  return result.filePaths[0]
+  return picked
 })
 
 handle('fs:listEntries', async (_event, payload = {}) => {
