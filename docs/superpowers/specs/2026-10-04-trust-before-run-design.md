@@ -1,6 +1,6 @@
 # Trust before run: design
 
-Date: 2026-10-04. Status: draft for review.
+Date: 2026-10-04. Status: approved by the owner (2026-10-04), with the ownership check below deferred.
 
 ## Why
 
@@ -133,6 +133,24 @@ the path itself (findings subset and identity match), otherwise ask.
   this folder"; wiring test keeps it dead in packaged builds.
 - `SECURITY.md` and its doc test are updated: the rule, the prompt, `trustedRoots`, the scanner's new role, the
   limits.
+
+## Shared folders: what protects them in this version
+
+Another person who can write into a share you trusted can change hooks and settings there after the fact. The
+app cannot tell a legitimate change from a malicious one, and git identities do not help: author names and
+emails are self-declared, and the files that run code (`.git/hooks`, `.git/config`, git-annex hooks, a remote's
+own hooks) are loose files with no author and no signature. The control for this version is therefore the share's
+own permissions: only people you trust may write to the datasets and their `.git` folders. This goes into
+`SECURITY.md` and the deployment notes. Keeping working copies local and using a share only as a push target helps
+too: the per-remote prompt covers that case.
+
+## Later (not in this version)
+
+**Ownership and permission check** (decided 2026-10-04 to defer): treat a trusted folder as trusted only while it
+is owned by the current user or an administrator-listed account and is not writable by group or others. This
+would narrow the shared-folder gap above. macOS and Linux first (a file stat is enough); Windows needs a safe way
+to read access-control lists and is a separate decision. It would be an extra condition on `trustedRoots` and on
+`folder`/`tree` records, so the trust store format (`version: 2`) should leave room for it.
 
 ## Open risks
 
