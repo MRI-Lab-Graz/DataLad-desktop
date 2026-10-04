@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -124,14 +124,21 @@ test('a folder that is not a repository has no vectors', async () => {
   assert.deepEqual(await findExecVectors(await mkdtemp(join(tmpdir(), 'trust-none-'))), [])
 })
 
-test('the trust store remembers folders across instances', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'trust-store-'))
-  const file = join(dir, 'trusted.json')
+test('trust covers the findings the user saw, and a new finding asks again', async () => {
+  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
   const target = await repo()
-  const first = createTrustStore(file)
-  assert.equal(first.has(target), false)
-  first.add(target)
-  assert.equal(createTrustStore(file).has(target), true)
+  createTrustStore(file).add(target, ['config a'])
+  assert.equal(createTrustStore(file).accepts(target, ['config a']), true)
+  assert.equal(createTrustStore(file).accepts(target, ['config a', 'config b']), false)
+  assert.equal(createTrustStore(file).accepts(target, []), true)
+  assert.equal(createTrustStore(file).accepts(await repo(), ['config a']), false)
+})
+
+test('an old path-only trust file trusts nothing', async () => {
+  const target = await repo()
+  const file = join(await mkdtemp(join(tmpdir(), 'trust-store-')), 'trusted.json')
+  writeFileSync(file, JSON.stringify([target]))
+  assert.equal(createTrustStore(file).accepts(target, ['config a']), false)
 })
 
 // The ground truth: what `datalad create` really writes on this OS must not be flagged

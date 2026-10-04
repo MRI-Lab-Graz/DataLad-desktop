@@ -30,3 +30,13 @@ test('create/clone check trust of an existing target before running anything', (
   const body = block("handle('adapter:runCommand'")
   assert.match(body, /!COMMANDS_CREATING_A_NEW_PROJECT\.has\([^)]*\)\) \{[^}]*\} else \{[^}]*await requireTrustedFolder\(event, payload\.request\?\.targetPath\)/)
 })
+
+test('every open re-scans; trust is checked against the current findings', () => {
+  assert.match(main, /findExecVectors\(projectPath\)[\s\S]*?folderTrust\(\)\.accepts\(projectPath, vectors\)/)
+  assert.doesNotMatch(main, /folderTrust\(\)\.has\(/)
+})
+
+test("the app's own clone/create is not trusted blindly: a clone with findings is asked about on first open", () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.doesNotMatch(body, /folderTrust\(\)\.add\(/)
+})

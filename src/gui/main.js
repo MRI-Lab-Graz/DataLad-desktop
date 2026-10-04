@@ -72,13 +72,14 @@ let trustStore
 const folderTrust = () => (trustStore ??= createTrustStore(join(app.getPath('userData'), 'trusted-folders.json')))
 
 // Opening a folder runs git in it, and a folder from elsewhere can name programs for git
-// to run (hooks, config). Ask once per folder; the app's own clones/creates are trusted.
+// to run (config, filters). The folder is re-scanned on every open; the user is asked about
+// each finding once and a new finding asks again.
 async function requireTrustedFolder(event, projectPath) {
-  if (typeof projectPath !== 'string' || folderTrust().has(projectPath)) {
+  if (typeof projectPath !== 'string') {
     return
   }
   const vectors = await findExecVectors(projectPath)
-  if (vectors.length === 0) {
+  if (vectors.length === 0 || folderTrust().accepts(projectPath, vectors)) {
     return
   }
   const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
@@ -95,7 +96,7 @@ async function requireTrustedFolder(event, projectPath) {
   if (response !== 1) {
     throw new Error('Folder not opened: it was not trusted.')
   }
-  folderTrust().add(projectPath)
+  folderTrust().add(projectPath, vectors)
 }
 
 function authorizeRoot(rootPath) {
@@ -254,7 +255,6 @@ handle('adapter:runCommand', async (event, payload) => {
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
   ) {
     authorizeRoot(request?.targetPath)
-    folderTrust().add(request.targetPath)
   }
   return result
 })

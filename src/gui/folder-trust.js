@@ -146,18 +146,27 @@ const canonical = (path) => {
   }
 }
 
+// Remembers, per folder, the findings the user accepted. The folder is re-scanned on every open,
+// so a finding that was not there when the user said yes (a new hook-like setting, a nested repo that
+// appeared) asks again. A file in the old format (a plain list of paths) accepts nothing.
 export function createTrustStore(file) {
-  let trusted = new Set()
+  let accepted = {}
   try {
-    trusted = new Set(JSON.parse(readFileSync(file, 'utf8')))
+    const parsed = JSON.parse(readFileSync(file, 'utf8'))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      accepted = parsed
+    }
   } catch {
     // first run, or unreadable: start empty (fail closed: ask again)
   }
   return {
-    has: (path) => trusted.has(canonical(path)),
-    add(path) {
-      trusted.add(canonical(path))
-      writeFileSync(file, JSON.stringify([...trusted]))
+    accepts(path, vectors) {
+      const known = accepted[canonical(path)]
+      return vectors.every((vector) => Array.isArray(known) && known.includes(vector))
+    },
+    add(path, vectors) {
+      accepted[canonical(path)] = [...vectors]
+      writeFileSync(file, JSON.stringify(accepted))
     }
   }
 }
