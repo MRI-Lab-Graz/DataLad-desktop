@@ -369,3 +369,70 @@ test('a hook that cannot be read is a not-fully-scanned finding, not a fingerpri
   assert.match(out, /not fully scanned \(cannot read hook pre-commit-annex/)
   assert.doesNotMatch(out, /hook pre-commit-annex [0-9a-f]{64}/)
 })
+
+// Push (datalad push) makes git-annex run the REMOTE repository's own hooks when the remote is a local path.
+const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' }, bare = false, url = (path) => path, config = '' } = {}) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-remote-')))
+  const remote = join(base, 'R')
+  if (bare) {
+    git(base, 'init', '-q', '--bare', remote)
+    await hook(remote, 'freezecontent-annex', hooks['freezecontent-annex'])
+  } else {
+    await mkdir(remote)
+    git(remote, 'init', '-q')
+    for (const [name, body] of Object.entries(hooks)) await hook(join(remote, '.git'), name, body)
+  }
+  const clone = join(base, 'C')
+  await mkdir(clone)
+  git(clone, 'init', '-q')
+  appendFileSync(join(clone, '.git', 'config'), `${config}[remote "origin"]\n\turl = ${url(remote)}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`)
+  return { base, remote, clone }
+}
+
+test("a local-path remote's git-annex hooks are reported before a push", async () => {
+  const { clone, remote } = await withRemote()
+  const out = await flagged(clone)
+  assert.match(out, /remote origin/)
+  assert.ok(out.includes(remote))
+  assert.match(out, /hook freezecontent-annex [0-9a-f]{64}/)
+})
+
+test('file:// and relative remote URLs are local paths too', async () => {
+  for (const url of [(path) => `file://${path}`, () => '../R']) {
+    const { clone } = await withRemote({ url })
+    assert.match(await flagged(clone), /hook freezecontent-annex/, String(url))
+  }
+})
+
+test('a bare remote is checked', async () => {
+  const { clone } = await withRemote({ bare: true })
+  assert.match(await flagged(clone), /hook freezecontent-annex [0-9a-f]{64}/)
+})
+
+test('a url.insteadOf rewrite to a local path is followed', async () => {
+  const { clone, base } = await withRemote({ url: () => 'lab:R' })
+  appendFileSync(join(clone, '.git', 'config'), `[url "${base}/"]\n\tinsteadOf = lab:\n`)
+  assert.match(await flagged(clone), /hook freezecontent-annex/)
+})
+
+test('network remotes are not local paths, and an unplugged local remote is not a finding', async () => {
+  for (const url of ['git@example.invalid:lab/ds.git', 'ssh://example.invalid/lab/ds', 'https://example.invalid/ds.git']) {
+    const { clone } = await withRemote({ url: () => url })
+    assert.deepEqual(await findExecVectors(clone), [], url)
+  }
+  const { clone } = await withRemote({ url: () => join(tmpdir(), 'trust-no-such-share', 'ds') })
+  assert.deepEqual(await findExecVectors(clone), [])
+})
+
+// git can refuse a folder owned by someone else (the usual case on a shared drive), so the layouts are also read directly.
+test("a remote that git itself will not open is still checked by looking at its hooks folders", async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-remote-')))
+  const remote = join(base, 'R')
+  await mkdir(remote)
+  await hook(join(remote, '.git'), 'post-update-annex', '#!/bin/sh\n:\n') // a .git folder git cannot use: no HEAD, no objects
+  const clone = join(base, 'C')
+  await mkdir(clone)
+  git(clone, 'init', '-q')
+  appendFileSync(join(clone, '.git', 'config'), `[remote "origin"]\n\turl = ${remote}\n`)
+  assert.match(await flagged(clone), /hook post-update-annex [0-9a-f]{64}/)
+})

@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto'
 import { lstat, readdir, readFile } from 'node:fs/promises'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
-import { join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ProcessRunner } from '../datalad/process-runner.js'
 
 // A repo copied from a zip, USB stick or shared folder brings its own .git/config, and git runs
@@ -78,6 +79,59 @@ async function scanRepo(runner, repo, prefix) {
   }
   for (const gitDir of sites ?? []) {
     found.push(...(await annexHooksIn(gitDir, prefix)))
+  }
+  found.push(...(await scanLocalRemotes(runner, repo, prefix)))
+  return found
+}
+
+// A push to a remote that is a local path (a USB stick, a lab share) makes git-annex run THAT
+// repository's hooks. The remotes are looked at the same way, with git's own answers for their URLs.
+function localPath(url, repo) {
+  if (/^file:\/\//i.test(url)) {
+    try {
+      return fileURLToPath(url)
+    } catch {
+      return null
+    }
+  }
+  if (/^[a-zA-Z]:[\\/]/.test(url) || url.startsWith('\\\\') || url.startsWith('//') || isAbsolute(url)) {
+    return url
+  }
+  if (/^[^/\\]*:/.test(url)) {
+    return null // ssh://, https://, host:path, datalad-annex::...
+  }
+  return resolve(repo, url)
+}
+
+async function scanLocalRemotes(runner, repo, prefix) {
+  const git = (args) => runner.run('git', ['-C', repo, ...args], { timeoutMs: GIT_TIMEOUT_MS })
+  const names = await git(['remote'])
+  if (names.failed) {
+    return [`${NOT_FULLY_SCANNED} (cannot list the remotes of ${prefix || 'the folder'})`]
+  }
+  const paths = new Map()
+  for (const name of names.stdout.split(/\r?\n/).filter(Boolean)) {
+    for (const flags of [[], ['--push']]) {
+      const urls = await git(['remote', 'get-url', ...flags, '--all', name])
+      for (const url of urls.failed ? [] : urls.stdout.split(/\r?\n/).filter(Boolean)) {
+        const path = localPath(url, repo)
+        if (path && !paths.has(path)) {
+          paths.set(path, name)
+        }
+      }
+    }
+  }
+  const found = []
+  for (const [path, name] of paths) {
+    if (!(await lstat(path).then(() => true, () => false))) {
+      continue // not there (an unplugged drive): nothing can run
+    }
+    // Git may refuse the folder (it belongs to someone else), so the usual layouts are also read directly.
+    const asked = await runner.run('git', ['-C', path, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
+    const dirs = new Set([join(path, '.git'), path, ...(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))])
+    for (const dir of dirs) {
+      found.push(...(await annexHooksIn(dir, `${prefix}remote ${name} (${path}): `)))
+    }
   }
   return found
 }
