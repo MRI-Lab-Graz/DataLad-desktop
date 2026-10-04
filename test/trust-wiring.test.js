@@ -28,7 +28,10 @@ test('the folder picker only authorizes a folder the user has trusted', () => {
 
 test('create/clone check trust of an existing target before running anything', () => {
   const body = block("handle('adapter:runCommand'")
-  assert.match(body, /!COMMANDS_CREATING_A_NEW_PROJECT\.has\([^)]*\)\) \{[^}]*\} else \{[^}]*await requireTrustedFolder\(event, payload\.request\?\.targetPath\)/)
+  const trust = body.search(/await requireTrustedFolder\(event, target\)/)
+  assert.ok(trust !== -1, 'create/clone no longer checks trust of the target')
+  assert.ok(trust < body.indexOf('adapter.runCommand('), 'trust must be checked before the command runs')
+  assert.match(body.slice(0, trust), /COMMANDS_CREATING_A_NEW_PROJECT\.has\(/)
 })
 
 test('every open re-scans; trust is checked against the current findings', () => {
@@ -39,4 +42,20 @@ test('every open re-scans; trust is checked against the current findings', () =>
 test("the app's own clone/create is not trusted blindly: a clone with findings is asked about on first open", () => {
   const body = block("handle('adapter:runCommand'")
   assert.doesNotMatch(body, /folderTrust\(\)\.add\(/)
+})
+
+test('turning the console on goes through the native consent, not just the renderer toggle', () => {
+  const body = block("handle('console:setEnabled'")
+  assert.match(body, /consoleConsent\(\)\.allow\(/)
+  assert.match(main, /dialog\.showMessageBox/)
+})
+
+test('create/clone into a folder outside every opened folder asks in a native dialog first', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /isWithinAuthorizedRoot\(dirname\(resolve\([^)]*\)\)\)/)
+  assert.match(body, /confirmNewProjectLocation/)
+})
+
+test('the e2e auto-confirm seam is never active in a packaged app', () => {
+  assert.match(main, /!app\.isPackaged && process\.env\.DATALAD_DESKTOP_E2E_CONFIRM === '1'/)
 })

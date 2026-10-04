@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
+import { createConsoleConsent } from './console-consent.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
@@ -97,6 +98,41 @@ async function requireTrustedFolder(event, projectPath) {
     throw new Error('Folder not opened: it was not trusted.')
   }
   folderTrust().add(projectPath, vectors)
+}
+
+// Native yes/no the renderer cannot answer. E2E drives the real app without a human, so an
+// unpackaged build started by the e2e driver answers yes itself; a packaged app never does.
+async function confirmNative(event, { title, message, detail, confirmLabel }) {
+  if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
+    return true
+  }
+  const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: 'warning',
+    buttons: ['Cancel', confirmLabel],
+    defaultId: 0,
+    cancelId: 0,
+    title,
+    message,
+    detail
+  })
+  return response === 1
+}
+
+let consentStore
+const consoleConsent = () => (consentStore ??= createConsoleConsent({ file: join(app.getPath('userData'), 'console-consent.json') }))
+
+// A new project is created or cloned at a path the page typed. Outside every folder the user has
+// opened, that could be anywhere (home, a login-items folder), so the main process asks.
+async function confirmNewProjectLocation(event, targetPath) {
+  const ok = await confirmNative(event, {
+    title: 'Create a project here?',
+    message: 'This folder is outside the projects you have opened.',
+    detail: `${targetPath}\n\nFiles will be created or downloaded into it.`,
+    confirmLabel: 'Create here'
+  })
+  if (!ok) {
+    throw new Error('Not created: the location was not confirmed.')
+  }
 }
 
 function authorizeRoot(rootPath) {
@@ -224,7 +260,11 @@ handle('adapter:runCommand', async (event, payload) => {
     requireAuthorizedRoot(payload.request?.projectPath)
   } else {
     // `create --force` over an existing folder runs that folder's own hooks.
-    await requireTrustedFolder(event, payload.request?.targetPath)
+    const target = payload.request?.targetPath
+    if (typeof target === 'string' && target.trim() && !isWithinAuthorizedRoot(dirname(resolve(target)))) {
+      await confirmNewProjectLocation(event, target)
+    }
+    await requireTrustedFolder(event, target)
   }
 
   let request = payload.request
@@ -379,8 +419,17 @@ handle('watch:setActiveProject', async (event, projectPath = null) => {
   return result
 })
 
-handle('console:setEnabled', async (_event, enabled) => {
-  consoleEnabled = Boolean(enabled) && !policy.consoleDisabled
+handle('console:setEnabled', async (event, enabled) => {
+  consoleEnabled =
+    !policy.consoleDisabled &&
+    (await consoleConsent().allow(Boolean(enabled), () =>
+      confirmNative(event, {
+        title: 'Turn on the command console?',
+        message: 'The console runs any command you type, with your permissions.',
+        detail: 'Only turn it on if you need it. Never paste commands from someone you do not trust.',
+        confirmLabel: 'Turn on the console'
+      })
+    ))
   return consoleEnabled
 })
 
