@@ -528,3 +528,8 @@ test("a cloned dataset's committed reckless setting does not loosen its subdatas
   try { shared = execFileSync('git', ['-C', join(dest, 'sub'), 'config', '--get', 'core.sharedrepository']).toString().trim() } catch { /* unset: the passing case */ }
   assert.notEqual(shared, '0666')
 })
+
+test('taskkill is started by absolute path, not looked up in a dataset-controlled folder', () => {
+  const src = readFileSync(new URL('../src/datalad/kill-tree.js', import.meta.url), 'utf8')
+  assert.match(src, /SystemRoot[^\n]*System32[^\n]*taskkill\.exe/)
+})

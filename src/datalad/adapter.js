@@ -341,6 +341,14 @@ export class DataLadAdapter {
     const excludeDir = isAbsolute(gitDir) ? gitDir : join(datasetPath, gitDir)
     const excludePath = join(excludeDir, 'info', 'exclude')
 
+    // A symlinked info folder or exclude file (from a repository's own content) would redirect the write.
+    for (const path of [join(excludeDir, 'info'), excludePath]) {
+      const info = await lstat(path).catch(() => null)
+      if (info?.isSymbolicLink()) {
+        return { datasetPath, added: false }
+      }
+    }
+
     let existingContent = ''
     try {
       existingContent = await readFile(excludePath, 'utf8')

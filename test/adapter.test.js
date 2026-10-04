@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
@@ -2049,4 +2049,35 @@ test('gitignore handlers refuse a dataset folder that is a symlink leaving the p
   await assert.rejects(adapter.addIgnorePatterns(root, ['sub-link'], ['*.log']), /outside the project/)
   await assert.rejects(adapter.readGitignore(root, 'sub-link'), /outside the project/)
   await assert.rejects(readFile(join(outside, '.gitignore')), /ENOENT/)
+})
+
+const gitDirRunner = (root) => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { exitCode: 0, stdout: 'true\n', stderr: '', failed: false })
+  runner.set('git', ['-C', root, 'rev-parse', '--git-dir'], { exitCode: 0, stdout: '.git\n', stderr: '', failed: false })
+  return runner
+}
+
+test('ignoreOsNoiseFiles never writes through a symlinked info/exclude', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-os-noise-link-'))
+  const outside = join(await mkdtemp(join(tmpdir(), 'dlad-outside-')), 'target.txt')
+  await writeFile(outside, 'original\n')
+  await mkdir(join(root, '.git', 'info'), { recursive: true })
+  await symlink(outside, join(root, '.git', 'info', 'exclude'))
+
+  const results = await new DataLadAdapter({ runner: gitDirRunner(root) }).ignoreOsNoiseFiles(root)
+
+  assert.deepEqual(results, [{ datasetPath: root, added: false }])
+  assert.equal(await readFile(outside, 'utf8'), 'original\n')
+})
+
+test('ignoreOsNoiseFiles never writes through a symlinked info folder', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-os-noise-linkdir-'))
+  const outsideDir = await mkdtemp(join(tmpdir(), 'dlad-outside-'))
+  await mkdir(join(root, '.git'), { recursive: true })
+  await symlink(outsideDir, join(root, '.git', 'info'))
+
+  await new DataLadAdapter({ runner: gitDirRunner(root) }).ignoreOsNoiseFiles(root)
+
+  assert.deepEqual(await readdir(outsideDir), [])
 })

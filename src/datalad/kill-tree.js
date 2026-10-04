@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { join } from 'node:path'
 
 // Abort reason used when the app is quitting: there is no later moment to
 // escalate to SIGKILL, so the kill must be immediate.
@@ -15,7 +16,9 @@ export function killProcessTree(child, graceMs = 3000) {
   }
 
   if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {})
+    // By absolute path: a bare name would be looked up in places a dataset can write to.
+    const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe')
+    spawn(taskkill, ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }).on('error', () => {})
     return
   }
 
