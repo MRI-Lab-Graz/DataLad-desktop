@@ -9,6 +9,8 @@ Result of an independent security review (see `SECURITY.md` for what is protecte
 - **Windows:** `git`/`datalad` are resolved to absolute paths from absolute `PATH` entries, so a program of the same name inside a dataset is never run.
 - Every child process gets literal pathspecs (a file named `*` can no longer widen Discard/Restore) and `core.fsmonitor` forced off.
 - **Folder trust:** opening a folder whose git config or hooks can run programs now asks first.
+- **Execution layer:** every git command uses only the stock git-annex hooks (a repository's own hooks never run; the app no longer runs your own hooks), and datalad ignores a dataset's reckless-clone setting.
+- **Folder trust (reworked):** every nested repository is scanned (including ones missing from `.gitmodules` and deeper than three levels), annex/remote/datalad settings are matched against an exact allowlist, hitting a limit is reported as "not fully scanned", trust is remembered per finding and every open re-scans. The console and creating/cloning outside opened folders need a native confirmation. Minor: symlinked `info/exclude` is refused, `taskkill` is started by absolute path, the Program Files check matches a whole folder name.
 - **Dataset procedures:** datalad never runs procedures a dataset ships in `.datalad/procedures` (adopting an existing BIDS dataset via Create Project used to run its `cfg_text2git`); folder trust reports them too.
 - **Windows installer:** the DataLad environment is built by the bundled uv on its own Python; an existing system Python is never run with admin rights.
 - Clone sources starting with `-` or using `ext::` are refused; branch checkout ends with `--`; `.gitignore` handlers confine their paths and refuse symlinks.

@@ -53,3 +53,14 @@ test('SECURITY.md documents that dataset-shipped datalad procedures are neutrali
   const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
   assert.match(runner, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
 })
+
+test('SECURITY.md documents the execution layer: app-owned hooks, no reckless clones, exact allowlists, native confirmations', () => {
+  assert.match(doc, /core\.hooksPath/)
+  assert.match(doc, /DATALAD_CLONE_RECKLESS/)
+  assert.match(doc, /not fully scanned/i)
+  assert.match(doc, /native (dialog|confirmation)/i)
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  assert.match(runner, /core\.hooksPath/)
+  assert.match(runner, /DATALAD_CLONE_RECKLESS/)
+  assert.ok(existsSync(new URL('../build/git-hooks/pre-commit', import.meta.url)))
+})
