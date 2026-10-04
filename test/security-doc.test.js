@@ -79,3 +79,9 @@ test('SECURITY.md lists the git-annex hooks and every place they are looked for,
   assert.match(doc, /safe\.bareRepository/)
   assert.doesNotMatch(doc, /two hooks of its own/)
 })
+
+test("SECURITY.md says a local remote is judged like an opened repository, and why", () => {
+  assert.match(doc, /clears[^.]*GIT_CONFIG/i)
+  assert.match(doc, /receive-side|pre-receive/)
+  assert.match(doc, /stock git-annex hooks/i)
+})

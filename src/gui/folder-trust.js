@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto'
 import { lstat, readdir, readFile } from 'node:fs/promises'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { ProcessRunner } from '../datalad/process-runner.js'
 
 // A repo copied from a zip, USB stick or shared folder brings its own .git/config, and git runs
@@ -11,6 +10,16 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 // Anything else that can run a program, other than what git-annex itself installs, needs the user's
 // explicit OK before we open the folder. Every repository under the folder is judged, wherever it hides.
 
+// The hooks git-annex installs itself, exactly: a remote that carries only these needs no prompt.
+const STOCK_ANNEX_HOOKS = {
+  'pre-commit': 'git annex pre-commit .',
+  'post-checkout': 'git annex smudge --update',
+  'post-merge': 'git annex smudge --update',
+  'post-receive': 'if git annex post-receive --help >/dev/null 2>&1; then git annex post-receive; fi'
+}
+const isStockAnnexHook = (name, body) =>
+  Object.hasOwn(STOCK_ANNEX_HOOKS, name) &&
+  body.toString('utf8').replace(/\r\n/g, '\n').trimEnd() === `#!/bin/sh\n# automatically configured by git-annex\n${STOCK_ANNEX_HOOKS[name]}`
 const ANNEX_FILTER = {
   smudge: 'git-annex smudge -- %f',
   clean: 'git-annex smudge --clean -- %f',
@@ -25,6 +34,7 @@ const HARMLESS_KEYS = [
   /^user\.(name|email)$/,
   /^branch\..+\.(remote|merge|rebase|description)$/,
   /^remote\..+\.(fetch|push|tagopt)$/,
+  /^receive\.(denycurrentbranch|denynonfastforwards|denydeletes|denydeletecurrent)$/,
   /^datalad\.dataset\.id$/,
   /^submodule\.(active|.+\.(url|active|branch|datalad-id|datalad-url))$/
 ]
@@ -58,6 +68,18 @@ function isHarmless(key, value) {
   return HARMLESS_KEYS.some((pattern) => pattern.test(key))
 }
 
+// Every setting of a `config --list -z` output that is not on the allowlist, with its value.
+function judgeConfig(listing, prefix) {
+  const found = []
+  for (const entry of listing.split('\0').filter(Boolean)) {
+    const [key, ...rest] = entry.split('\n')
+    if (!isHarmless(key, rest.join('\n'))) {
+      found.push(`${prefix}config ${key.toLowerCase()} = ${rest.join('\n')}`)
+    }
+  }
+  return found
+}
+
 // `config --list` and `ls-files` run no hooks and no configured programs.
 async function scanRepo(runner, repo, prefix) {
   const git = (args) => runner.run('git', ['-C', repo, ...args], { timeoutMs: GIT_TIMEOUT_MS })
@@ -69,11 +91,8 @@ async function scanRepo(runner, repo, prefix) {
     if (listed.failed && scope === '--local') {
       found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${prefix || 'the folder'})`)
     }
-    for (const entry of listed.failed ? [] : listed.stdout.split('\0').filter(Boolean)) {
-      const [key, ...rest] = entry.split('\n')
-      if (!isHarmless(key, rest.join('\n'))) {
-        found.push(`${prefix}config ${key.toLowerCase()} = ${rest.join('\n')}`)
-      }
+    if (!listed.failed) {
+      found.push(...judgeConfig(listed.stdout, prefix))
     }
   }
   found.push(...(await scanDataladProcedures(runner, repo, prefix)))
@@ -82,21 +101,34 @@ async function scanRepo(runner, repo, prefix) {
     found.push(`${NOT_FULLY_SCANNED} (cannot find the git directory of ${prefix || 'the folder'})`)
   }
   for (const gitDir of sites ?? []) {
-    found.push(...(await annexHooksIn(gitDir, prefix)))
+    found.push(...(await hooksIn(gitDir, prefix)))
   }
   found.push(...(await scanLocalRemotes(runner, repo, prefix)))
   return found
 }
 
-// A push to a remote that is a local path (a USB stick, a lab share) makes git-annex run THAT
-// repository's hooks. The remotes are looked at the same way, with git's own answers for their URLs.
-function localPath(url, repo) {
-  if (/^file:\/\//i.test(url)) {
+// A push to a remote that is a local path (a USB stick, a lab share) runs THAT repository's hooks and
+// config, which the app's environment overrides do not reach (git clears them for the process it starts
+// there). The remotes are judged like any repository, with git's own answers for their URLs.
+// file:// is read the way git reads it: the host is dropped, %-escapes are decoded, and '?' and '#' are
+// part of the path (so no WHATWG URL parsing).
+export function localPath(url, repo) {
+  const fileUrl = /^file:\/\/([^/]*)(.*)$/i.exec(url)
+  if (fileUrl) {
+    const [, host, rest] = fileUrl
+    let path
     try {
-      return fileURLToPath(url)
+      path = decodeURIComponent(rest)
     } catch {
       return null
     }
+    if (!path) {
+      return null
+    }
+    if (/^\/[a-zA-Z]:[\\/]/.test(path)) {
+      return path.slice(1) // file:///C:/x
+    }
+    return host && host.toLowerCase() !== 'localhost' && process.platform === 'win32' ? `//${host}${path}` : path
   }
   if (/^[a-zA-Z]:[\\/]/.test(url) || url.startsWith('\\\\') || url.startsWith('//') || isAbsolute(url)) {
     return url
@@ -132,9 +164,26 @@ async function scanLocalRemotes(runner, repo, prefix) {
     }
     // Git may refuse the folder (it belongs to someone else), so the usual layouts are also read directly.
     const asked = await runner.run('git', ['-C', path, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
-    const dirs = new Set([join(path, '.git'), path, ...(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))])
-    for (const dir of dirs) {
-      found.push(...(await annexHooksIn(dir, `${prefix}remote ${name} (${path}): `)))
+    const askedDirs = new Set(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))
+    const label = `${prefix}remote ${name} (${path}): `
+    for (const dir of new Set([join(path, '.git'), path, ...askedDirs])) {
+      // A folder with a HEAD (or one git itself named) is a git dir: its config and every hook are judged.
+      // Otherwise only git-annex's own hook names are looked up (a plain "hooks" folder is just a folder).
+      const isGitDir = askedDirs.has(dir) || (await lstat(join(dir, 'HEAD')).then(() => true, () => false))
+      found.push(...(await hooksIn(dir, label, { all: isGitDir })))
+      if (!isGitDir) {
+        continue
+      }
+      const configFile = join(dir, 'config')
+      if (!(await lstat(configFile).then((info) => info.isFile(), () => false))) {
+        continue
+      }
+      const listed = await runner.run('git', ['config', '--file', configFile, '--list', '--includes', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
+      if (listed.failed) {
+        found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${label}${dir})`)
+      } else {
+        found.push(...judgeConfig(listed.stdout, label))
+      }
     }
   }
   return found
@@ -151,17 +200,22 @@ async function hookSites(runner, repo) {
 // The hooks git-annex runs (git-annex 10.2026). Looked up by name with lstat, because executing a hook
 // needs only the x bit on its folder: a folder that cannot be listed can still run them.
 const ANNEX_HOOK_NAMES = ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']
+// Pushing into a repository runs its receive-side git hooks too (see localPath above).
+const RECEIVE_HOOK_NAMES = ['pre-receive', 'update', 'proc-receive', 'post-receive', 'post-update', 'reference-transaction', 'push-to-checkout', 'pre-auto-gc']
 const ABSENT = new Set(['ENOENT', 'ENOTDIR'])
 
 // A fingerprint of the whole hook makes a changed hook a new finding. Anything that cannot be read is
 // reported as "not fully scanned" (accepted for this launch only), never silently skipped.
-async function annexHooksIn(gitDir, prefix) {
+async function hooksIn(gitDir, prefix, { all = false } = {}) {
   const hooksDir = join(gitDir, 'hooks')
   const found = []
+  const known = [...ANNEX_HOOK_NAMES, ...(all ? RECEIVE_HOOK_NAMES : [])]
   const inspect = async (name) => {
     const file = join(hooksDir, name)
     try {
-      await lstat(file)
+      if ((await lstat(file)).isDirectory()) {
+        return
+      }
     } catch (error) {
       if (!ABSENT.has(error.code)) {
         found.push(`${NOT_FULLY_SCANNED} (cannot read hook ${name} in ${prefix}${hooksDir})`)
@@ -169,7 +223,10 @@ async function annexHooksIn(gitDir, prefix) {
       return
     }
     try {
-      found.push(`${prefix}hook ${name} ${createHash('sha256').update(await readFile(file)).digest('hex')}`)
+      const body = await readFile(file)
+      if (!(all && isStockAnnexHook(name, body))) {
+        found.push(`${prefix}hook ${name} ${createHash('sha256').update(body).digest('hex')}`)
+      }
     } catch {
       found.push(`${NOT_FULLY_SCANNED} (cannot read hook ${name} in ${prefix}${hooksDir})`)
     }
@@ -177,13 +234,13 @@ async function annexHooksIn(gitDir, prefix) {
 
   let others = []
   try {
-    others = (await readdir(hooksDir)).filter((name) => /annex/i.test(name) && !name.endsWith('.sample') && !ANNEX_HOOK_NAMES.includes(name))
+    others = (await readdir(hooksDir)).filter((name) => (all || /annex/i.test(name)) && !name.endsWith('.sample') && !known.includes(name))
   } catch (error) {
     if (!ABSENT.has(error.code)) {
       found.push(`${NOT_FULLY_SCANNED} (cannot list ${prefix}${hooksDir})`)
     }
   }
-  for (const name of [...ANNEX_HOOK_NAMES, ...others]) {
+  for (const name of [...known, ...others]) {
     await inspect(name)
   }
   return found
@@ -309,7 +366,8 @@ export function createTrustStore(file) {
 export function describeVectors(vectors, { max = 5, width = 120 } = {}) {
   // Control and bidi characters in a dataset's text could reorder or hide what the dialog says.
   const oneLine = (vector) => {
-    const flat = vector.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim()
+    // A 64-character fingerprint would push the hook's name out of view: show its start.
+    const flat = vector.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\p{Cf}/gu, '').replace(/\b([0-9a-f]{8})[0-9a-f]{56}\b/g, '$1').replace(/\s+/g, ' ').trim()
     // A long finding keeps its start and its end: the command is usually at the end.
     return flat.length > width ? `${flat.slice(0, Math.floor(width * 0.4))}…${flat.slice(-(width - Math.floor(width * 0.4) - 1))}` : flat
   }
