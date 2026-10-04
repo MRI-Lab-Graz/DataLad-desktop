@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs x86_64-pc-windows-msvc
+
       # Deliberately NOT installing DataLad or git-annex here: the installer
       # has to provide them, that is what this job proves.
       - name: Build NSIS installer

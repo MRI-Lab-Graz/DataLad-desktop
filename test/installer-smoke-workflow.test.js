@@ -60,3 +60,10 @@ test('prints the installer log when a step fails', () => {
   const step = workflow.split('- name:').find((s) => s.includes('if: failure()'))
   assert.match(step, /install\.log/)
 })
+
+// The installer builds the DataLad env with the bundled uv, so the smoke build must bundle it.
+test('fetches the pinned uv before building the installer', () => {
+  const fetch = workflow.indexOf('node scripts/fetch-uv.mjs x86_64-pc-windows-msvc')
+  assert.ok(fetch !== -1, 'no uv fetch step')
+  assert.ok(fetch < workflow.indexOf('electron-builder --win nsis'), 'uv must be fetched before the build')
+})
