@@ -598,3 +598,35 @@ test('findRemoteVectors reports a finding once when the remote is reached under 
   const out = await findRemoteVectors(new ProcessRunner(), alias, 'R: ')
   assert.equal(out.length, 1, out.join('\n'))
 })
+
+// Review 5: the push check listed remotes differently from how git and git-annex find them.
+test('a remote reached only through annexUrl is listed (git-annex pushes there)', async () => {
+  const clean = await withRemote({ hooks: {} })
+  const hooked = await withRemote({ hooks: { 'freezecontent-annex': '#!/bin/sh\n:\n' } })
+  git(clean.clone, 'config', 'remote.origin.annexUrl', hooked.remote)
+  const paths = (await localRemotePaths(new ProcessRunner(), clean.clone)).map((remote) => remote.path)
+  assert.ok(paths.includes(hooked.remote), paths.join(', '))
+  assert.match(await flagged(clean.clone), /hook freezecontent-annex/)
+})
+
+test('a remote URL with a control character cannot be read safely: the push is refused and the scan says so', async () => {
+  const { clone, remote } = await withRemote()
+  git(clone, 'config', 'remote.origin.url', `${remote}x\n${remote}`)
+  await assert.rejects(localRemotePaths(new ProcessRunner(), clone), /cannot read safely/)
+  assert.match(await flagged(clone), /not fully scanned \(a remote URL cannot be read safely/)
+})
+
+test('a relative remote URL is resolved from the work tree root even when the project path is a subfolder', async () => {
+  const { clone, remote } = await withRemote({ url: () => '../R' })
+  const sub = join(clone, 'sub')
+  await mkdir(sub)
+  const paths = (await localRemotePaths(new ProcessRunner(), sub)).map((entry) => entry.path)
+  assert.deepEqual(paths, [remote])
+})
+
+test('an insteadOf rewrite that adds a control character is refused too', async () => {
+  const { clone, base } = await withRemote({ url: () => 'lab:R' })
+  git(clone, 'config', `url.${base}/.insteadOf`, 'lab:')
+  git(clone, 'config', 'url.x.insteadOf', 'a\nb')
+  await assert.rejects(localRemotePaths(new ProcessRunner(), clone), /cannot read safely/)
+})

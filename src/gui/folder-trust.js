@@ -139,23 +139,55 @@ export function localPath(url, repo) {
   return resolve(repo, url)
 }
 
-// The remotes of `repo` that are local paths, as git resolves their URLs (insteadOf, pushurl).
+// A control character in a URL (a newline splits one URL into two lines) cannot be read safely.
+const CONTROL = /[\u0000-\u001f\u007f]/
+
+// The remotes of `repo` that are local paths, as git and git-annex resolve them: url and pushurl (with
+// insteadOf rewrites) and annexUrl (git-annex pushes there instead when it is set), relative URLs resolved from the
+// work tree root. Anything that cannot be read with certainty fails closed (`reason`), never "no remote".
 async function listLocalRemotes(runner, repo) {
   const git = (args) => runner.run('git', ['-C', repo, ...args], { timeoutMs: GIT_TIMEOUT_MS })
+  const top = await git(['rev-parse', '--show-toplevel'])
+  const root = top.failed ? repo : top.stdout.trim() // git resolves a relative URL from here, whatever folder `repo` names
   const names = await git(['remote'])
   if (names.failed) {
-    return { failed: true, remotes: [] }
+    return { failed: true, reason: 'list', remotes: [] }
   }
-  const paths = new Map()
+  // The raw values: a control character is only visible here, once the output is split into lines it is not.
+  const raw = await git(['config', '-z', '--get-regexp', '^(remote\\..*\\.(url|pushurl|annexurl)|url\\..*\\.(insteadof|pushinsteadof))$'])
+  if (raw.failed && raw.exitCode !== 1) { // exit 1 means "no such keys"
+    return { failed: true, reason: 'list', remotes: [] }
+  }
+  const entries = (raw.failed ? [] : raw.stdout.split('\0').filter(Boolean)).map((entry) => {
+    const at = entry.indexOf('\n')
+    return at < 0 ? { key: entry, value: '' } : { key: entry.slice(0, at), value: entry.slice(at + 1) }
+  })
+  if (entries.some(({ key, value }) => CONTROL.test(key) || CONTROL.test(value))) {
+    return { failed: true, reason: 'url', remotes: [] }
+  }
+
+  const urls = []
   for (const name of names.stdout.split(/\r?\n/).filter(Boolean)) {
     for (const flags of [[], ['--push']]) {
-      const urls = await git(['remote', 'get-url', ...flags, '--all', name])
-      for (const url of urls.failed ? [] : urls.stdout.split(/\r?\n/).filter(Boolean)) {
-        const path = localPath(url, repo)
-        if (path && !paths.has(path)) {
-          paths.set(path, name)
-        }
+      const got = await git(['remote', 'get-url', ...flags, '--all', name])
+      urls.push(...(got.failed ? [] : got.stdout.split(/\r?\n/).filter(Boolean)).map((url) => ({ url, name })))
+    }
+  }
+  for (const { key, value } of entries) {
+    const match = /^remote\.(.+)\.annexurl$/.exec(key)
+    if (match) {
+      const rewritten = value.startsWith('-') ? { failed: true } : await git(['ls-remote', '--get-url', value])
+      if (rewritten.failed) {
+        return { failed: true, reason: 'url', remotes: [] }
       }
+      urls.push({ url: rewritten.stdout.trim(), name: match[1] })
+    }
+  }
+  const paths = new Map()
+  for (const { url, name } of urls) {
+    const path = localPath(url, root)
+    if (path && !paths.has(path)) {
+      paths.set(path, name)
     }
   }
   return { failed: false, remotes: [...paths].map(([path, name]) => ({ name, path })) }
@@ -165,7 +197,10 @@ const exists = (path) => lstat(path).then(() => true, () => false)
 
 // The local-path remotes of a project that exist right now (an unplugged drive has nothing that can run).
 export async function localRemotePaths(runner, repo) {
-  const { remotes } = await listLocalRemotes(runner, repo)
+  const { failed, remotes } = await listLocalRemotes(runner, repo)
+  if (failed) {
+    throw new Error('Not pushed: a remote of this project has a URL the app cannot read safely.')
+  }
   const present = []
   for (const remote of remotes) {
     if (await exists(remote.path)) {
@@ -205,9 +240,9 @@ export async function findRemoteVectors(runner, path, label = '') {
 }
 
 async function scanLocalRemotes(runner, repo, prefix) {
-  const { failed, remotes } = await listLocalRemotes(runner, repo)
+  const { failed, reason, remotes } = await listLocalRemotes(runner, repo)
   if (failed) {
-    return [`${NOT_FULLY_SCANNED} (cannot list the remotes of ${prefix || 'the folder'})`]
+    return [`${NOT_FULLY_SCANNED} (${reason === 'url' ? 'a remote URL cannot be read safely' : 'cannot list the remotes'} in ${prefix || 'the folder'})`]
   }
   const found = []
   for (const { name, path } of remotes) {

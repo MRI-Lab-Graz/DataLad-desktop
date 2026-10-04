@@ -120,3 +120,14 @@ test('the prompt names the path, lists the findings or says nothing was found, a
   const remote = describeTrustPrompt({ path: '/share/ds', kind: 'remote', vectors: [] })
   assert.match(remote.message, /Pushing to this folder runs programs stored in it/)
 })
+
+test('the prompt shows a cleaned, resolved, shortened path: control and bidi characters, ".." and length cannot mislead it', () => {
+  const tricky = describeTrustPrompt({ path: '/Users/x/Documents/thesis/../../Downloads/evil\n/Users/x/Documents/thesis‮gnp.exe\u0007', kind: 'folder', vectors: [] })
+  const shown = tricky.detail.split('\n\n')[0]
+  assert.ok(!/[‮\u0007\n]/.test(shown), JSON.stringify(shown))
+  assert.ok(!shown.includes('..'))
+  assert.match(shown, /Downloads/)
+  const long = describeTrustPrompt({ path: `/${'a'.repeat(900)}/ds`, kind: 'folder', vectors: [] }).detail.split('\n\n')[0]
+  assert.ok(long.length <= 300, String(long.length))
+  assert.match(long, /\/ds$/)
+})

@@ -96,3 +96,10 @@ test('SECURITY.md states the trust-before-run rule, its sources, and its limits'
   const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
   assert.match(main, /policy\.trustedRoots/)
 })
+
+test('SECURITY.md describes the push-time remote list, the nesting re-check and the clone-source exception', () => {
+  assert.match(doc, /annexUrl/)
+  assert.match(doc, /cannot (be )?read safely|refus\w+ the push/i)
+  assert.match(doc, /createSubdataset|nest/i)
+  assert.match(doc, /clone source/i)
+})

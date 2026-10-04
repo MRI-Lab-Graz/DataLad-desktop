@@ -258,14 +258,22 @@ const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'
 handle('adapter:runCommand', async (event, payload) => {
   const target = payload.request?.targetPath
   let createdEmpty = false
+  let recheckTrust = async () => {}
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
     // A push to a local-path remote (a share, a USB stick) runs that remote's own hooks and uses its config, and
-    // the project or the remote may have changed since it was trusted: look again, right before.
-    if (payload.commandName === 'push') {
-      await trustGate().require(payload.request.projectPath, { event })
-      for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
-        await trustGate().require(remote.path, { kind: 'remote', event })
+    // the project or the remote may have changed since it was trusted: look again, right before. Nesting a folder
+    // (createSubdataset) runs that folder's own settings, and it may have been dropped into an open project since.
+    // This scans (seconds on a big project), so it runs inside the registered run below: a Stop pressed meanwhile
+    // is honoured instead of finding nothing to cancel.
+    recheckTrust = async () => {
+      if (payload.commandName === 'push' || payload.commandName === 'createSubdataset') {
+        await trustGate().require(payload.request.projectPath, { event })
+      }
+      if (payload.commandName === 'push') {
+        for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
+          await trustGate().require(remote.path, { kind: 'remote', event })
+        }
       }
     }
   } else {
@@ -286,6 +294,9 @@ handle('adapter:runCommand', async (event, payload) => {
   }
 
   let request = payload.request
+  if (createdEmpty) {
+    request = { ...request, force: false } // empty a moment ago: nothing to adopt, and nothing filled in since may be
+  }
   if (payload.commandName === 'save') {
     const gate = await runWithHandle(event, payload.runId, (runOptions) =>
       gateSave({
@@ -305,9 +316,10 @@ handle('adapter:runCommand', async (event, payload) => {
     }
   }
 
-  const result = await runWithHandle(event, payload.runId, (runOptions) =>
-    adapter.runCommand(payload.commandName, request, runOptions)
-  )
+  const result = await runWithHandle(event, payload.runId, async (runOptions) => {
+    await recheckTrust()
+    return adapter.runCommand(payload.commandName, request, runOptions)
+  })
   if (result?.ok && createdEmpty) {
     trustGate().createdByApp(request.targetPath)
   }
@@ -488,6 +500,10 @@ handle('dialog:pickDirectory', async (_event, options = {}) => {
   }
 
   const picked = result.filePaths[0]
+  // A clone SOURCE is only read from: the user is not asked to trust it as a project, and it is not authorized.
+  if (options.purpose === 'source') {
+    return picked
+  }
   // An empty folder has nothing to trust yet: it is only a place to create a project in.
   if (await isEmptyOrMissing(picked)) {
     pickedLocations.add(resolve(picked))

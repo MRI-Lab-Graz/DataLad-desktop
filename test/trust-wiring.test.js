@@ -74,3 +74,51 @@ test('a create/clone target outside every opened folder still asks where, unless
   const refuse = body.search(/typeof target !== 'string'/)
   assert.ok(refuse !== -1 && refuse < body.indexOf('confirmNewProjectLocation'))
 })
+
+// Review 5.
+test('nesting a folder (createSubdataset) re-runs the gate on the project first, like push does', () => {
+  const body = block("handle('adapter:runCommand'")
+  const gate = body.search(/commandName === 'createSubdataset'[\s\S]{0,300}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
+  assert.ok(gate !== -1, 'createSubdataset no longer re-checks the project')
+  assert.ok(gate < body.indexOf('adapter.runCommand('))
+})
+
+test('picking a clone SOURCE folder returns the path without asking to trust it and without authorizing it', () => {
+  const body = block("handle('dialog:pickDirectory'")
+  const purpose = body.search(/options\.purpose === 'source'/)
+  assert.ok(purpose !== -1 && purpose < body.indexOf('trustGate().require(picked'))
+  assert.ok(purpose < body.indexOf('pickedLocations.add('))
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  assert.match(app, /wireFolderPicker\(elements\.pickGetRemoteNetworkPathButton[\s\S]{0,200}purpose: 'source'/)
+  assert.match(app, /purpose: options\.purpose/)
+})
+
+test('createProject into an empty target ignores force, so a folder filled in between cannot be adopted unasked', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /if \(createdEmpty\) \{\s*request = \{ \.\.\.request, force: false \}/)
+})
+
+// A new handler must be classified: guarded by the authorized-root check, behind the trust gate, taking no
+// folder, or a documented read-only exception. Otherwise this test fails until someone decides.
+test('every IPC handler is classified', () => {
+  const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath']
+  const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
+  const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'env:ensure', 'console:setEnabled', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
+  const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
+  assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException].sort(), 'classify new handlers here')
+  for (const name of guarded) {
+    assert.match(block(`handle('${name}'`), /requireAuthorizedRoot\(|isWithinAuthorizedRoot\(/, `${name} does not check the authorized roots`)
+  }
+  for (const name of ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']) {
+    assert.match(block(`handle('${name}'`), /trustGate\(\)/, `${name} does not use the gate`)
+  }
+})
+
+// The re-check scans the project (seconds on a big one). It must happen INSIDE the registered run: a Stop pressed
+// meanwhile would otherwise find nothing to cancel, and the command would then start anyway.
+test('the push/nesting re-check runs inside the registered run, so a Stop pressed during it is honoured', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /runWithHandle\(event, payload\.runId, async \(runOptions\) => \{\s*await recheckTrust\(\)\s*return adapter\.runCommand\(/)
+  assert.match(body, /recheckTrust = async \(\) => \{\s*if \(payload\.commandName === 'push' \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
+})

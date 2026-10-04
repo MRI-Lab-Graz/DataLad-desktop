@@ -1,4 +1,5 @@
 import { readdir } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { describeVectors } from './folder-trust.js'
 
 // A missing folder or one with no entries has nothing foreign in it.
@@ -10,16 +11,25 @@ export async function isEmptyOrMissing(path) {
   }
 }
 
+// The path is shown the way the folder really is: ".." resolved, control and bidi characters removed, and kept
+// short with both ends visible. A folder name from an archive must not be able to reorder or hide what the prompt says.
+const MAX_PATH = 300
+function cleanPath(path) {
+  const flat = resolve(String(path)).replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim()
+  return flat.length > MAX_PATH ? `${flat.slice(0, 60)}…${flat.slice(-(MAX_PATH - 61))}` : flat
+}
+
 const BUTTONS = ['Cancel', 'Trust this folder', 'Trust everything inside this folder']
 
 export function describeTrustPrompt({ path, kind, vectors }) {
+  const shown = cleanPath(path)
   const found =
     vectors.length > 0
       ? `What the app found there (advice, not a verdict):\n${describeVectors(vectors)}`
       : 'Nothing unusual was found, but this app cannot prove a folder is safe. Only trust folders from people you trust.'
   return kind === 'remote'
-    ? { title: 'Push to this folder?', message: 'Pushing to this folder runs programs stored in it.', detail: `${path}\n\n${found}`, buttons: BUTTONS }
-    : { title: 'Only open folders you trust', message: 'This folder can run programs on your computer.', detail: `${path}\n\n${found}`, buttons: BUTTONS }
+    ? { title: 'Push to this folder?', message: 'Pushing to this folder runs programs stored in it.', detail: `${shown}\n\n${found}`, buttons: BUTTONS }
+    : { title: 'Only open folders you trust', message: 'This folder can run programs on your computer.', detail: `${shown}\n\n${found}`, buttons: BUTTONS }
 }
 
 // The one place a folder becomes a project root: authorize() is only ever called here, after the folder is
