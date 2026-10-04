@@ -51,7 +51,7 @@ test('DataLad is installed into a private venv from the hash-locked requirements
   const install = nsh.split('Installing DataLad into its own environment...')[1]?.split('Checking for git-annex...')[0]
   assert.ok(install, 'expected a DataLad environment step')
   assert.match(install, /uv\.exe/)
-  assert.match(install, /venv --no-config --managed-python/)
+  assert.match(install, /venv --clear --no-config --managed-python/)
   assert.match(install, /\$INSTDIR\\datalad-env/)
   assert.match(install, /--require-hashes/)
   assert.match(install, /--only-binary :all:/, 'no sdist builds: their build tools are not hash-checked')
@@ -134,7 +134,7 @@ test('the installer never runs a pre-existing system Python with admin rights', 
 test('the DataLad env is built by the bundled uv with its own managed Python inside the install folder', () => {
   assert.match(nsh, /\$INSTDIR\\resources\\uv\\uv\.exe/)
   assert.match(nsh, /UV_PYTHON_INSTALL_DIR = '\$INSTDIR\\python'/)
-  assert.match(nsh, /venv --no-config --managed-python --python 3\.12/)
+  assert.match(nsh, /venv --clear --no-config --managed-python --python 3\.12/, "an update reuses the folder; uv refuses an existing venv without --clear")
   assert.match(nsh, /pip install --no-config .*--require-hashes --only-binary :all: --no-deps/)
   assert.match(nsh, /RMDir \/r "\$INSTDIR\\python"/)
 })

@@ -93,7 +93,7 @@
   ${EndIf}
 
   DetailPrint "Installing DataLad into its own environment..."
-  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$env:UV_PYTHON_INSTALL_DIR = '$INSTDIR\python'; $$env:UV_CACHE_DIR = '$PLUGINSDIR\uv-cache'; $$uv = '$INSTDIR\resources\uv\uv.exe'; $$venv = '$INSTDIR\datalad-env'; & $$uv venv --no-config --managed-python --python 3.12 $$venv; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & $$uv pip install --no-config --python $$venv --link-mode copy --index-url https://pypi.org/simple --require-hashes --only-binary :all: --no-deps -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
+  nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$env:UV_PYTHON_INSTALL_DIR = '$INSTDIR\python'; $$env:UV_CACHE_DIR = '$PLUGINSDIR\uv-cache'; $$uv = '$INSTDIR\resources\uv\uv.exe'; $$venv = '$INSTDIR\datalad-env'; & $$uv venv --clear --no-config --managed-python --python 3.12 $$venv; if ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }; & $$uv pip install --no-config --python $$venv --link-mode copy --index-url https://pypi.org/simple --require-hashes --only-binary :all: --no-deps -r '$INSTDIR\resources\datalad-requirements.txt'; exit $$LASTEXITCODE"`
   Pop $0
   !insertmacro Log "DataLad install exit $0"
   ${If} $0 != 0
