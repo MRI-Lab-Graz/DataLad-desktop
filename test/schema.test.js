@@ -78,3 +78,31 @@ test('assertCommandRequest rejects a clone source that looks like an option or e
   assert.throws(() => assertCommandRequest('cloneInstall', { ...base, source: 'ext::sh -c touch% x' }), /transport is not allowed/)
   assert.doesNotThrow(() => assertCommandRequest('cloneInstall', { ...base, source: 'https://example.org/ds.git' }))
 })
+
+// Node's spawn turns an array argument into a string, and the main-process checks compare strings:
+// a field that is not a string must never get that far.
+test('every text field rejects values that are not strings', () => {
+  const valid = {
+    cloneInstall: { source: 'https://example.org/ds', targetPath: '/p' },
+    createProject: { targetPath: '/p', procedure: 'text2git' },
+    createSubdataset: { projectPath: '/p', relativePath: 'sub-01', procedure: 'text2git' },
+    save: { projectPath: '/p', message: 'm' },
+    createBranch: { projectPath: '/p', branchName: 'b' },
+    createBranchAt: { projectPath: '/p', branchName: 'b', startPoint: 'abcd' },
+    disconnectRemote: { projectPath: '/p', remoteName: 'origin' },
+    get: { projectPath: '/p' }
+  }
+  for (const [commandName, request] of Object.entries(valid)) {
+    assertCommandRequest(commandName, request)
+    for (const field of Object.keys(request)) {
+      for (const bad of [['x'], { a: 1 }, 7, true]) {
+        assert.throws(() => assertCommandRequest(commandName, { ...request, [field]: bad }), /must be a string/, `${commandName}.${field}=${JSON.stringify(bad)}`)
+      }
+    }
+  }
+})
+
+test('force must be a boolean', () => {
+  assertCommandRequest('createProject', { targetPath: '/p', force: true })
+  assert.throws(() => assertCommandRequest('createProject', { targetPath: '/p', force: 'yes' }), /force must be a boolean/)
+})

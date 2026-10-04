@@ -266,7 +266,10 @@ handle('adapter:runCommand', async (event, payload) => {
   } else {
     // `create --force` over an existing folder runs that folder's own hooks.
     const target = payload.request?.targetPath
-    if (typeof target === 'string' && target.trim() && !isWithinAuthorizedRoot(dirname(resolve(target)))) {
+    if (typeof target !== 'string' || !target.trim()) {
+      throw new Error('Choose a folder first.')
+    }
+    if (!isWithinAuthorizedRoot(target)) {
       await confirmNewProjectLocation(event, target)
     }
     await requireTrustedFolder(event, target)

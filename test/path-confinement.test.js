@@ -52,3 +52,11 @@ test('initialAuthorizedRoots seeds the launch directory only for unpackaged (dev
   assert.deepEqual([...initialAuthorizedRoots({ cwd: '/work/repo', isPackaged: false })], [resolve('/work/repo')])
   assert.deepEqual([...initialAuthorizedRoots({ cwd: '/', isPackaged: true })], [])
 })
+
+// A symlink as the LAST part of a target must be resolved before deciding it is inside a root.
+test('a target that is itself a symlink out of the root is outside it', { skip: process.platform === 'win32' && 'symlinks need privileges' }, async () => {
+  const { root, outside } = await fixture()
+  await symlink(outside, join(root, 'link'))
+  assert.equal(isWithinRoots(join(root, 'link'), new Set([root])), false)
+  assert.equal(isWithinRoots(join(root, 'brand-new-folder'), new Set([root])), true)
+})

@@ -52,8 +52,17 @@ test('turning the console on goes through the native consent, not just the rende
 
 test('create/clone into a folder outside every opened folder asks in a native dialog first', () => {
   const body = block("handle('adapter:runCommand'")
-  assert.match(body, /isWithinAuthorizedRoot\(dirname\(resolve\([^)]*\)\)\)/)
+  assert.match(body, /!isWithinAuthorizedRoot\(target\)/)
+  assert.doesNotMatch(body, /isWithinAuthorizedRoot\(dirname\(/, 'dirname() drops a symlinked last component before it is resolved')
   assert.match(body, /confirmNewProjectLocation/)
+})
+
+test('a create/clone target that is not text is refused before anything else', () => {
+  const body = block("handle('adapter:runCommand'")
+  const refuse = body.search(/typeof target !== 'string'/)
+  assert.ok(refuse !== -1, 'a non-string target is not refused')
+  assert.ok(refuse < body.indexOf('confirmNewProjectLocation'))
+  assert.ok(refuse < body.indexOf('requireTrustedFolder(event, target)'))
 })
 
 test('the e2e auto-confirm seam is never active in a packaged app', () => {
