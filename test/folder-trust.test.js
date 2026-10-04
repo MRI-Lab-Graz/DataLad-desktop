@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { mkdtemp, mkdir, writeFile, chmod, realpath, symlink, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { findExecVectors, describeVectors, localPath } from '../src/gui/folder-trust.js'
+import { findExecVectors, describeVectors, findRemoteVectors, localPath, localRemotePaths } from '../src/gui/folder-trust.js'
 import { ProcessRunner } from '../src/datalad/process-runner.js'
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' })
@@ -565,4 +565,26 @@ test('the dialog shortens fingerprints so the hook name stays visible', () => {
   const shown = describeVectors([`remote origin (/a/very/long/path/to/a/lab/share/with/many/folders/that/goes/on/and/on/R): hook pre-receive ${'ab12'.repeat(16)}`])
   assert.match(shown, /hook pre-receive ab12ab12$/)
   assert.ok(!shown.includes('ab12'.repeat(3)))
+})
+
+test('localRemotePaths lists the remotes that are existing local paths', async () => {
+  const { clone, remote } = await withRemote()
+  assert.deepEqual(await localRemotePaths(new ProcessRunner(), clone), [{ name: 'origin', path: remote }])
+})
+
+test('localRemotePaths skips network remotes and a remote that is not there', async () => {
+  const runner = new ProcessRunner()
+  const network = await withRemote({ url: () => 'git@example.invalid:lab/ds.git' })
+  assert.deepEqual(await localRemotePaths(runner, network.clone), [])
+  const gone = await withRemote({ url: () => join(tmpdir(), 'trust-no-such-share', 'ds') })
+  assert.deepEqual(await localRemotePaths(runner, gone.clone), [])
+})
+
+test('findRemoteVectors judges one remote path like a repository, with the label in front', async () => {
+  const { remote } = await withRemote({ hooks: { 'post-receive': '#!/bin/sh\n:\n' } })
+  const out = await findRemoteVectors(new ProcessRunner(), remote, 'R: ')
+  assert.equal(out.length, 1)
+  assert.match(out[0], /^R: hook post-receive [0-9a-f]{64}$/)
+  const clean = await withRemote({ hooks: {} })
+  assert.deepEqual(await findRemoteVectors(new ProcessRunner(), clean.remote), [])
 })

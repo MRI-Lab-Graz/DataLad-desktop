@@ -139,11 +139,12 @@ export function localPath(url, repo) {
   return resolve(repo, url)
 }
 
-async function scanLocalRemotes(runner, repo, prefix) {
+// The remotes of `repo` that are local paths, as git resolves their URLs (insteadOf, pushurl).
+async function listLocalRemotes(runner, repo) {
   const git = (args) => runner.run('git', ['-C', repo, ...args], { timeoutMs: GIT_TIMEOUT_MS })
   const names = await git(['remote'])
   if (names.failed) {
-    return [`${NOT_FULLY_SCANNED} (cannot list the remotes of ${prefix || 'the folder'})`]
+    return { failed: true, remotes: [] }
   }
   const paths = new Map()
   for (const name of names.stdout.split(/\r?\n/).filter(Boolean)) {
@@ -157,33 +158,60 @@ async function scanLocalRemotes(runner, repo, prefix) {
       }
     }
   }
-  const found = []
-  for (const [path, name] of paths) {
-    if (!(await lstat(path).then(() => true, () => false))) {
-      continue // not there (an unplugged drive): nothing can run
+  return { failed: false, remotes: [...paths].map(([path, name]) => ({ name, path })) }
+}
+
+const exists = (path) => lstat(path).then(() => true, () => false)
+
+// The local-path remotes of a project that exist right now (an unplugged drive has nothing that can run).
+export async function localRemotePaths(runner, repo) {
+  const { remotes } = await listLocalRemotes(runner, repo)
+  const present = []
+  for (const remote of remotes) {
+    if (await exists(remote.path)) {
+      present.push(remote)
     }
-    // Git may refuse the folder (it belongs to someone else), so the usual layouts are also read directly.
-    const asked = await runner.run('git', ['-C', path, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
-    const askedDirs = new Set(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))
-    const label = `${prefix}remote ${name} (${path}): `
-    for (const dir of new Set([join(path, '.git'), path, ...askedDirs])) {
-      // A folder with a HEAD (or one git itself named) is a git dir: its config and every hook are judged.
-      // Otherwise only git-annex's own hook names are looked up (a plain "hooks" folder is just a folder).
-      const isGitDir = askedDirs.has(dir) || (await lstat(join(dir, 'HEAD')).then(() => true, () => false))
-      found.push(...(await hooksIn(dir, label, { all: isGitDir })))
-      if (!isGitDir) {
-        continue
-      }
-      const configFile = join(dir, 'config')
-      if (!(await lstat(configFile).then((info) => info.isFile(), () => false))) {
-        continue
-      }
-      const listed = await runner.run('git', ['config', '--file', configFile, '--list', '--includes', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
-      if (listed.failed) {
-        found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${label}${dir})`)
-      } else {
-        found.push(...judgeConfig(listed.stdout, label))
-      }
+  }
+  return present
+}
+
+// Judges one remote path like a repository: its config goes through the allowlist and every hook counts.
+export async function findRemoteVectors(runner, path, label = '') {
+  const found = []
+  // Git may refuse the folder (it belongs to someone else), so the usual layouts are also read directly.
+  const asked = await runner.run('git', ['-C', path, 'rev-parse', '--path-format=absolute', '--absolute-git-dir', '--git-common-dir'], { timeoutMs: GIT_TIMEOUT_MS })
+  const askedDirs = new Set(asked.failed ? [] : asked.stdout.split(/\r?\n/).filter(Boolean))
+  for (const dir of new Set([join(path, '.git'), path, ...askedDirs])) {
+    // A folder with a HEAD (or one git itself named) is a git dir: its config and every hook are judged.
+    // Otherwise only git-annex's own hook names are looked up (a plain "hooks" folder is just a folder).
+    const isGitDir = askedDirs.has(dir) || (await exists(join(dir, 'HEAD')))
+    found.push(...(await hooksIn(dir, label, { all: isGitDir })))
+    if (!isGitDir) {
+      continue
+    }
+    const configFile = join(dir, 'config')
+    if (!(await lstat(configFile).then((info) => info.isFile(), () => false))) {
+      continue
+    }
+    const listed = await runner.run('git', ['config', '--file', configFile, '--list', '--includes', '-z'], { timeoutMs: GIT_TIMEOUT_MS })
+    if (listed.failed) {
+      found.push(`${NOT_FULLY_SCANNED} (cannot read the config of ${label}${dir})`)
+    } else {
+      found.push(...judgeConfig(listed.stdout, label))
+    }
+  }
+  return found
+}
+
+async function scanLocalRemotes(runner, repo, prefix) {
+  const { failed, remotes } = await listLocalRemotes(runner, repo)
+  if (failed) {
+    return [`${NOT_FULLY_SCANNED} (cannot list the remotes of ${prefix || 'the folder'})`]
+  }
+  const found = []
+  for (const { name, path } of remotes) {
+    if (await exists(path)) { // not there (an unplugged drive): nothing can run
+      found.push(...(await findRemoteVectors(runner, path, `${prefix}remote ${name} (${path}): `)))
     }
   }
   return found
