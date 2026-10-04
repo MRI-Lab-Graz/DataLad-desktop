@@ -89,6 +89,17 @@ export function assertCommandRequest(commandName, request) {
     }
   }
 
+  // Text fields must be text: spawn() turns an array into a string, and the main process compares strings.
+  for (const field of [...schema.required, ...schema.optional]) {
+    const value = request[field]
+    if (field === 'paths' || value === undefined || value === null) {
+      continue
+    }
+    if (field === 'force' ? typeof value !== 'boolean' : typeof value !== 'string') {
+      throw new Error(`Invalid request for ${commandName}: ${field} must be ${field === 'force' ? 'a boolean' : 'a string'}`)
+    }
+  }
+
   if (Object.hasOwn(request, 'paths') && !Array.isArray(request.paths)) {
     throw new Error(`Invalid request for ${commandName}: paths must be an array`)
   }

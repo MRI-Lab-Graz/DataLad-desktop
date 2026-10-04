@@ -1,0 +1,2 @@
+# The git-annex hooks are run by git's shell: a CRLF checkout on Windows would break them.
+build/git-hooks/* text eol=lf

@@ -104,7 +104,7 @@
     ; drive can be writable by every user, and a machine-wide PATH entry there would let
     ; any of them plant programs.
     DetailPrint "Making the datalad command available on PATH..."
-    nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts.StartsWith($$env:ProgramW6432, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
+    nsExec::ExecToLog `${PS} -NoProfile -Command "${MACHINE_PATH} $$scripts = '$INSTDIR\datalad-env\Scripts'; $$machine = [Environment]::GetEnvironmentVariable('Path', 'Machine'); if ($$scripts.StartsWith($$env:ProgramW6432 + '\', [StringComparison]::OrdinalIgnoreCase) -and (Test-Path (Join-Path $$scripts 'datalad.exe')) -and (($$machine -split ';') -notcontains $$scripts)) { [Environment]::SetEnvironmentVariable('Path', $$machine.TrimEnd(';') + ';' + $$scripts, 'Machine') }"`
     Pop $0
     ${If} $0 != 0
       DetailPrint "DataLad was not added to PATH (exit $0): the install folder must be under Program Files. Add $INSTDIR\datalad-env\Scripts manually if the datalad command is not found."

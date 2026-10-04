@@ -53,6 +53,10 @@
       {
         "from": "build/prism-requirements.txt",
         "to": "prism-requirements.txt"
+      },
+      {
+        "from": "build/git-hooks",
+        "to": "git-hooks"
       }
     ],
     "mac": {

@@ -28,5 +28,50 @@ test('the folder picker only authorizes a folder the user has trusted', () => {
 
 test('create/clone check trust of an existing target before running anything', () => {
   const body = block("handle('adapter:runCommand'")
-  assert.match(body, /!COMMANDS_CREATING_A_NEW_PROJECT\.has\([^)]*\)\) \{[^}]*\} else \{[^}]*await requireTrustedFolder\(event, payload\.request\?\.targetPath\)/)
+  const trust = body.search(/await requireTrustedFolder\(event, target\)/)
+  assert.ok(trust !== -1, 'create/clone no longer checks trust of the target')
+  assert.ok(trust < body.indexOf('adapter.runCommand('), 'trust must be checked before the command runs')
+  assert.match(body.slice(0, trust), /COMMANDS_CREATING_A_NEW_PROJECT\.has\(/)
+})
+
+test('every open re-scans; trust is checked against the current findings', () => {
+  assert.match(main, /findExecVectors\(projectPath\)[\s\S]*?folderTrust\(\)\.accepts\(projectPath, vectors\)/)
+  assert.doesNotMatch(main, /folderTrust\(\)\.has\(/)
+})
+
+test("the app's own clone/create is not trusted blindly: a clone with findings is asked about on first open", () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.doesNotMatch(body, /folderTrust\(\)\.add\(/)
+})
+
+test('turning the console on goes through the native consent, not just the renderer toggle', () => {
+  const body = block("handle('console:setEnabled'")
+  assert.match(body, /consoleConsent\(\)\.allow\(/)
+  assert.match(main, /dialog\.showMessageBox/)
+})
+
+test('create/clone into a folder outside every opened folder asks in a native dialog first', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /!isWithinAuthorizedRoot\(target\)/)
+  assert.doesNotMatch(body, /isWithinAuthorizedRoot\(dirname\(/, 'dirname() drops a symlinked last component before it is resolved')
+  assert.match(body, /confirmNewProjectLocation/)
+})
+
+test('a create/clone target that is not text is refused before anything else', () => {
+  const body = block("handle('adapter:runCommand'")
+  const refuse = body.search(/typeof target !== 'string'/)
+  assert.ok(refuse !== -1, 'a non-string target is not refused')
+  assert.ok(refuse < body.indexOf('confirmNewProjectLocation'))
+  assert.ok(refuse < body.indexOf('requireTrustedFolder(event, target)'))
+})
+
+test('the e2e auto-confirm seam is never active in a packaged app', () => {
+  assert.match(main, /!app\.isPackaged && process\.env\.DATALAD_DESKTOP_E2E_CONFIRM === '1'/)
+})
+
+test('a push re-checks the folder and its local remotes at the moment of the push', () => {
+  const body = block("handle('adapter:runCommand'")
+  const check = body.search(/commandName === 'push'[\s\S]{0,120}await requireTrustedFolder\(event, payload\.request\.projectPath\)/)
+  assert.ok(check !== -1, 'push no longer re-checks trust')
+  assert.ok(check < body.indexOf('adapter.runCommand('), 'the check must run before the push')
 })

@@ -1,0 +1,4 @@
+#!/bin/sh
+# automatically configured by git-annex
+git config --get annex.uuid >/dev/null 2>&1 || exit 0
+if git annex post-receive --help >/dev/null 2>&1; then git annex post-receive; fi

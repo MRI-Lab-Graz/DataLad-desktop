@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { buildConsoleCommand } from '../datalad/console-command.js'
+import { createConsoleConsent } from './console-consent.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
@@ -13,7 +14,7 @@ import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
-import { createTrustStore, findExecVectors } from './folder-trust.js'
+import { createTrustStore, describeVectors, findExecVectors } from './folder-trust.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -72,13 +73,14 @@ let trustStore
 const folderTrust = () => (trustStore ??= createTrustStore(join(app.getPath('userData'), 'trusted-folders.json')))
 
 // Opening a folder runs git in it, and a folder from elsewhere can name programs for git
-// to run (hooks, config). Ask once per folder; the app's own clones/creates are trusted.
+// to run (config, filters). The folder is re-scanned on every open; the user is asked about
+// each finding once and a new finding asks again.
 async function requireTrustedFolder(event, projectPath) {
-  if (typeof projectPath !== 'string' || folderTrust().has(projectPath)) {
+  if (typeof projectPath !== 'string') {
     return
   }
   const vectors = await findExecVectors(projectPath)
-  if (vectors.length === 0) {
+  if (vectors.length === 0 || folderTrust().accepts(projectPath, vectors)) {
     return
   }
   const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
@@ -89,13 +91,48 @@ async function requireTrustedFolder(event, projectPath) {
     title: 'Only open folders you trust',
     message: 'This folder can run programs on your computer.',
     detail:
-      `${projectPath}\n\nIt contains settings that make Git run commands (${vectors.slice(0, 5).join(', ')}). ` +
+      `${projectPath}\n\nIt contains settings that make Git run commands:\n${describeVectors(vectors)}\n\n` +
       'Open it only if you know where it came from.'
   })
   if (response !== 1) {
     throw new Error('Folder not opened: it was not trusted.')
   }
-  folderTrust().add(projectPath)
+  folderTrust().add(projectPath, vectors)
+}
+
+// Native yes/no the renderer cannot answer. E2E drives the real app without a human, so an
+// unpackaged build started by the e2e driver answers yes itself; a packaged app never does.
+async function confirmNative(event, { title, message, detail, confirmLabel }) {
+  if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
+    return true
+  }
+  const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: 'warning',
+    buttons: ['Cancel', confirmLabel],
+    defaultId: 0,
+    cancelId: 0,
+    title,
+    message,
+    detail
+  })
+  return response === 1
+}
+
+let consentStore
+const consoleConsent = () => (consentStore ??= createConsoleConsent({ file: join(app.getPath('userData'), 'console-consent.json') }))
+
+// A new project is created or cloned at a path the page typed. Outside every folder the user has
+// opened, that could be anywhere (home, a login-items folder), so the main process asks.
+async function confirmNewProjectLocation(event, targetPath) {
+  const ok = await confirmNative(event, {
+    title: 'Create a project here?',
+    message: 'This folder is outside the projects you have opened.',
+    detail: `${targetPath}\n\nFiles will be created or downloaded into it.`,
+    confirmLabel: 'Create here'
+  })
+  if (!ok) {
+    throw new Error('Not created: the location was not confirmed.')
+  }
 }
 
 function authorizeRoot(rootPath) {
@@ -221,9 +258,21 @@ const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'
 handle('adapter:runCommand', async (event, payload) => {
   if (!COMMANDS_CREATING_A_NEW_PROJECT.has(payload.commandName)) {
     requireAuthorizedRoot(payload.request?.projectPath)
+    // A push to a local-path remote (a share, a USB stick) makes git-annex run that remote's own hooks, and
+    // the remote may have changed since the folder was opened: look again right before.
+    if (payload.commandName === 'push') {
+      await requireTrustedFolder(event, payload.request.projectPath)
+    }
   } else {
     // `create --force` over an existing folder runs that folder's own hooks.
-    await requireTrustedFolder(event, payload.request?.targetPath)
+    const target = payload.request?.targetPath
+    if (typeof target !== 'string' || !target.trim()) {
+      throw new Error('Choose a folder first.')
+    }
+    if (!isWithinAuthorizedRoot(target)) {
+      await confirmNewProjectLocation(event, target)
+    }
+    await requireTrustedFolder(event, target)
   }
 
   let request = payload.request
@@ -254,7 +303,6 @@ handle('adapter:runCommand', async (event, payload) => {
     (payload.commandName === 'cloneInstall' || payload.commandName === 'createProject')
   ) {
     authorizeRoot(request?.targetPath)
-    folderTrust().add(request.targetPath)
   }
   return result
 })
@@ -379,8 +427,17 @@ handle('watch:setActiveProject', async (event, projectPath = null) => {
   return result
 })
 
-handle('console:setEnabled', async (_event, enabled) => {
-  consoleEnabled = Boolean(enabled) && !policy.consoleDisabled
+handle('console:setEnabled', async (event, enabled) => {
+  consoleEnabled =
+    !policy.consoleDisabled &&
+    (await consoleConsent().allow(Boolean(enabled), () =>
+      confirmNative(event, {
+        title: 'Turn on the command console?',
+        message: 'The console runs any command you type, with your permissions.',
+        detail: 'Only turn it on if you need it. Never paste commands from someone you do not trust.',
+        confirmLabel: 'Turn on the console'
+      })
+    ))
   return consoleEnabled
 })
 

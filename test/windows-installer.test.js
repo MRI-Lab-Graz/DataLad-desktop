@@ -138,3 +138,7 @@ test('the DataLad env is built by the bundled uv with its own managed Python ins
   assert.match(nsh, /pip install --no-config .*--require-hashes --only-binary :all: --no-deps/)
   assert.match(nsh, /RMDir \/r "\$INSTDIR\\python"/)
 })
+
+test('the machine PATH entry needs the install folder inside Program Files, not just a matching prefix', () => {
+  assert.match(nsh, /StartsWith\(\$\$env:ProgramW6432 \+ '\\'/)
+})

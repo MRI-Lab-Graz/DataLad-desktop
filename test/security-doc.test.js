@@ -53,3 +53,35 @@ test('SECURITY.md documents that dataset-shipped datalad procedures are neutrali
   const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
   assert.match(runner, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
 })
+
+test('SECURITY.md documents the execution layer: app-owned hooks, no reckless clones, exact allowlists, native confirmations', () => {
+  assert.match(doc, /core\.hooksPath/)
+  assert.match(doc, /DATALAD_CLONE_RECKLESS/)
+  assert.match(doc, /not fully scanned/i)
+  assert.match(doc, /native (dialog|confirmation)/i)
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  assert.match(runner, /core\.hooksPath/)
+  assert.match(runner, /DATALAD_CLONE_RECKLESS/)
+  assert.ok(existsSync(new URL('../build/git-hooks/pre-commit', import.meta.url)))
+})
+
+test('SECURITY.md documents the git-annex own hooks and the per-launch "not fully scanned" acceptance', () => {
+  assert.match(doc, /pre-commit-annex/)
+  assert.match(doc, /this launch|current launch|this session/i)
+})
+
+test('SECURITY.md lists the git-annex hooks and every place they are looked for, including remotes and the push-time check', () => {
+  for (const hook of ['pre-commit-annex', 'post-update-annex', 'freezecontent-annex', 'thawcontent-annex', 'secure-erase-annex', 'commitmessage-annex', 'http-headers-annex', 'pre-init-annex']) {
+    assert.ok(doc.includes(hook), hook)
+  }
+  assert.match(doc, /local-path remote/i)
+  assert.match(doc, /right before a push/i)
+  assert.match(doc, /safe\.bareRepository/)
+  assert.doesNotMatch(doc, /two hooks of its own/)
+})
+
+test("SECURITY.md says a local remote is judged like an opened repository, and why", () => {
+  assert.match(doc, /clears[^.]*GIT_CONFIG/i)
+  assert.match(doc, /receive-side|pre-receive/)
+  assert.match(doc, /stock git-annex hooks/i)
+})

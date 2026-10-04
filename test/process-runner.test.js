@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ProcessRunner } from '../src/datalad/process-runner.js'
+import { HOOKS_DIR, ProcessRunner, resolveHooksDir } from '../src/datalad/process-runner.js'
+import { taskkillPath } from '../src/datalad/kill-tree.js'
 import { QUIT_ABORT_REASON } from '../src/datalad/kill-tree.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
@@ -417,10 +418,10 @@ test('ProcessRunner makes git treat pathspecs literally', async () => {
 test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
   const result = await new ProcessRunner().run(
     process.execPath,
-    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_0]))'],
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_3, e.GIT_CONFIG_KEY_0]))'],
     { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
   )
-  assert.deepEqual(JSON.parse(result.stdout), ['2', 'core.fsmonitor', 'false', 'user.name'])
+  assert.deepEqual(JSON.parse(result.stdout), ['4', 'core.fsmonitor', 'false', 'core.hooksPath', 'safe.bareRepository', 'user.name'])
 })
 
 test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
@@ -482,4 +483,129 @@ test("create -c text2git --force on an existing dataset runs datalad's procedure
   assert.equal(result.failed, false, result.stderr)
   assert.equal(existsSync(marker), false, 'the dataset-shipped procedure ran')
   assert.match(await readFile(join(ds, '.gitattributes'), 'utf8'), /annex\.largefiles/) // built-in text2git still applied
+})
+
+test('ProcessRunner points git at the app-owned hooks folder', async () => {
+  const result = await new ProcessRunner().run(process.execPath, ['-e',
+    'const n=+process.env.GIT_CONFIG_COUNT;const o={};for(let i=0;i<n;i++)o[process.env["GIT_CONFIG_KEY_"+i]]=process.env["GIT_CONFIG_VALUE_"+i];process.stdout.write(o["core.hooksPath"]??"")'])
+  assert.equal(result.stdout, HOOKS_DIR)
+})
+
+test("a repository's own hook does not run when the app commits", { skip: process.platform === 'win32' && 'POSIX hook script' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hooks-'))
+  const marker = join(dir, 'hook-ran')
+  execFileSync('git', ['init', '-q', dir])
+  const hook = join(dir, '.git', 'hooks', 'pre-commit')
+  await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\n`)
+  chmodSync(hook, 0o755)
+  await new ProcessRunner().run('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-q', '--allow-empty', '-m', 'x'])
+  assert.equal(existsSync(marker), false, "the repository's own pre-commit hook ran")
+})
+
+test('the app-owned hooks folder holds exactly the stock git-annex hooks', () => {
+  const names = readdirSync(HOOKS_DIR)
+  assert.ok(names.includes('pre-commit'))
+  for (const name of names) {
+    assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /^#!\/bin\/sh\n# automatically configured by git-annex\n/, name)
+  }
+})
+
+test('ProcessRunner blanks datalad.clone.reckless for every child', async () => {
+  const r = await new ProcessRunner().run(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(process.env.DATALAD_CLONE_RECKLESS))'])
+  assert.equal(r.stdout, '""')
+})
+
+test("a cloned dataset's committed reckless setting does not loosen its subdatasets' permissions", { skip: (!hasDatalad || process.platform === 'win32') && 'needs datalad on POSIX' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'reckless-'))
+  const src = join(dir, 'src')
+  execFileSync('datalad', ['create', src], { stdio: 'ignore' })
+  execFileSync('datalad', ['create', '-d', src, join(src, 'sub')], { stdio: 'ignore' })
+  execFileSync('git', ['config', '--file', join(src, '.datalad', 'config'), 'datalad.clone.reckless', 'shared-0777'])
+  execFileSync('datalad', ['save', '-d', src, '-m', 'x'], { stdio: 'ignore' })
+  const dest = join(dir, 'dest')
+  const r = await new ProcessRunner().run('datalad', ['install', '-r', '-s', src, '--', dest])
+  assert.equal(r.failed, false, r.stderr)
+  let shared = ''
+  try { shared = execFileSync('git', ['-C', join(dest, 'sub'), 'config', '--get', 'core.sharedrepository']).toString().trim() } catch { /* unset: the passing case */ }
+  assert.notEqual(shared, '0666')
+})
+
+test('taskkill is started by absolute path, not looked up in a dataset-controlled folder', () => {
+  const src = readFileSync(new URL('../src/datalad/kill-tree.js', import.meta.url), 'utf8')
+  assert.match(src, /SystemRoot[^\n]*System32[^\n]*taskkill\.exe/)
+})
+
+// A Windows checkout converts line endings by default, and `#!/bin/sh\r` fails under git's shell:
+// every git-annex hook would break. The hooks must be checked out (and packaged) with LF.
+test('the git hooks keep LF line endings on every checkout', () => {
+  const attributes = readFileSync(new URL('../.gitattributes', import.meta.url), 'utf8')
+  assert.match(attributes, /^build\/git-hooks\/\*\s+text\s+eol=lf\s*$/m)
+  for (const name of readdirSync(HOOKS_DIR)) {
+    assert.doesNotMatch(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\r/, `${name} has CRLF line endings`)
+  }
+})
+
+test('the hooks folder is resources/git-hooks in a packaged app and build/git-hooks otherwise', () => {
+  assert.equal(resolveHooksDir({ resourcesPath: join('res'), exists: () => true }), join('res', 'git-hooks'))
+  assert.match(resolveHooksDir({ resourcesPath: join('res'), exists: () => false }), /build[\\/]git-hooks$/)
+  assert.match(resolveHooksDir({ resourcesPath: undefined, exists: () => true }), /build[\\/]git-hooks$/)
+})
+
+test('taskkill comes from the Windows system folder, wherever Windows lives', () => {
+  assert.ok(taskkillPath({ SystemRoot: 'D:\\Win' }).startsWith('D:\\Win'))
+  assert.match(taskkillPath({ SystemRoot: 'D:\\Win' }), /System32[\\/]taskkill\.exe$/)
+  assert.ok(taskkillPath({}).startsWith('C:\\Windows'))
+})
+
+// Regression from the review of the hooks design: the shipped hooks ran `git annex ...` in every
+// repository, so a plain git project (or `datalad create --no-annex`) could no longer commit.
+test('the app can commit in a repository that does not use git-annex', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plain-'))
+  execFileSync('git', ['init', '-q', dir])
+  await writeFile(join(dir, 'a.txt'), 'x')
+  const runner = new ProcessRunner()
+  await runner.run('git', ['-C', dir, 'add', 'a.txt'])
+  const result = await runner.run('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-q', '-m', 'x'])
+  assert.equal(result.failed, false, result.stderr)
+})
+
+test('every shipped hook does nothing in a repository that has no git-annex uuid', () => {
+  for (const name of readdirSync(HOOKS_DIR)) {
+    assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /\ngit config --get annex\.uuid >\/dev\/null 2>&1 \|\| exit 0\n/, name)
+  }
+})
+
+// A folder laid out like a bare git directory (HEAD, objects, refs, config) can name a work tree elsewhere
+// and carry its own filters and attributes. Git must only use a repository it finds as `.git`.
+test('git refuses a bare-format folder it would find by looking at the current directory', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'bare-format-'))
+  const proj = join(dir, 'proj')
+  execFileSync('git', ['init', '-q', '--bare', proj])
+  mkdirSync(join(dir, 'data'))
+  await writeFile(join(proj, 'config'), '[core]\n\tbare = false\n\tworktree = ../data\n\trepositoryformatversion = 0\n')
+  const result = await new ProcessRunner().run('git', ['-C', proj, 'status', '--porcelain'])
+  assert.equal(result.failed, true)
+  assert.match(result.stderr, /bare repository/i)
+})
+
+test('pushing to, cloning from and fetching from local bare and work-tree remotes still works', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'remotes-'))
+  const runner = new ProcessRunner()
+  const git = (...args) => runner.run('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.t', ...args])
+  execFileSync('git', ['init', '-q', '--bare', join(dir, 'bare.git')])
+  const clone = join(dir, 'clone')
+  assert.equal((await git('clone', '-q', join(dir, 'bare.git'), clone)).failed, false)
+  await writeFile(join(clone, 'a.txt'), 'x')
+  await git('-C', clone, 'add', 'a.txt')
+  assert.equal((await git('-C', clone, 'commit', '-q', '-m', 'x')).failed, false)
+  const pushed = await git('-C', clone, 'push', '-q', 'origin', 'HEAD')
+  assert.equal(pushed.failed, false, pushed.stderr)
+  const second = join(dir, 'second')
+  assert.equal((await git('clone', '-q', join(dir, 'bare.git'), second)).failed, false)
+  assert.equal((await git('-C', second, 'fetch', '-q')).failed, false)
+  // a work-tree remote
+  const work = join(dir, 'work')
+  execFileSync('git', ['init', '-q', work])
+  execFileSync('git', ['-C', work, 'config', 'receive.denyCurrentBranch', 'updateInstead'])
+  assert.equal((await git('-C', clone, 'push', '-q', work, 'HEAD:refs/heads/main')).failed, false)
 })

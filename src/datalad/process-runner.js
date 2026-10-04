@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { killProcessTree, QUIT_ABORT_REASON } from './kill-tree.js'
 import { resolveTool } from './resolve-tool.js'
@@ -18,20 +21,37 @@ const DEFAULT_KILL_GRACE_MS = 3000
 const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
 const OUTPUT_LIMIT_EXIT_CODE = 125
 
+// Only the stock git-annex hooks ever run: a repository's own hooks (from a zip, a USB stick,
+// a nested repo the scanner never saw) are ignored. Packaged: resources/git-hooks (git cannot
+// run a script inside app.asar); dev/tests: build/git-hooks.
+export function resolveHooksDir({ resourcesPath = process.resourcesPath, exists = existsSync } = {}) {
+  const packaged = resourcesPath ? join(resourcesPath, 'git-hooks') : null
+  return packaged && exists(packaged) ? packaged : fileURLToPath(new URL('../../build/git-hooks', import.meta.url))
+}
+export const HOOKS_DIR = resolveHooksDir()
+
+// safe.bareRepository=explicit: git only uses a repository it finds as `.git` (or is told about). A folder
+// that merely looks like a bare git directory could otherwise name a work tree elsewhere and bring its own
+// filters and attributes. Pushing to or cloning from bare remotes does not go through discovery.
 // Hardening applied to every child: file names are never git pathspec patterns,
-// a repo's own .git/config cannot make `git status` run a program, and datalad never
-// runs procedures a dataset ships.
+// a repo's own .git/config cannot make `git status` run a program, only the stock git-annex
+// hooks run, and datalad never runs procedures a dataset ships.
 function childEnv(extra = {}) {
   const env = { ...process.env, ...extra }
-  const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
-  env.GIT_CONFIG_COUNT = String(n + 1)
-  env[`GIT_CONFIG_KEY_${n}`] = 'core.fsmonitor'
-  env[`GIT_CONFIG_VALUE_${n}`] = 'false'
+  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit']]) {
+    const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
+    env[`GIT_CONFIG_KEY_${n}`] = key
+    env[`GIT_CONFIG_VALUE_${n}`] = value
+    env.GIT_CONFIG_COUNT = String(n + 1)
+  }
   env.GIT_LITERAL_PATHSPECS = '1'
   // A dataset can ship .datalad/procedures/cfg_<name> that datalad prefers over its own
   // (create -c text2git --force on an adopted dataset ran it). Point the dataset-procedures
   // location at a file: nothing can be found "inside" it.
   env.DATALAD_LOCATIONS_DATASET__PROCEDURES = process.execPath
+  // A dataset's committed .datalad/config can name datalad.clone.reckless (e.g. shared-0777, which
+  // makes every subdataset's .git world-writable); an empty environment value overrides it.
+  env.DATALAD_CLONE_RECKLESS = ''
   env.NoDefaultCurrentDirectoryInExePath = '1'
   return env
 }

@@ -23,6 +23,9 @@ export async function launchApp({ identity = true, env = {} } = {}) {
   // quirk entirely.
   const childEnv = { ...process.env }
   delete childEnv.ELECTRON_RUN_AS_NODE
+  // No human to click the app's native confirmations (console on, new project outside opened folders);
+  // an unpackaged app honours this, a packaged one never does.
+  childEnv.DATALAD_DESKTOP_E2E_CONFIRM = '1'
 
   // Without this, the app launches against the real per-machine profile
   // (localStorage, settings.json), so anything a developer toggled while
