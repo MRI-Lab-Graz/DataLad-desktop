@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from '../src/gui/trust-gate.js'
 import { createTrustStore } from '../src/gui/trust-store.js'
 
@@ -113,7 +113,7 @@ test('isEmptyOrMissing: missing and empty are true, a folder with entries and a 
 test('the prompt names the path, lists the findings or says nothing was found, and has the three buttons', () => {
   const found = describeTrustPrompt({ path: '/p', kind: 'folder', vectors: ['config core.sshcommand = evil'] })
   assert.deepEqual(found.buttons, ['Cancel', 'Trust this folder', 'Trust everything inside this folder'])
-  assert.match(found.detail, /\/p/)
+  assert.ok(found.detail.includes(resolve('/p')), found.detail) // shown resolved: on Windows that is a drive path
   assert.match(found.detail, /core\.sshcommand = evil/)
   const clean = describeTrustPrompt({ path: '/p', kind: 'folder', vectors: [] })
   assert.match(clean.detail, /cannot prove a folder is safe/)
@@ -129,5 +129,5 @@ test('the prompt shows a cleaned, resolved, shortened path: control and bidi cha
   assert.match(shown, /Downloads/)
   const long = describeTrustPrompt({ path: `/${'a'.repeat(900)}/ds`, kind: 'folder', vectors: [] }).detail.split('\n\n')[0]
   assert.ok(long.length <= 300, String(long.length))
-  assert.match(long, /\/ds$/)
+  assert.match(long, /[\\/]ds$/)
 })
