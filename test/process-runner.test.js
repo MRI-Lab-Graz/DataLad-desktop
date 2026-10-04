@@ -1,11 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ProcessRunner } from '../src/datalad/process-runner.js'
+import { HOOKS_DIR, ProcessRunner } from '../src/datalad/process-runner.js'
 import { QUIT_ABORT_REASON } from '../src/datalad/kill-tree.js'
 
 test('ProcessRunner resolves stdout and a zero exit code on success', async () => {
@@ -417,10 +417,10 @@ test('ProcessRunner makes git treat pathspecs literally', async () => {
 test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
   const result = await new ProcessRunner().run(
     process.execPath,
-    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_0]))'],
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_0]))'],
     { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
   )
-  assert.deepEqual(JSON.parse(result.stdout), ['2', 'core.fsmonitor', 'false', 'user.name'])
+  assert.deepEqual(JSON.parse(result.stdout), ['3', 'core.fsmonitor', 'false', 'core.hooksPath', 'user.name'])
 })
 
 test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
@@ -482,4 +482,29 @@ test("create -c text2git --force on an existing dataset runs datalad's procedure
   assert.equal(result.failed, false, result.stderr)
   assert.equal(existsSync(marker), false, 'the dataset-shipped procedure ran')
   assert.match(await readFile(join(ds, '.gitattributes'), 'utf8'), /annex\.largefiles/) // built-in text2git still applied
+})
+
+test('ProcessRunner points git at the app-owned hooks folder', async () => {
+  const result = await new ProcessRunner().run(process.execPath, ['-e',
+    'const n=+process.env.GIT_CONFIG_COUNT;const o={};for(let i=0;i<n;i++)o[process.env["GIT_CONFIG_KEY_"+i]]=process.env["GIT_CONFIG_VALUE_"+i];process.stdout.write(o["core.hooksPath"]??"")'])
+  assert.equal(result.stdout, HOOKS_DIR)
+})
+
+test("a repository's own hook does not run when the app commits", { skip: process.platform === 'win32' && 'POSIX hook script' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'hooks-'))
+  const marker = join(dir, 'hook-ran')
+  execFileSync('git', ['init', '-q', dir])
+  const hook = join(dir, '.git', 'hooks', 'pre-commit')
+  await writeFile(hook, `#!/bin/sh\ntouch '${marker}'\n`)
+  chmodSync(hook, 0o755)
+  await new ProcessRunner().run('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t.t', 'commit', '-q', '--allow-empty', '-m', 'x'])
+  assert.equal(existsSync(marker), false, "the repository's own pre-commit hook ran")
+})
+
+test('the app-owned hooks folder holds exactly the stock git-annex hooks', () => {
+  const names = readdirSync(HOOKS_DIR)
+  assert.ok(names.includes('pre-commit'))
+  for (const name of names) {
+    assert.match(readFileSync(join(HOOKS_DIR, name), 'utf8'), /^#!\/bin\/sh\n# automatically configured by git-annex\n/, name)
+  }
 })

@@ -1,0 +1,3 @@
+#!/bin/sh
+# automatically configured by git-annex
+git annex pre-commit .
