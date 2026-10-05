@@ -925,7 +925,7 @@ test('listRecentCommits returns commit metadata in log order', async () => {
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-n', '2', '--format=%ct%x00%h%x00%an%x00%s'], {
+  runner.set('git', ['-C', root, 'log', '-n', '2', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
     exitCode: 0,
     stdout: '1716200000\u0000a1b2c3d\u0000Ada Lovelace\u0000Save figures\n1716100000\u0000d4e5f6g\u0000Grace Hopper\u0000Initial import\n',
     stderr: '',
@@ -940,7 +940,8 @@ test('listRecentCommits returns commit metadata in log order', async () => {
     timestamp: 1716200000,
     commitHash: 'a1b2c3d',
     author: 'Ada Lovelace',
-    subject: 'Save figures'
+    subject: 'Save figures',
+    tags: []
   })
 })
 
@@ -953,7 +954,7 @@ test('listRecentCommits returns empty list when repository has no commits', asyn
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s'], {
+  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
     exitCode: 128,
     stdout: '',
     stderr: 'fatal: your current branch main has no commits yet',
@@ -2130,4 +2131,19 @@ test('runCommand rejects version names git or a shell could misread', async () =
       tagName
     )
   }
+})
+
+test('listRecentCommits returns the version tags on each commit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-tags-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
+    stdout:
+      '1700000100\u0000bbb2222\u0000Ana\u0000final\u0000HEAD -> main, tag: v1.0, tag: submitted, origin/main\n' +
+      '1700000000\u0000aaa1111\u0000Ana\u0000first\u0000\n'
+  })
+
+  const history = await new DataLadAdapter({ runner }).listRecentCommits(root)
+
+  assert.deepEqual(history.commits.map((c) => c.tags), [['v1.0', 'submitted'], []])
 })

@@ -658,7 +658,7 @@ export class DataLadAdapter {
       'log',
       '-n',
       String(limit),
-      '--format=%ct%x00%h%x00%an%x00%s'
+      '--format=%ct%x00%h%x00%an%x00%s%x00%D'
     ])
 
     if (result.failed) {
@@ -681,7 +681,7 @@ export class DataLadAdapter {
         continue
       }
 
-      const [timestampRaw, commitHash, author, subject] = line.split('\u0000')
+      const [timestampRaw, commitHash, author, subject, decorations] = line.split('\u0000')
       const timestamp = Number.parseInt(timestampRaw, 10)
       if (!Number.isFinite(timestamp)) {
         continue
@@ -691,7 +691,11 @@ export class DataLadAdapter {
         timestamp,
         commitHash: (commitHash ?? '').trim(),
         author: (author ?? '').trim(),
-        subject: (subject ?? '').trim()
+        subject: (subject ?? '').trim(),
+        tags: (decorations ?? '')
+          .split(', ')
+          .filter((d) => d.startsWith('tag: '))
+          .map((d) => d.slice('tag: '.length).trim())
       })
     }
 
