@@ -997,8 +997,8 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
-  const result = await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
-  const remoteName = remoteNameForProject(state.projectHealthSnapshot, projectPath)
+  const remoteName = remoteNameForProject(state.projectHealthSnapshot, projectPath) ?? undefined
+  const result = await runWorkflowCommand('push', { projectPath, remoteName }, elements.publishProjectButton)
   if (result?.ok && remoteName) {
     // datalad push does not send tags; send the versions this person marked (an up-to-date push is a no-op).
     const tagNames = await api.listOwnTags(projectPath)
