@@ -54,6 +54,10 @@ test('every download goes through Get-VerifiedFile', async () => {
   assert.doesNotMatch(ps.replace(fn, ''), /Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile/)
 })
 
+test('a download cannot hang forever: Invoke-WebRequest has a timeout', async () => {
+  assert.match(body(await read('install.ps1'), 'Get-VerifiedFile'), /Invoke-WebRequest [^\n]*-TimeoutSec \d+/)
+})
+
 test('Get-VerifiedFile checks the SHA-256 and throws on a mismatch, also for a file taken from -FromDir', async () => {
   const fn = body(await read('install.ps1'), 'Get-VerifiedFile')
   assert.ok(fn.indexOf('FromDir') !== -1 && fn.indexOf('FromDir') < fn.indexOf('SHA256'), 'hash must be checked after the file is obtained, either way')
@@ -154,4 +158,53 @@ test('the report names where datalad resolves and warns when it is not the priva
 
 test('a failing uv call is written to the log with its output', async () => {
   assert.match(body(await read('install.ps1'), 'Install-DataladEnv'), /Write-Log \$output/)
+})
+
+// ---- install.ps1: Git and git-annex ----
+test('git-annex comes from the versioned DataLad mirror file, never from a moving current/ URL', async () => {
+  const ps = await read('install.ps1')
+  assert.match(ps, /\$GitAnnexVersion = '10\.20260901'/)
+  assert.ok(ps.includes('https://datasets.datalad.org/datalad/packages/windows/git-annex-installer_${GitAnnexVersion}_x64.exe'))
+  assert.doesNotMatch(ps, /downloads\.kitenet\.net|\/current\//)
+})
+
+test('the Git and git-annex pins are the reviewed values and sit above the first function', async () => {
+  const ps = await read('install.ps1')
+  const pins = [
+    "$GitAnnexSha256 = '582F0EF30AC9BE560285D9510F27EBDD95EBDF01719DEC42543B591F6BEF0095'",
+    "$GitSha256 = 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6'",
+    "$GitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe'"
+  ]
+  for (const pin of pins) {
+    assert.ok(ps.includes(pin), `missing pin ${pin}`)
+    assert.ok(ps.indexOf(pin) < ps.indexOf('\nfunction '), `${pin} must sit above the functions`)
+  }
+})
+
+test('Git is installed for the current user and only when it is missing', async () => {
+  const fn = body(await read('install.ps1'), 'Install-Git')
+  assert.match(fn, /Get-Command git -ErrorAction/)
+  assert.ok(fn.includes('/CURRENTUSER') && fn.includes('/VERYSILENT'))
+  assert.match(fn, /Get-VerifiedFile -Url \$GitUrl -Sha256 \$GitSha256/)
+})
+
+test('git-annex is installed only when it is missing, and only after Git', async () => {
+  const ps = await read('install.ps1')
+  const fn = body(ps, 'Install-GitAnnex')
+  assert.match(fn, /Get-Command git-annex -ErrorAction/)
+  assert.match(fn, /Get-VerifiedFile -Url \$GitAnnexUrl -Sha256 \$GitAnnexSha256/)
+  const main = ps.slice(ps.indexOf('\ntry {'))
+  assert.ok(main.indexOf('Install-Git\n') < main.indexOf('Install-GitAnnex'))
+})
+
+// Git installed for all users lives in Program Files: git-annex then needs an administrator once, and that has to be
+// said, not swallowed.
+test('a prerequisite that cannot be installed is collected with manual instructions, not thrown or swallowed', async () => {
+  const ps = await read('install.ps1')
+  for (const [name, hint] of [['Install-Git', /git-scm\.com/], ['Install-GitAnnex', /administrator/i]]) {
+    const fn = body(ps, name)
+    assert.match(fn, /\$script:Failures \+=/)
+    assert.match(fn, hint)
+    assert.match(fn, /catch \{[\s\S]*\$script:Failures \+=[\s\S]*return/, `${name}: a failed download must not abort the whole install`)
+  }
 })

@@ -24,6 +24,12 @@ $AppZipSha256 = '__ZIP_SHA256__'
 $Repo = 'MRI-Lab-Graz/DataLad-desktop'
 $AppZipName = "DataLad-Desktop-$AppVersion-win-x64.zip"
 $AppZipUrl = "https://github.com/$Repo/releases/download/v$AppVersion/$AppZipName"
+$GitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe'
+$GitSha256 = 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6'
+# DataLad's mirror keeps one file per git-annex version; the author's own current/ URL moves and would break this pin.
+$GitAnnexVersion = '10.20260901'
+$GitAnnexSha256 = '582F0EF30AC9BE560285D9510F27EBDD95EBDF01719DEC42543B591F6BEF0095'
+$GitAnnexUrl = "https://datasets.datalad.org/datalad/packages/windows/git-annex-installer_${GitAnnexVersion}_x64.exe"
 
 # Steps that cannot finish are collected here; the script reports them and exits non-zero at the end.
 $script:Failures = @()
@@ -44,7 +50,7 @@ function Get-VerifiedFile([string]$Url, [string]$Sha256, [string]$OutFile) {
         Copy-Item -LiteralPath $local -Destination $OutFile -Force
     } else {
         Write-Log "Downloading $Url"
-        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing
+        Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 1800
     }
     $stream = [IO.File]::OpenRead($OutFile)
     try {
@@ -82,6 +88,54 @@ function Install-App {
     }
     Move-Item -LiteralPath $work -Destination $InstallDir
     Write-Log "Installed the app in '$InstallDir'."
+}
+
+# This process keeps the PATH it started with; installers update the registry. Look at what a new terminal will see.
+function Update-ProcessPath {
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+}
+
+function Install-Git {
+    if (Get-Command git -ErrorAction SilentlyContinue) {
+        Write-Log 'Git is already installed.'
+        return
+    }
+    $installer = Join-Path ([IO.Path]::GetTempPath()) 'dlad-git-installer.exe'
+    try {
+        Get-VerifiedFile -Url $GitUrl -Sha256 $GitSha256 -OutFile $installer
+    } catch {
+        $script:Failures += "Git for Windows could not be downloaded: $($_.Exception.Message) Install it from https://git-scm.com/download/win and run this script again."
+        return
+    }
+    Write-Log 'Installing Git for Windows for your user...'
+    $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES', '/CURRENTUSER' -Wait -PassThru
+    Remove-Item -LiteralPath $installer -Force
+    Update-ProcessPath
+    if ($process.ExitCode -ne 0 -or -not (Get-Command git -ErrorAction SilentlyContinue)) {
+        $script:Failures += "Git for Windows could not be installed (exit code $($process.ExitCode)). Install it from https://git-scm.com/download/win and run this script again."
+    }
+}
+
+function Install-GitAnnex {
+    if (Get-Command git-annex -ErrorAction SilentlyContinue) {
+        Write-Log 'git-annex is already installed.'
+        return
+    }
+    $installer = Join-Path ([IO.Path]::GetTempPath()) 'dlad-git-annex-installer.exe'
+    $manual = "Download $GitAnnexUrl and run it. If Git is installed for all users (in Program Files), run it as an administrator once."
+    try {
+        Get-VerifiedFile -Url $GitAnnexUrl -Sha256 $GitAnnexSha256 -OutFile $installer
+    } catch {
+        $script:Failures += "git-annex could not be downloaded: $($_.Exception.Message) $manual"
+        return
+    }
+    Write-Log 'Installing git-annex...'
+    $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
+    Remove-Item -LiteralPath $installer -Force
+    Update-ProcessPath
+    if ($process.ExitCode -ne 0 -or -not (Get-Command git-annex -ErrorAction SilentlyContinue)) {
+        $script:Failures += "git-annex could not be installed (exit code $($process.ExitCode)). git-annex installs into Git for Windows. $manual"
+    }
 }
 
 # The app finds datalad only through PATH, so the private environment's Scripts folder goes on the user PATH
@@ -130,8 +184,7 @@ function Test-Datalad {
 
 function Write-Report {
     $ours = Join-Path $InstallDir 'datalad-env\Scripts\datalad.exe'
-    # This process still has the PATH it started with: look at what a new terminal will see.
-    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+    Update-ProcessPath
     $found = Get-Command datalad -ErrorAction SilentlyContinue
     if (-not (Test-Datalad)) {
         $script:Failures += 'DataLad was installed but "datalad --version" does not run.'
@@ -150,6 +203,8 @@ try {
         throw 'This is the unrendered template. Download install.cmd and install.ps1 from a release page instead.'
     }
     Install-App
+    Install-Git
+    Install-GitAnnex
     Install-DataladEnv
     Write-Report
     if ($script:Failures.Count -gt 0) {
