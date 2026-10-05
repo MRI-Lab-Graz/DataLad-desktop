@@ -81,8 +81,11 @@ test('Free Up Space removes the local copy now that the backup has one', async (
 })
 
 test('a version marked in git reaches the remote on Publish', async () => {
-  // made under the app's git identity (E2E Test), like Mark As Version does; the UI path is covered by unit tests
-  sh('git', ['-c', 'user.email=e2e@example.org', '-c', 'user.name=E2E Test', 'tag', '-a', 'v1.0', '-m', 'Version v1.0'], projectPath)
+  // Made under the identity the app sees in this project, like Mark As Version does; the UI path is covered by unit tests.
+  // No -c override: the project's own config beats the app's global one, and CI's datalad create writes one there.
+  execFileSync('git', ['tag', '-a', 'v1.0', '-m', 'Version v1.0'], {
+    cwd: projectPath, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: app.gitConfigGlobal }
+  })
   sh('git', ['-c', 'user.email=bob@example.org', '-c', 'user.name=Bob', 'tag', '-a', 'theirs', '-m', 'from a collaborator'], projectPath)
   await app.page.evaluate(() => document.getElementById('publish-project').click())
   // The tag push runs right after Publish finishes (the button is idle by then): poll the remote.
