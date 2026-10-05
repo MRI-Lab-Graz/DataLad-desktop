@@ -133,3 +133,8 @@ test('mapCommandError maps an existing tag name', () => {
   const result = mapCommandError('createTag', { stderr: "fatal: tag 'v1.0' already exists" })
   assert.equal(result.code, 'TAG_EXISTS')
 })
+
+test('mapCommandError maps a remote name that is already taken', () => {
+  const result = mapCommandError('addRemote', { stderr: "fatal: remote origin already exists." })
+  assert.equal(result.code, 'REMOTE_EXISTS')
+})

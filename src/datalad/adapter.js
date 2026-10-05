@@ -27,7 +27,8 @@ const CURATED_COMMANDS = new Set([
   'drop',
   'createTag',
   'pushTags',
-  'verify'
+  'verify',
+  'addRemote'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
@@ -1147,9 +1148,20 @@ export class DataLadAdapter {
       }
       case 'push': {
         const projectPath = request.projectPath
+        const args = ['-C', projectPath, 'push']
+        if (request.remoteName) {
+          args.push('--to', request.remoteName)
+        }
+        return { command: 'datalad', args, options: { cwd: projectPath } }
+      }
+      case 'addRemote': {
+        const { projectPath, remoteName, url } = request
+        if (!isSafeName(remoteName)) {
+          throw new Error(`Invalid remote name: ${remoteName}. Use letters, digits, dot, dash or underscore.`)
+        }
         return {
           command: 'datalad',
-          args: ['-C', projectPath, 'push'],
+          args: ['siblings', 'add', '-d', projectPath, '-s', remoteName, '--url', url],
           options: { cwd: projectPath }
         }
       }

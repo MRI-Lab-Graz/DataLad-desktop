@@ -191,6 +191,15 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (commandName === 'addRemote' && hasPattern(`${stdout}\n${stderr}`, /already (exists|present|configured)/)) {
+    return {
+      code: 'REMOTE_EXISTS',
+      title: 'That remote name is already used',
+      message: 'This project already has a remote with this name. Pick a different name.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
+
   if (hasPattern(stderr, /no configured push target|no sibling|no remote|could not determine remote/)) {
     return {
       code: 'REMOTE_MISSING',

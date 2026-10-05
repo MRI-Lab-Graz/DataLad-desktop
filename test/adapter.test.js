@@ -2172,3 +2172,36 @@ test('runCommand verifies stored data with a full git-annex checksum pass', asyn
 
   assert.equal(result.ok, true)
 })
+
+test('runCommand adds a remote as a DataLad sibling', async () => {
+  const runner = new FakeRunner()
+  const args = ['siblings', 'add', '-d', '/tmp/project', '-s', 'backup', '--url', '/Volumes/USB/study']
+  runner.set('datalad', args, {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('addRemote', {
+    projectPath: '/tmp/project', remoteName: 'backup', url: '/Volumes/USB/study'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, args)
+})
+
+test('addRemote rejects unsafe remote names', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const remoteName of ['my remote', 'a/b', 'x..y', 'origin.lock']) {
+    await assert.rejects(
+      adapter.runCommand('addRemote', { projectPath: '/tmp/p', remoteName, url: 'https://x/y' }),
+      /remote name/i,
+      remoteName
+    )
+  }
+})
+
+test('push can target one named remote', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'push', '--to', 'backup'], {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('push', { projectPath: '/tmp/project', remoteName: 'backup' })
+
+  assert.equal(result.ok, true)
+})
