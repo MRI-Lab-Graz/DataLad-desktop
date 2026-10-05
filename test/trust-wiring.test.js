@@ -5,7 +5,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
+// A Windows checkout has CRLF line endings; block() below looks for '\n})\n', and without it would return the rest of the file.
+const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const block = (start) => {
   const at = main.indexOf(start)
   assert.ok(at !== -1, `missing ${start}`)
