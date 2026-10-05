@@ -1,11 +1,14 @@
 import {
   computeDatasetGating,
   computeUnlockGating,
+  computeAnnexToolGating,
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
+import { summarizeFsck } from './integrity.js'
+import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -15,6 +18,7 @@ import {
   createRunId,
   formatActivityLine,
   formatDurationLine,
+  formatProgress,
   renderRunningRows,
   shouldShowUserErrorMessage,
   shouldStopSequence
@@ -161,6 +165,9 @@ const elements = {
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
+  dropDataButton: document.getElementById('drop-data'),
+  verifyDataButton: document.getElementById('verify-data'),
+  verifyOutput: document.getElementById('verify-output'),
   unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
@@ -197,6 +204,12 @@ const elements = {
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
   remoteInfo: document.getElementById('remote-info'),
+  addRemote: document.getElementById('add-remote'),
+  addRemoteModeFolder: document.getElementById('add-remote-mode-folder'),
+  addRemoteLocation: document.getElementById('add-remote-location'),
+  addRemoteBrowse: document.getElementById('add-remote-browse'),
+  addRemoteName: document.getElementById('add-remote-name'),
+  addRemoteConnect: document.getElementById('add-remote-connect'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
   consoleHelpText: document.getElementById('console-help-text'),
@@ -213,7 +226,9 @@ const elements = {
   timeMachineCloseDetailButton: document.getElementById('tm-close-detail'),
   timeMachineBranchName: document.getElementById('tm-branch-name'),
   timeMachineBranchFromHereButton: document.getElementById('tm-branch-from-here'),
-  timeMachineActionOutput: document.getElementById('tm-action-output')
+  timeMachineActionOutput: document.getElementById('tm-action-output'),
+  timeMachineVersionName: document.getElementById('tm-version-name'),
+  timeMachineMarkVersionButton: document.getElementById('tm-mark-version')
 }
 
 loadRecentProjects()
@@ -876,10 +891,11 @@ elements.getDataButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('get', {
-    projectPath,
-    paths: parsePaths(elements.paths.value)
-  }, elements.getDataButton)
+  const paths = parsePaths(elements.paths.value)
+  // ponytail: total known only for "get everything" in the root dataset (health counts the root only).
+  const progressTotal =
+    paths.length === 0 && projectPath === state.rootProjectPath ? state.projectHealthSnapshot?.missingContentCount ?? null : null
+  await runWorkflowCommand('get', { projectPath, paths }, elements.getDataButton, undefined, { progressTotal })
 
   await refreshFileBrowser(projectPath)
 })
@@ -914,6 +930,56 @@ elements.unlockFilesButton.addEventListener('click', async () => {
   await refreshFileBrowser(projectPath)
 })
 
+elements.dropDataButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const paths = parsePaths(elements.paths.value)
+  const scope = paths.length > 0 ? `${paths.length} selected item(s)` : 'all downloaded data in this folder'
+  const confirmed = window.confirm(
+    `Free up space by removing the local copy of ${scope}?\n\n` +
+      '- Only removed when another copy (your remote or backup) is confirmed. Otherwise nothing happens.\n' +
+      '- Files stay listed; use Get Data to download them again.\n\n' +
+      'Continue?'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  await runWorkflowCommand('drop', { projectPath, paths }, elements.dropDataButton)
+  await refreshFileBrowser(projectPath)
+})
+
+elements.verifyDataButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const result = await runWorkflowCommand('verify', { projectPath }, elements.verifyDataButton)
+  if (!result) {
+    return
+  }
+  // fsck exits non-zero when it finds damage, so read the summary even for a "failed" result.
+  const { checked, damaged } = summarizeFsck(result.stdout)
+  if (checked === 0 && !result.ok) {
+    return // a real failure; runWorkflowCommand already rendered it
+  }
+  elements.verifyOutput.innerHTML = damaged.length === 0
+    ? `<p>All ${checked} downloaded file(s) are intact.</p>`
+    : `<p><strong>${damaged.length} of ${checked} file(s) are damaged.</strong> The damaged copies were set aside; ` +
+      'use Get Data to fetch a good copy from your remote or backup.</p>' +
+      `<ul>${damaged.map((f) => `<li><code>${escapeHtml(f)}</code></li>`).join('')}</ul>`
+  elements.verifyOutput.hidden = false
+  if (damaged.length > 0) {
+    setLastActionState(`${damaged.length} damaged file(s) found.`, 'error')
+  } else {
+    setLastActionState('All data intact.', 'success')
+  }
+})
+
 elements.updateProjectButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
   if (!projectPath) {
@@ -929,7 +995,72 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
+  const result = await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
+  const remoteName = state.projectHealthSnapshot?.upstream?.split('/')[0]
+  if (result?.ok && remoteName) {
+    // datalad push does not send tags; send the versions this person marked (an up-to-date push is a no-op).
+    const tagNames = await api.listOwnTags(projectPath)
+    if (tagNames.length > 0) {
+      const tags = await api.runCommand('pushTags', { projectPath, remoteName, tagNames }, createRunId())
+      if (!tags?.ok) {
+        setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+      }
+    }
+  }
+})
+
+elements.addRemoteBrowse.addEventListener('click', async () => {
+  const picked = await api.pickDirectory({ title: 'Choose an empty folder for the copy' })
+  if (picked) {
+    elements.addRemoteLocation.value = picked
+    elements.addRemoteModeFolder.checked = true
+  }
+})
+
+// The remote is only useful once Publish worked and the branch tracks it: otherwise remove it again, so
+// the name is free for a retry (Disconnect is disabled while no upstream exists).
+async function undoAddedRemote(projectPath, remoteName) {
+  await api.runCommand('disconnectRemote', { projectPath, remoteName }, createRunId())
+}
+
+elements.addRemoteConnect.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const location = elements.addRemoteLocation.value.trim()
+  const remoteName = elements.addRemoteName.value.trim()
+  if (!projectPath) {
+    return
+  }
+  if (!location || !remoteName) {
+    setLastActionState('Enter a location and a name first.', 'error')
+    return
+  }
+
+  try {
+    if (elements.addRemoteModeFolder.checked) {
+      await api.prepareFolderRemote(projectPath, remoteName, location)
+    }
+    const added = await runWorkflowCommand('addRemote', { projectPath, remoteName, url: location }, elements.addRemoteConnect)
+    if (!added?.ok) {
+      return
+    }
+    const pushed = await runWorkflowCommand('push', { projectPath, remoteName }, elements.addRemoteConnect)
+    if (!pushed?.ok) {
+      await undoAddedRemote(projectPath, remoteName)
+      return
+    }
+    try {
+      await api.trackRemote(projectPath, remoteName)
+    } catch (error) {
+      await undoAddedRemote(projectPath, remoteName)
+      throw error
+    }
+    setLastActionState(`Connected to ${remoteName} and published.`, 'success')
+  } catch (error) {
+    elements.commandOutput.textContent = String(error.message)
+    setLastActionState('Add a Remote failed.', 'error')
+  } finally {
+    await refreshProjectHealth(projectPath)
+  }
 })
 
 elements.disconnectRemoteButton.addEventListener('click', async () => {
@@ -1133,6 +1264,36 @@ elements.timeMachineBranchFromHereButton.addEventListener('click', async () => {
       result.userError?.message ?? 'Branch creation failed. Check the branch name and try again.'
     elements.timeMachineActionOutput.hidden = false
   }
+})
+
+elements.timeMachineMarkVersionButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  const tagName = elements.timeMachineVersionName.value.trim()
+  if (!projectPath || !commitHash) {
+    return
+  }
+  if (!tagName) {
+    elements.timeMachineActionOutput.textContent = 'Enter a version name first.'
+    elements.timeMachineActionOutput.hidden = false
+    return
+  }
+
+  const result = await runWorkflowCommand(
+    'createTag',
+    { projectPath, tagName, message: `Version ${tagName}`, commitHash },
+    elements.timeMachineMarkVersionButton
+  )
+  if (result?.ok) {
+    elements.timeMachineActionOutput.innerHTML =
+      `<p>Marked save <code>${escapeHtml(commitHash)}</code> as version <strong>${escapeHtml(tagName)}</strong>. ` +
+      'Publish to share it.</p>'
+    elements.timeMachineVersionName.value = ''
+    await refreshTimeMachineHistory(projectPath)
+  } else if (result) {
+    elements.timeMachineActionOutput.textContent = result.userError?.message ?? 'The version could not be created.'
+  }
+  elements.timeMachineActionOutput.hidden = false
 })
 
 elements.timeMachineDetailOutput.addEventListener('click', async (event) => {
@@ -1390,8 +1551,8 @@ function renderRunningCommands() {
   elements.runningCommands.innerHTML = renderRunningRows(runs)
 }
 
-function trackRun(runId, label) {
-  state.activeRuns.set(runId, { runId, label, line: '', stopping: false })
+function trackRun(runId, label, total = null) {
+  state.activeRuns.set(runId, { runId, label, line: '', stopping: false, total, progress: '' })
   renderRunningCommands()
 }
 
@@ -1411,6 +1572,20 @@ api.onCommandActivity(({ runId, line }) => {
   const span = elements.runningCommands.querySelector(`[data-run-row="${CSS.escape(runId)}"] .running-line`)
   if (span) {
     span.textContent = run.line
+  }
+})
+
+api.onCommandProgress(({ runId, done }) => {
+  const run = state.activeRuns.get(runId)
+  if (!run) {
+    return
+  }
+  run.progress = formatProgress(done, run.total)
+  const span = elements.runningCommands.querySelector(`[data-run-row="${CSS.escape(runId)}"] .running-progress`)
+  if (span) {
+    span.textContent = run.progress
+  } else {
+    renderRunningCommands()
   }
 })
 
@@ -1439,7 +1614,7 @@ elements.runningCommands.addEventListener('click', (event) => {
 })
 
 async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined, options = {}) {
-  const { skipBackgroundRefresh = false } = options
+  const { skipBackgroundRefresh = false, progressTotal = null } = options
 
   if (state.sequenceStopRequested) {
     return cancelledResult(commandName)
@@ -1463,7 +1638,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
 
   state.pendingCommands.add(commandName)
   const runId = createRunId()
-  trackRun(runId, actionLabel(commandName))
+  trackRun(runId, actionLabel(commandName), progressTotal)
   const pathCount = Array.isArray(request.paths) ? request.paths.length : 0
   const busyLabel =
     busyLabelOverride ??
@@ -2095,6 +2270,7 @@ function clearTimeMachine() {
   elements.timeMachineDetail.hidden = true
   elements.timeMachineActionOutput.hidden = true
   elements.timeMachineBranchName.value = ''
+  elements.verifyOutput.hidden = true // a previous project's integrity result must not linger
   renderTimeMachineHistory()
 }
 
@@ -2163,7 +2339,11 @@ function renderTimeMachineHistory() {
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
         `<span class="history-age">${escapeHtml(age)} ago</span>` +
         '</div>' +
-        `<div class="history-subject">${escapeHtml(subject)}</div>` +
+        `<div class="history-subject">${isRunCommit(subject) ? '<span class="run-chip">recorded run</span> ' : ''}` +
+        `${escapeHtml(subject.replace('[DATALAD RUNCMD] ', ''))}</div>` +
+        (entry.tags?.length
+          ? `<div class="history-tags">${entry.tags.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>`
+          : '') +
         `<div class="history-author">${escapeHtml(author)}</div>` +
         '</li>'
       )
@@ -2221,8 +2401,22 @@ function renderTimeMachineDetail() {
     : ''
 
   const bodyText = (details.message ?? '').replace(/^\s*\n*/, '').trim()
+  const run = parseRunRecord(details.message)
+  const runHtml = !run
+    ? ''
+    : run.sidecar
+      ? '<div class="tm-run-record"><h4>Produced by a recorded command</h4><p class="hint-inline">The command is stored in the project\'s .datalad/runinfo folder.</p></div>'
+      : '<div class="tm-run-record"><h4>Produced by a recorded command</h4>' +
+        `<pre class="panel panel-code">${escapeHtml(run.cmd)}</pre>` +
+        `<p class="hint-inline">Ran in <code>${escapeHtml(run.pwd)}</code>` +
+        (run.exit === null ? '' : `, exit code ${run.exit}`) + '.</p>' +
+        (run.inputs.length ? `<p class="hint-inline">Inputs: ${run.inputs.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}</p>` : '') +
+        (run.outputs.length ? `<p class="hint-inline">Outputs: ${run.outputs.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}</p>` : '') +
+        '</div>'
+
+  // A run commit's body is the raw record block: shown above as runHtml instead.
   const bodyHtml =
-    bodyText && bodyText !== details.subject
+    !run && bodyText && bodyText !== details.subject
       ? `<p class="tm-detail-body">${escapeHtml(bodyText)}</p>`
       : ''
 
@@ -2257,6 +2451,7 @@ function renderTimeMachineDetail() {
     '</div>' +
     `<p class="tm-detail-subject">${escapeHtml(details.subject ?? '')}</p>` +
     bodyHtml +
+    runHtml +
     statHtml +
     restoreFilesHtml
 
@@ -2856,6 +3051,26 @@ function actionLabel(commandName) {
     return 'Unlock for Editing'
   }
 
+  if (commandName === 'drop') {
+    return 'Free Up Space'
+  }
+
+  if (commandName === 'createTag') {
+    return 'Mark As Version'
+  }
+
+  if (commandName === 'addRemote') {
+    return 'Add a Remote'
+  }
+
+  if (commandName === 'verify') {
+    return 'Check Data Integrity'
+  }
+
+  if (commandName === 'pushTags') {
+    return 'Publish Versions'
+  }
+
   return 'Action'
 }
 
@@ -2975,6 +3190,20 @@ function updateGetDataGating() {
   const unlockGating = computeUnlockGating(state.currentProjectClassification)
   elements.unlockFilesButton.disabled = unlockGating.disabled
   elements.unlockFilesButton.title = unlockGating.title
+
+  const dropGating = computeAnnexToolGating(
+    state.currentProjectClassification,
+    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get Data brings it back.'
+  )
+  elements.dropDataButton.disabled = dropGating.disabled
+  elements.dropDataButton.title = dropGating.title
+
+  const verifyGating = computeAnnexToolGating(
+    state.currentProjectClassification,
+    'Re-check every downloaded file against its recorded checksum. Can take a while on large data.'
+  )
+  elements.verifyDataButton.disabled = verifyGating.disabled
+  elements.verifyDataButton.title = verifyGating.title
 }
 
 function updateSyncSectionVisibility() {
@@ -3081,6 +3310,7 @@ function applyRemoteGatedButtons(health) {
   elements.disconnectRemoteButton.disabled = gating.disconnect.disabled
   elements.disconnectRemoteButton.title = gating.disconnect.title
 
+  elements.addRemote.hidden = gating.addRemote.hidden || !state.rootProjectPath
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
 

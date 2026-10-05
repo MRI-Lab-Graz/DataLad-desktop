@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, symlink, realpath } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { isWithinRoots, initialAuthorizedRoots } from '../src/gui/path-confinement.js'
+import { isUnsafeBackupLocation, isWithinRoots, initialAuthorizedRoots } from '../src/gui/path-confinement.js'
 
 async function fixture() {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'confine-')))
@@ -59,4 +59,20 @@ test('a target that is itself a symlink out of the root is outside it', { skip: 
   await symlink(outside, join(root, 'link'))
   assert.equal(isWithinRoots(join(root, 'link'), new Set([root])), false)
   assert.equal(isWithinRoots(join(root, 'brand-new-folder'), new Set([root])), true)
+})
+
+test('a backup copy may not take over a filesystem root, the home folder, a folder above it, or a whole drive', async () => {
+  const { root } = await fixture()
+  assert.equal(isUnsafeBackupLocation(resolve('/')), true)
+  assert.equal(isUnsafeBackupLocation(homedir()), true)
+  assert.equal(isUnsafeBackupLocation(resolve(homedir(), '..')), true)
+  // a mount point: its device differs from its parent folder's
+  assert.equal(isUnsafeBackupLocation(join(root, 'sub'), { dev: (p) => (p.endsWith('sub') ? 2 : 1) }), true)
+})
+
+test('a new or empty folder inside a drive is a fine backup location', async () => {
+  const { root } = await fixture()
+  assert.equal(isUnsafeBackupLocation(join(root, 'sub'), { dev: () => 1 }), false)
+  assert.equal(isUnsafeBackupLocation(join(root, 'not-yet', 'my-study'), { dev: () => 1 }), false)
+  assert.equal(isUnsafeBackupLocation(join(root, 'not-yet')), false) // stat fails on a missing folder: not a mount point
 })

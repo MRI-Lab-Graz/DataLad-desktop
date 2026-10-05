@@ -106,3 +106,21 @@ test('force must be a boolean', () => {
   assertCommandRequest('createProject', { targetPath: '/p', force: true })
   assert.throws(() => assertCommandRequest('createProject', { targetPath: '/p', force: 'yes' }), /force must be a boolean/)
 })
+
+test('addRemote refuses flag-like values and the ext:: transport', () => {
+  assert.throws(() => assertCommandRequest('addRemote', { projectPath: '/p', remoteName: '-x', url: 'https://a' }), /cannot start with -/)
+  assert.throws(() => assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: '--upload-pack=evil' }), /cannot start with -/)
+  assert.throws(() => assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: 'ext::sh -c evil' }), /ext:: transport/)
+})
+
+test('addRemote refuses a URL that carries a password or token', () => {
+  assert.throws(
+    () => assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: 'https://user:s3cret@host/x' }),
+    /password or token/
+  )
+  assert.throws(
+    () => assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: 'https://ghp_TOKEN@github.com/me/x' }),
+    /password or token/
+  )
+  assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: 'ssh://git@host/x' }) // user name only: fine
+})

@@ -61,7 +61,7 @@ test('a clone is never trusted or authorized by the app: its first open asks', (
 
 test('a push re-checks the project and every local-path remote right before the command', () => {
   const body = block("handle('adapter:runCommand'")
-  const project = body.search(/commandName === 'push'[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
+  const project = body.search(/PUSHES\.has\(payload\.commandName\)[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
   const remotes = body.search(/localRemotePaths\(consoleRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
   assert.ok(project !== -1 && remotes !== -1)
   assert.ok(remotes < body.indexOf('adapter.runCommand('))
@@ -102,11 +102,12 @@ test('createProject into an empty target ignores force, so a folder filled in be
 // folder, or a documented read-only exception. Otherwise this test fails until someone decides.
 test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
-  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath']
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
   const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'env:ensure', 'console:setEnabled', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
-  assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException].sort(), 'classify new handlers here')
+  const newEmptyFolder = ['adapter:prepareFolderRemote'] // writes only into an empty folder, confirmed unless picked (own test below)
+  assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException, ...newEmptyFolder].sort(), 'classify new handlers here')
   for (const name of guarded) {
     assert.match(block(`handle('${name}'`), /requireAuthorizedRoot\(|isWithinAuthorizedRoot\(/, `${name} does not check the authorized roots`)
   }
@@ -120,5 +121,80 @@ test('every IPC handler is classified', () => {
 test('the push/nesting re-check runs inside the registered run, so a Stop pressed during it is honoured', () => {
   const body = block("handle('adapter:runCommand'")
   assert.match(body, /runWithHandle\(event, payload\.runId, async \(runOptions\) => \{\s*await recheckTrust\(\)\s*return adapter\.runCommand\(/)
-  assert.match(body, /recheckTrust = async \(\) => \{\s*if \(payload\.commandName === 'push' \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
+  assert.match(body, /recheckTrust = async \(\) => \{\s*if \(PUSHES\.has\(payload\.commandName\) \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
+})
+
+test('sending versions to a remote re-checks trust exactly like Publish', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(main, /const PUSHES = new Set\(\['push', 'pushTags'\]\)/)
+  const recheck = body.slice(body.indexOf('recheckTrust = async'), body.indexOf('} else {'))
+  assert.match(recheck, /PUSHES\.has\(payload\.commandName\)/)
+  assert.doesNotMatch(recheck, /payload\.commandName === 'push'/)
+})
+
+test('Get and Publish report file-count progress to the page', () => {
+  assert.match(main, /'command:progress'/)
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /progress: payload\.commandName === 'get' \|\| payload\.commandName === 'push'/)
+})
+
+test('a folder remote is only ever created in an empty folder, confirmed when not picked, then trusted as app-made', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  const name = body.indexOf('adapter.assertNewRemoteName(')
+  const empty = body.indexOf('isEmptyOrMissing(folderPath)')
+  const prepare = body.indexOf('adapter.prepareFolderRemote')
+  assert.ok(name !== -1 && name < empty, 'the remote name is checked before the folder is touched')
+  assert.match(body, /requireAuthorizedRoot\(payload\.projectPath\)/)
+  assert.ok(empty !== -1 && empty < prepare, 'emptiness is checked before anything is written')
+  assert.match(body, /isWithinRoots\(folderPath, pickedLocations\)[\s\S]*?confirmNative\(/)
+  assert.ok(body.indexOf('createdByApp(folderPath)') > prepare)
+})
+
+test('a retry on a folder the app already prepared writes nothing and is not trusted (Publish asks about it)', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  assert.match(body, /await adapter\.isPreparedFolderRemote\(folderPath\)[\s\S]*?return \{ ok: true, folderPath, alreadyPrepared: true \}/)
+  assert.ok(body.indexOf('isPreparedFolderRemote') < body.indexOf('adapter.prepareFolderRemote'))
+  assert.equal((body.match(/createdByApp\(/g) ?? []).length, 1)
+})
+
+test('trackRemote requires an opened project', () => {
+  assert.match(block("handle('adapter:trackRemote'"), /requireAuthorizedRoot\(payload\.projectPath\)/)
+})
+
+test('adding a remote that is a local path (a share, a USB stick) trust-checks that path first', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(
+    body,
+    /payload\.commandName === 'addRemote'[\s\S]*?localPath\(payload\.request\.url, payload\.request\.projectPath\)[\s\S]*?trustGate\(\)\.require\([^)]*kind: 'remote'/
+  )
+})
+
+// The list of commands that reach a remote is kept by hand in main.js. A new one that is forgotten there is a
+// trust bypass (pushTags was, once), so the list is derived from what each command really runs.
+test('every command that writes to a remote is re-checked in main.js', async () => {
+  const { DataLadAdapter, CURATED_COMMANDS } = await import('../src/datalad/adapter.js')
+  const request = {
+    projectPath: '/p', paths: ['a'], message: 'm', branchName: 'b', startPoint: 'abc1234', commitHash: 'abc1234',
+    tagName: 't', tagNames: ['t'], remoteName: 'r', url: '/x', targetPath: '/t', source: 's', relativePath: 'rel'
+  }
+  const pushes = []
+  const addsRemote = []
+  for (const name of CURATED_COMMANDS) {
+    let args = []
+    const runner = { run: async (_command, a) => ((args = a), { command: 'x', args: a, exitCode: 0, stdout: '', stderr: '', failed: false }) }
+    await new DataLadAdapter({ runner }).runCommand(name, request)
+    if (args.includes('push')) pushes.push(name)
+    if (args.includes('siblings') && args.includes('add')) addsRemote.push(name)
+  }
+  assert.deepEqual(pushes.sort(), ['push', 'pushTags'], 'a new command that pushes must join PUSHES in main.js')
+  assert.deepEqual(addsRemote, ['addRemote'], 'a new command that adds a remote needs its own re-check in main.js')
+
+  const listed = /const PUSHES = new Set\(\[([^\]]*)\]\)/.exec(main)[1].match(/'([^']+)'/g).map((n) => n.slice(1, -1))
+  assert.deepEqual(listed.sort(), pushes.sort())
+})
+
+test('a folder remote is refused at a drive root or the home folder before anything is checked or written', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  const unsafe = body.indexOf('isUnsafeBackupLocation(folderPath)')
+  assert.ok(unsafe !== -1 && unsafe < body.indexOf('isEmptyOrMissing(folderPath)'))
 })

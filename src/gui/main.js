@@ -9,12 +9,13 @@ import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
+import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
-import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
+import { initialAuthorizedRoots, isUnsafeBackupLocation, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
-import { findExecVectors, findRemoteVectors, localRemotePaths } from './folder-trust.js'
+import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from './folder-trust.js'
 import { createTrustStore } from './trust-store.js'
 import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
@@ -52,21 +53,30 @@ const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')
 const handle = (channel, fn) => ipcMain.handle(channel, guardedHandler(APP_RENDERER_URL, fn))
 // Runs `run({ signal, onOutput })` as a cancellable, observable run when the
 // renderer supplied a runId; otherwise runs it plain, as before.
-async function runWithHandle(event, runId, run) {
+async function runWithHandle(event, runId, run, { progress = false } = {}) {
   if (runId === undefined) {
     return run({})
   }
 
   const signal = runRegistry.register(runId)
-  const activity = createLatestLineThrottle((line) => {
+  const send = (channel, payload) => {
     if (!event.sender.isDestroyed()) {
-      event.sender.send('command:activity', { runId, line })
+      event.sender.send(channel, payload)
     }
-  })
+  }
+  const activity = createLatestLineThrottle((line) => send('command:activity', { runId, line }))
+  // The throttle only ever sends the newest value, which is what a running count needs.
+  const counted = progress ? createLatestLineThrottle((done) => send('command:progress', { runId, done })) : null
+  const counter = progress ? createResultCounter() : null
   try {
-    return await run({ signal, onOutput: activity.push })
+    return await run({
+      signal,
+      onOutput: activity.push,
+      ...(counted ? { onData: (chunk) => counted.push(counter.push(chunk)) } : {})
+    })
   } finally {
     activity.stop()
+    counted?.stop()
     runRegistry.finish(runId)
   }
 }
@@ -254,6 +264,8 @@ handle('adapter:untrackPath', async (_event, payload = {}) => {
 
 // create/clone targets do not exist yet (or are empty); see the trust rules in the handler below.
 const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
+// Everything that writes to a remote: a local-path remote runs its own hooks, so trust is re-checked first.
+const PUSHES = new Set(['push', 'pushTags'])
 
 handle('adapter:runCommand', async (event, payload) => {
   const target = payload.request?.targetPath
@@ -267,12 +279,19 @@ handle('adapter:runCommand', async (event, payload) => {
     // This scans (seconds on a big project), so it runs inside the registered run below: a Stop pressed meanwhile
     // is honoured instead of finding nothing to cancel.
     recheckTrust = async () => {
-      if (payload.commandName === 'push' || payload.commandName === 'createSubdataset') {
+      if (PUSHES.has(payload.commandName) || payload.commandName === 'createSubdataset') {
         await trustGate().require(payload.request.projectPath, { event })
       }
-      if (payload.commandName === 'push') {
+      if (PUSHES.has(payload.commandName)) {
         for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
           await trustGate().require(remote.path, { kind: 'remote', event })
+        }
+      }
+      // Adding a remote that is a local path reads that repository (its config, its hooks folder): judge it first.
+      if (payload.commandName === 'addRemote') {
+        const local = localPath(payload.request.url, payload.request.projectPath)
+        if (local) {
+          await trustGate().require(local, { kind: 'remote', event })
         }
       }
     }
@@ -319,7 +338,7 @@ handle('adapter:runCommand', async (event, payload) => {
   const result = await runWithHandle(event, payload.runId, async (runOptions) => {
     await recheckTrust()
     return adapter.runCommand(payload.commandName, request, runOptions)
-  })
+  }, { progress: payload.commandName === 'get' || payload.commandName === 'push' })
   if (result?.ok && createdEmpty) {
     trustGate().createdByApp(request.targetPath)
   }
@@ -409,6 +428,11 @@ handle('adapter:getCommitDetails', async (_event, payload = {}) => {
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
 })
 
+handle('adapter:listOwnTags', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.listOwnTags(projectPath)
+})
+
 handle('adapter:getProjectHealth', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.getProjectHealth(projectPath)
@@ -417,6 +441,46 @@ handle('adapter:getProjectHealth', async (_event, projectPath) => {
 handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.clearRepositoryLock(projectPath)
+})
+
+// Writes a new repository into a folder the user chose (USB drive, share). Never into one with content.
+handle('adapter:prepareFolderRemote', async (event, payload = {}) => {
+  const { folderPath } = payload
+  requireAuthorizedRoot(payload.projectPath)
+  await adapter.assertNewRemoteName(payload.projectPath, payload.remoteName)
+  if (typeof folderPath !== 'string' || !folderPath.trim()) {
+    throw new Error('Choose a folder first.')
+  }
+  if (isUnsafeBackupLocation(folderPath)) {
+    throw new Error('Choose a new folder for the copy, not a whole drive or your home folder (for example USB/my-study).')
+  }
+  if (!(await isEmptyOrMissing(folderPath))) {
+    // A retry after a later step failed: nothing to write, and not trusted here, so Publish asks about it.
+    if (await adapter.isPreparedFolderRemote(folderPath)) {
+      return { ok: true, folderPath, alreadyPrepared: true }
+    }
+    throw new Error('Choose an empty folder: this one already has files in it.')
+  }
+  if (!isWithinRoots(folderPath, pickedLocations)) {
+    const ok = await confirmNative(event, {
+      title: 'Create a backup copy here?',
+      message: 'This folder was typed, not picked.',
+      detail: `${folderPath}\n\nA copy of the project will be stored in it.`,
+      confirmLabel: 'Use this folder'
+    })
+    if (!ok) {
+      throw new Error('Not created: the location was not confirmed.')
+    }
+  }
+  const result = await adapter.prepareFolderRemote(folderPath)
+  // Publish re-checks a local remote's trust; this one the app made itself, empty.
+  trustGate().createdByApp(folderPath)
+  return result
+})
+
+handle('adapter:trackRemote', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.trackRemote(payload.projectPath, payload.remoteName)
 })
 
 handle('watch:setActiveProject', async (event, projectPath = null) => {

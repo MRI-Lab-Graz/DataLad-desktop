@@ -38,3 +38,7 @@ test('identityMissingResult is a runner-shaped warning that stops sequences', ()
   assert.match(result.userError.message, /Set your name and email first/)
   assert.equal(shouldStopSequence(result), true)
 })
+
+test('creating a version needs a git identity (annotated tags record the tagger)', () => {
+  assert.equal(shouldBlockForIdentity('createTag', { available: true, complete: false }), true)
+})

@@ -69,6 +69,15 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (commandName === 'createTag' && hasPattern(stderr, /already exists/)) {
+    return {
+      code: 'TAG_EXISTS',
+      title: 'Version name already used',
+      message: 'A version with this name already exists in this project. Pick a different name.',
+      technicalDetails: details
+    }
+  }
+
   if (
     (commandName === 'createBranchAt' || commandName === 'restoreFileFromCommit') &&
     hasPattern(stderr, /unknown revision|not a valid object name|bad object|could not resolve/)
@@ -182,6 +191,15 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (commandName === 'addRemote' && hasPattern(`${stdout}\n${stderr}`, /already (exists|present|configured|known)/)) {
+    return {
+      code: 'REMOTE_EXISTS',
+      title: 'That remote name is already used',
+      message: 'This project already has a remote with this name. Pick a different name.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
+
   if (hasPattern(stderr, /no configured push target|no sibling|no remote|could not determine remote/)) {
     return {
       code: 'REMOTE_MISSING',
@@ -242,6 +260,17 @@ export function mapCommandError(commandName, runResult) {
       message:
         'Unlock needs the actual file content on your computer first. Run "Get Data" for this file, then try Unlock again.',
       technicalDetails: (details || stdout.trim())
+    }
+  }
+
+  // datalad reports the refusal as a drop(error) result line on stdout.
+  if (commandName === 'drop' && hasPattern(`${stdout}\n${stderr}`, /unsafe|could not verify|necessary cop/)) {
+    return {
+      code: 'DROP_UNSAFE',
+      title: 'Not removed: no other copy is confirmed',
+      message:
+        'DataLad could not confirm that another copy of this data exists (for example on your remote or backup), so nothing was removed. Publish first, then try again.',
+      technicalDetails: details || stdout.trim()
     }
   }
 

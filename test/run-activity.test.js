@@ -5,6 +5,7 @@ import {
   createRunId,
   formatActivityLine,
   formatDurationLine,
+  formatProgress,
   renderRunningRows,
   shouldShowUserErrorMessage,
   shouldStopSequence
@@ -96,4 +97,16 @@ test('shouldShowUserErrorMessage hides the error paragraph for a cancelled resul
   assert.equal(shouldShowUserErrorMessage({ ok: false, cancelled: true, userError }), false)
   assert.equal(shouldShowUserErrorMessage({ ok: true, userError: null }), false)
   assert.equal(shouldShowUserErrorMessage({ ok: false }), false)
+})
+
+test('formatProgress shows N of M when the total is known, a running count otherwise', () => {
+  assert.equal(formatProgress(12, 340), '12 of 340 files')
+  assert.equal(formatProgress(400, 340), '340 of 340 files')
+  assert.equal(formatProgress(1, null), '1 file done')
+  assert.equal(formatProgress(5, 0), '5 files done')
+})
+
+test('renderRunningRows includes the progress text when present', () => {
+  const html = renderRunningRows([{ runId: 'r1', label: 'Get Data', line: '', progress: '3 of 9 files' }])
+  assert.match(html, /<span class="running-progress">3 of 9 files<\/span>/)
 })

@@ -117,3 +117,32 @@ test('get errors do not tell users to type datalad CLI commands', () => {
   assert.doesNotMatch(forbidden.message, /datalad siblings/)
   assert.doesNotMatch(unavailable.message, /datalad siblings/)
 })
+
+test('mapCommandError explains a drop refused because no other copy is verified', () => {
+  const result = mapCommandError('drop', {
+    stdout: 'drop(error): big.bin (file) [unsafe; Could not verify the existence of the 1 necessary copy.; ' +
+      '(Use --reckless availability to override this check, or adjust numcopies.)]\n',
+    stderr: ''
+  })
+  assert.equal(result.code, 'DROP_UNSAFE')
+  assert.match(result.message, /nothing was removed/i)
+  assert.match(result.technicalDetails, /necessary copy/)
+})
+
+test('mapCommandError maps an existing tag name', () => {
+  const result = mapCommandError('createTag', { stderr: "fatal: tag 'v1.0' already exists" })
+  assert.equal(result.code, 'TAG_EXISTS')
+})
+
+test('mapCommandError maps a remote name that is already taken', () => {
+  const result = mapCommandError('addRemote', { stderr: "fatal: remote origin already exists." })
+  assert.equal(result.code, 'REMOTE_EXISTS')
+})
+
+test('mapCommandError maps the real DataLad text for a sibling name that is already known', () => {
+  const result = mapCommandError('addRemote', {
+    stdout: 'add-sibling(error): . (sibling) [sibling is already known: origin, use `configure` instead?]\n',
+    stderr: ''
+  })
+  assert.equal(result.code, 'REMOTE_EXISTS')
+})

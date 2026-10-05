@@ -103,3 +103,18 @@ test('SECURITY.md describes the push-time remote list, the nesting re-check and 
   assert.match(doc, /createSubdataset|nest/i)
   assert.match(doc, /clone source/i)
 })
+
+// The doc describes the new commands' controls; each phrase below is backed by code or a test named in it.
+test('SECURITY.md documents the controls of the science-workflow commands, and the code has them', () => {
+  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  assert.match(doc, /protocol\.ext\.allow=never/)
+  assert.match(runner, /\['protocol\.ext\.allow', 'never'\]/)
+  assert.match(doc, /never with `--reckless`/)
+  assert.doesNotMatch(adapter, /['"`]--reckless/) // as an argument; a comment may name it
+  assert.match(doc, /never `--tags`/)
+  assert.doesNotMatch(adapter, /'--tags'/)
+  assert.match(doc, /isUnsafeBackupLocation/)
+  assert.match(doc, /trusted\*? remote|marks? a remote as \*trusted\*/)
+  assert.match(doc, /Passwords and tokens in URLs/)
+})

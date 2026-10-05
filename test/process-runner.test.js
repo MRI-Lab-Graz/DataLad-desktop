@@ -418,10 +418,11 @@ test('ProcessRunner makes git treat pathspecs literally', async () => {
 test('ProcessRunner overrides core.fsmonitor for git children, keeping any inherited GIT_CONFIG_COUNT entries', async () => {
   const result = await new ProcessRunner().run(
     process.execPath,
-    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_3, e.GIT_CONFIG_KEY_0]))'],
+    ['-e', 'const e = process.env; process.stdout.write(JSON.stringify([e.GIT_CONFIG_COUNT, e.GIT_CONFIG_KEY_1, e.GIT_CONFIG_VALUE_1, e.GIT_CONFIG_KEY_2, e.GIT_CONFIG_KEY_3, e.GIT_CONFIG_KEY_4, e.GIT_CONFIG_VALUE_4, e.GIT_CONFIG_KEY_0]))'],
     { env: { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.name', GIT_CONFIG_VALUE_0: 'x' } }
   )
-  assert.deepEqual(JSON.parse(result.stdout), ['4', 'core.fsmonitor', 'false', 'core.hooksPath', 'safe.bareRepository', 'user.name'])
+  // protocol.ext.allow=never: a remote named ext::<command> in a repository's config can never run a command
+  assert.deepEqual(JSON.parse(result.stdout), ['5', 'core.fsmonitor', 'false', 'core.hooksPath', 'safe.bareRepository', 'protocol.ext.allow', 'never', 'user.name'])
 })
 
 test('ProcessRunner fsmonitor override really stops a repo config from running code', async () => {
@@ -608,4 +609,13 @@ test('pushing to, cloning from and fetching from local bare and work-tree remote
   execFileSync('git', ['init', '-q', work])
   execFileSync('git', ['-C', work, 'config', 'receive.denyCurrentBranch', 'updateInstead'])
   assert.equal((await git('-C', clone, 'push', '-q', work, 'HEAD:refs/heads/main')).failed, false)
+})
+
+test('ProcessRunner hands every stdout chunk to onData, untouched', async () => {
+  const chunks = []
+  const runner = new ProcessRunner()
+  await runner.run(process.execPath, ['-e', 'process.stdout.write("get(ok): a (file)\\n"); process.stderr.write("noise\\n")'], {
+    onData: (chunk) => chunks.push(chunk)
+  })
+  assert.equal(chunks.join(''), 'get(ok): a (file)\n')
 })

@@ -11,6 +11,22 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  drop: {
+    required: ['projectPath'],
+    optional: ['paths']
+  },
+  createTag: {
+    required: ['projectPath', 'tagName', 'message', 'commitHash'],
+    optional: []
+  },
+  pushTags: {
+    required: ['projectPath', 'remoteName', 'tagNames'],
+    optional: []
+  },
+  verify: {
+    required: ['projectPath'],
+    optional: []
+  },
   save: {
     required: ['projectPath', 'message'],
     optional: ['paths']
@@ -21,6 +37,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
   },
   push: {
     required: ['projectPath'],
+    optional: ['remoteName']
+  },
+  addRemote: {
+    required: ['projectPath', 'remoteName', 'url'],
     optional: []
   },
   createBranch: {
@@ -63,6 +83,10 @@ const LEADING_DASH_FIELDS = Object.freeze({
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
+  createTag: ['tagName'],
+  pushTags: ['remoteName'],
+  addRemote: ['remoteName', 'url'],
+  push: ['remoteName'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
   disconnectRemote: ['remoteName']
@@ -92,7 +116,7 @@ export function assertCommandRequest(commandName, request) {
   // Text fields must be text: spawn() turns an array into a string, and the main process compares strings.
   for (const field of [...schema.required, ...schema.optional]) {
     const value = request[field]
-    if (field === 'paths' || value === undefined || value === null) {
+    if (field === 'paths' || field === 'tagNames' || value === undefined || value === null) {
       continue
     }
     if (field === 'force' ? typeof value !== 'boolean' : typeof value !== 'string') {
@@ -115,8 +139,20 @@ export function assertCommandRequest(commandName, request) {
     }
   }
 
-  if (commandName === 'cloneInstall' && /^\s*ext::/i.test(request.source)) {
-    throw new Error('Invalid request for cloneInstall: the ext:: transport is not allowed')
+  // Stored in plain text in .git/config and shown on screen: the credential helper is the place for secrets.
+  if (commandName === 'addRemote' && /^\s*(https?|ftps?):\/\/[^/@\s]+@/i.test(request.url)) {
+    throw new Error('Invalid request for addRemote: the URL must not contain a password or token; use your credential helper')
+  }
+
+  const transportField = { cloneInstall: 'source', addRemote: 'url' }[commandName]
+  if (transportField && /^\s*ext::/i.test(request[transportField])) {
+    throw new Error(`Invalid request for ${commandName}: the ext:: transport is not allowed`)
+  }
+
+  if (commandName === 'pushTags') {
+    if (!Array.isArray(request.tagNames) || request.tagNames.length === 0 || request.tagNames.some((n) => typeof n !== 'string')) {
+      throw new Error('Invalid request for pushTags: tagNames must be a non-empty array of strings')
+    }
   }
 
   for (const pathValue of request.paths ?? []) {

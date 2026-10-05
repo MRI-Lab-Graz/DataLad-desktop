@@ -22,6 +22,13 @@ export function formatActivityLine(line, max = 120) {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean
 }
 
+export function formatProgress(done, total) {
+  if (total > 0) {
+    return `${Math.min(done, total)} of ${total} files`
+  }
+  return `${done} file${done === 1 ? '' : 's'} done`
+}
+
 export function renderRunningRows(runs) {
   return runs
     .map((run) => {
@@ -33,6 +40,7 @@ export function renderRunningRows(runs) {
       return (
         `<div class="running-row" data-run-row="${id}">` +
         `<span class="running-label">${label}…</span>` +
+        (run.progress ? `<span class="running-progress">${escapeHtml(run.progress)}</span>` : '') +
         `<span class="running-line" aria-live="off">${escapeHtml(run.line)}</span>` +
         button +
         '</div>'

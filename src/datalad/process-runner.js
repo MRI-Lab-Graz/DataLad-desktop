@@ -38,7 +38,7 @@ export const HOOKS_DIR = resolveHooksDir()
 // hooks run, and datalad never runs procedures a dataset ships.
 function childEnv(extra = {}) {
   const env = { ...process.env, ...extra }
-  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit']]) {
+  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit'], ['protocol.ext.allow', 'never']]) {
     const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
     env[`GIT_CONFIG_KEY_${n}`] = key
     env[`GIT_CONFIG_VALUE_${n}`] = value
@@ -98,7 +98,7 @@ export class ProcessRunner {
   }
 
   async #runOnce(command, args, options) {
-    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES } = options
+    const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput, onData, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES } = options
 
     // Bare names are looked up on PATH ourselves: Windows would otherwise try the
     // (dataset-controlled) cwd first. A shell line is the console's business.
@@ -224,6 +224,7 @@ export class ProcessRunner {
         if (accept(chunk)) {
           stdout += String(chunk)
           report(chunk)
+          onData?.(String(chunk))
         }
       })
 
