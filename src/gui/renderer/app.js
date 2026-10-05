@@ -215,7 +215,9 @@ const elements = {
   timeMachineCloseDetailButton: document.getElementById('tm-close-detail'),
   timeMachineBranchName: document.getElementById('tm-branch-name'),
   timeMachineBranchFromHereButton: document.getElementById('tm-branch-from-here'),
-  timeMachineActionOutput: document.getElementById('tm-action-output')
+  timeMachineActionOutput: document.getElementById('tm-action-output'),
+  timeMachineVersionName: document.getElementById('tm-version-name'),
+  timeMachineMarkVersionButton: document.getElementById('tm-mark-version')
 }
 
 loadRecentProjects()
@@ -953,7 +955,15 @@ elements.publishProjectButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
+  const result = await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
+  const remoteName = state.projectHealthSnapshot?.upstream?.split('/')[0]
+  if (result?.ok && remoteName) {
+    // datalad push does not send tags; an up-to-date --tags push is a no-op.
+    const tags = await api.runCommand('pushTags', { projectPath, remoteName }, createRunId())
+    if (!tags?.ok) {
+      setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+    }
+  }
 })
 
 elements.disconnectRemoteButton.addEventListener('click', async () => {
@@ -1157,6 +1167,36 @@ elements.timeMachineBranchFromHereButton.addEventListener('click', async () => {
       result.userError?.message ?? 'Branch creation failed. Check the branch name and try again.'
     elements.timeMachineActionOutput.hidden = false
   }
+})
+
+elements.timeMachineMarkVersionButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  const tagName = elements.timeMachineVersionName.value.trim()
+  if (!projectPath || !commitHash) {
+    return
+  }
+  if (!tagName) {
+    elements.timeMachineActionOutput.textContent = 'Enter a version name first.'
+    elements.timeMachineActionOutput.hidden = false
+    return
+  }
+
+  const result = await runWorkflowCommand(
+    'createTag',
+    { projectPath, tagName, message: `Version ${tagName}`, commitHash },
+    elements.timeMachineMarkVersionButton
+  )
+  if (result?.ok) {
+    elements.timeMachineActionOutput.innerHTML =
+      `<p>Marked save <code>${escapeHtml(commitHash)}</code> as version <strong>${escapeHtml(tagName)}</strong>. ` +
+      'Publish to share it.</p>'
+    elements.timeMachineVersionName.value = ''
+    await refreshTimeMachineHistory(projectPath)
+  } else if (result) {
+    elements.timeMachineActionOutput.textContent = result.userError?.message ?? 'The version could not be created.'
+  }
+  elements.timeMachineActionOutput.hidden = false
 })
 
 elements.timeMachineDetailOutput.addEventListener('click', async (event) => {
@@ -2188,6 +2228,9 @@ function renderTimeMachineHistory() {
         `<span class="history-age">${escapeHtml(age)} ago</span>` +
         '</div>' +
         `<div class="history-subject">${escapeHtml(subject)}</div>` +
+        (entry.tags?.length
+          ? `<div class="history-tags">${entry.tags.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>`
+          : '') +
         `<div class="history-author">${escapeHtml(author)}</div>` +
         '</li>'
       )
@@ -2882,6 +2925,14 @@ function actionLabel(commandName) {
 
   if (commandName === 'drop') {
     return 'Free Up Space'
+  }
+
+  if (commandName === 'createTag') {
+    return 'Mark As Version'
+  }
+
+  if (commandName === 'pushTags') {
+    return 'Publish Versions'
   }
 
   return 'Action'

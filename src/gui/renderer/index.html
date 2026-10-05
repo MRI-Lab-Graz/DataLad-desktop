@@ -627,6 +627,16 @@
               <p class="hint-inline">
                 Creates a new branch starting at this save point. Your current work stays untouched.
               </p>
+              <label class="field">
+                <span>Mark As Version</span>
+                <div class="field-row">
+                  <input id="tm-version-name" type="text" placeholder="v1.0-submission" />
+                  <button id="tm-mark-version" class="button button-ghost button-inline" type="button">Mark</button>
+                </div>
+              </label>
+              <p class="hint-inline">
+                Gives this save point a permanent name you can cite in a paper. Publish sends it to your remote.
+              </p>
             </div>
 
             <div id="tm-action-output" class="panel panel-muted panel-compact" hidden></div>
