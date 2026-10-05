@@ -321,7 +321,7 @@ export class DataLadAdapter {
   async prepareFolderRemote(folderPath) {
     for (const args of [
       ['init', '--bare', '--', folderPath],
-      ['-C', folderPath, 'annex', 'init', 'DataLad Desktop backup']
+      ['--git-dir', folderPath, 'annex', 'init', 'DataLad Desktop backup'] // bare repo: the runner's safe.bareRepository=explicit needs this
     ]) {
       const result = await this.runner.run('git', args)
       if (result.failed) {

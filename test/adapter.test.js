@@ -2209,7 +2209,8 @@ test('push can target one named remote', async () => {
 test('prepareFolderRemote creates an annex-ready bare repository so the first Publish carries data', async () => {
   const runner = new FakeRunner()
   runner.set('git', ['init', '--bare', '--', '/Volumes/USB/study'], {})
-  runner.set('git', ['-C', '/Volumes/USB/study', 'annex', 'init', 'DataLad Desktop backup'], {})
+  // explicit --git-dir: the runner sets safe.bareRepository=explicit, which refuses `-C <bare repo>`
+  runner.set('git', ['--git-dir', '/Volumes/USB/study', 'annex', 'init', 'DataLad Desktop backup'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).prepareFolderRemote('/Volumes/USB/study'), {
     ok: true, folderPath: '/Volumes/USB/study'
