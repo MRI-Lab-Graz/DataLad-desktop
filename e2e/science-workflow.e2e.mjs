@@ -91,7 +91,19 @@ test('a version marked in git reaches the remote on Publish', async () => {
     await new Promise((resolve) => setTimeout(resolve, 500))
     tags = sh('git', ['--git-dir', backupPath, 'tag'])
   }
-  assert.match(tags, /v1\.0/, await commandOutput())
+  // Publish's own output is the last thing on screen, so a missing tag says nothing about why: show what the app saw.
+  const why = async () =>
+    JSON.stringify({
+      commandOutput: await commandOutput(),
+      lastActionState: await app.page.evaluate(() => document.getElementById('last-action-state')?.textContent),
+      appEmail: sh('git', ['config', '--file', app.gitConfigGlobal, 'user.email']).trim(),
+      projectTags: sh('git', ['for-each-ref', '--format=%(refname:short) %(taggeremail)', 'refs/tags'], projectPath),
+      listOwnTags: await app.page.evaluate((p) => window.dataladDesktop.listOwnTags(p).catch((e) => `error: ${e.message}`), projectPath),
+      remoteTags: tags
+    }, null, 2)
+  if (!/v1\.0/.test(tags)) {
+    assert.fail(await why())
+  }
   assert.doesNotMatch(tags, /theirs/, 'a collaborator\'s tag is not republished')
 })
 
