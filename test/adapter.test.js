@@ -2104,3 +2104,30 @@ test('runCommand drops the whole dataset content when no paths are given', async
   assert.equal(result.ok, true)
   assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop'])
 })
+
+test('runCommand creates an annotated version tag at a save point', async () => {
+  const runner = new FakeRunner()
+  const args = ['-C', '/tmp/project', 'tag', '-a', '--message=paper submission', 'v1.0', 'abc1234']
+  runner.set('git', args, {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('createTag', {
+    projectPath: '/tmp/project',
+    tagName: 'v1.0',
+    message: 'paper submission',
+    commitHash: 'abc1234'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, args)
+})
+
+test('runCommand rejects version names git or a shell could misread', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const tagName of ['-f', 'v 1', 'a/b', 'v1..2', 'v1.lock', 'versión', '.hidden']) {
+    await assert.rejects(
+      adapter.runCommand('createTag', { projectPath: '/tmp/p', tagName, message: 'm', commitHash: 'abc1234' }),
+      /version name|cannot start with -/i,
+      tagName
+    )
+  }
+})

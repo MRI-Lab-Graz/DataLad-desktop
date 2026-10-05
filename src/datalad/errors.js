@@ -69,6 +69,15 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (commandName === 'createTag' && hasPattern(stderr, /already exists/)) {
+    return {
+      code: 'TAG_EXISTS',
+      title: 'Version name already used',
+      message: 'A version with this name already exists in this project. Pick a different name.',
+      technicalDetails: details
+    }
+  }
+
   if (
     (commandName === 'createBranchAt' || commandName === 'restoreFileFromCommit') &&
     hasPattern(stderr, /unknown revision|not a valid object name|bad object|could not resolve/)

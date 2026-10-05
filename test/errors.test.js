@@ -128,3 +128,8 @@ test('mapCommandError explains a drop refused because no other copy is verified'
   assert.match(result.message, /nothing was removed/i)
   assert.match(result.technicalDetails, /necessary copy/)
 })
+
+test('mapCommandError maps an existing tag name', () => {
+  const result = mapCommandError('createTag', { stderr: "fatal: tag 'v1.0' already exists" })
+  assert.equal(result.code, 'TAG_EXISTS')
+})

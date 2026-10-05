@@ -24,9 +24,15 @@ const CURATED_COMMANDS = new Set([
   'restoreFileFromCommit',
   'discardChanges',
   'unlock',
-  'drop'
+  'drop',
+  'createTag'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+// Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
+export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
+function isSafeName(name) {
+  return SAFE_NAME_PATTERN.test(name) && !name.includes('..') && !name.endsWith('.lock')
+}
 const BIDS_MARKER_FILE = 'dataset_description.json'
 // Detection probes must answer promptly; a hung one falls back to the
 // .datalad/config marker instead of stalling project open. Kept below the e2e
@@ -1208,6 +1214,20 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['-C', projectPath, 'unlock', '--', ...request.paths],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'createTag': {
+        const { projectPath, tagName, message, commitHash } = request
+        if (!isSafeName(tagName)) {
+          throw new Error(`Invalid version name: ${tagName}. Use letters, digits, dot, dash or underscore.`)
+        }
+        if (!COMMIT_HASH_PATTERN.test(commitHash)) {
+          throw new Error(`Invalid commit hash format: ${commitHash}`)
+        }
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'tag', '-a', `--message=${message}`, tagName, commitHash],
           options: { cwd: projectPath }
         }
       }
