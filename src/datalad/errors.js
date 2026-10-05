@@ -245,6 +245,17 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  // datalad reports the refusal as a drop(error) result line on stdout.
+  if (commandName === 'drop' && hasPattern(`${stdout}\n${stderr}`, /unsafe|could not verify|necessary cop/)) {
+    return {
+      code: 'DROP_UNSAFE',
+      title: 'Not removed: no other copy is confirmed',
+      message:
+        'DataLad could not confirm that another copy of this data exists (for example on your remote or backup), so nothing was removed. Publish first, then try again.',
+      technicalDetails: details || stdout.trim()
+    }
+  }
+
   return {
     ...DEFAULT_ERROR,
     technicalDetails: details

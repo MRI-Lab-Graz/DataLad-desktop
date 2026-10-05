@@ -23,7 +23,8 @@ const CURATED_COMMANDS = new Set([
   'createBranchAt',
   'restoreFileFromCommit',
   'discardChanges',
-  'unlock'
+  'unlock',
+  'drop'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const BIDS_MARKER_FILE = 'dataset_description.json'
@@ -1207,6 +1208,16 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['-C', projectPath, 'unlock', '--', ...request.paths],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'drop': {
+        // datalad refuses to drop the last verified copy by itself (no --reckless here, ever).
+        const projectPath = request.projectPath
+        const paths = request.paths ?? []
+        return {
+          command: 'datalad',
+          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--', ...paths] : ['-C', projectPath, 'drop'],
           options: { cwd: projectPath }
         }
       }

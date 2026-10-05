@@ -11,6 +11,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  drop: {
+    required: ['projectPath'],
+    optional: ['paths']
+  },
   save: {
     required: ['projectPath', 'message'],
     optional: ['paths']

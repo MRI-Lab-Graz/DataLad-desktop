@@ -2081,3 +2081,26 @@ test('ignoreOsNoiseFiles never writes through a symlinked info folder', { skip: 
 
   assert.deepEqual(await readdir(outsideDir), [])
 })
+
+test('runCommand routes drop for selected paths through datalad drop', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('drop', {
+    projectPath: '/tmp/project',
+    paths: ['sub-01/anat.nii.gz']
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'])
+})
+
+test('runCommand drops the whole dataset content when no paths are given', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop'], { stdout: 'drop(ok): . (directory)\n' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop'])
+})

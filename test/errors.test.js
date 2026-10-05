@@ -117,3 +117,14 @@ test('get errors do not tell users to type datalad CLI commands', () => {
   assert.doesNotMatch(forbidden.message, /datalad siblings/)
   assert.doesNotMatch(unavailable.message, /datalad siblings/)
 })
+
+test('mapCommandError explains a drop refused because no other copy is verified', () => {
+  const result = mapCommandError('drop', {
+    stdout: 'drop(error): big.bin (file) [unsafe; Could not verify the existence of the 1 necessary copy.; ' +
+      '(Use --reckless availability to override this check, or adjust numcopies.)]\n',
+    stderr: ''
+  })
+  assert.equal(result.code, 'DROP_UNSAFE')
+  assert.match(result.message, /nothing was removed/i)
+  assert.match(result.technicalDetails, /necessary copy/)
+})
