@@ -41,7 +41,8 @@ test.before(async () => {
   sh('datalad', ['create', projectPath])
   await writeFile(join(projectPath, 'data.bin'), 'x'.repeat(4096))
   sh('datalad', ['save', '-m', 'add data'], projectPath)
-  sh('datalad', ['run', '-m', 'size', 'wc -c data.bin > size.txt'], projectPath)
+  // node, not wc: `datalad run` uses cmd.exe on Windows, which has no wc.
+  sh('datalad', ['run', '-m', 'size', `node -e "const fs = require('fs'); fs.writeFileSync('size.txt', String(fs.statSync('data.bin').size))"`], projectPath)
   app = await launchApp({ trustedPaths: [projectPath] })
   await app.openProject(projectPath)
 })
@@ -80,8 +81,11 @@ test('Free Up Space removes the local copy now that the backup has one', async (
 })
 
 test('a version marked in git reaches the remote on Publish', async () => {
-  // made under the app's git identity (E2E Test), like Mark As Version does; the UI path is covered by unit tests
-  sh('git', ['-c', 'user.email=e2e@example.org', '-c', 'user.name=E2E Test', 'tag', '-a', 'v1.0', '-m', 'Version v1.0'], projectPath)
+  // Made under the identity the app sees in this project, like Mark As Version does; the UI path is covered by unit tests.
+  // No -c override: the project's own config beats the app's global one, and CI's datalad create writes one there.
+  execFileSync('git', ['tag', '-a', 'v1.0', '-m', 'Version v1.0'], {
+    cwd: projectPath, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: app.gitConfigGlobal }
+  })
   sh('git', ['-c', 'user.email=bob@example.org', '-c', 'user.name=Bob', 'tag', '-a', 'theirs', '-m', 'from a collaborator'], projectPath)
   await app.page.evaluate(() => document.getElementById('publish-project').click())
   // The tag push runs right after Publish finishes (the button is idle by then): poll the remote.
@@ -90,7 +94,29 @@ test('a version marked in git reaches the remote on Publish', async () => {
     await new Promise((resolve) => setTimeout(resolve, 500))
     tags = sh('git', ['--git-dir', backupPath, 'tag'])
   }
-  assert.match(tags, /v1\.0/, await commandOutput())
+  // Publish's own output is the last thing on screen, so a missing tag says nothing about why: show what the app saw.
+  const why = async () =>
+    JSON.stringify({
+      commandOutput: await commandOutput(),
+      lastActionState: await app.page.evaluate(() => document.getElementById('last-action-state')?.textContent),
+      appEmail: sh('git', ['config', '--file', app.gitConfigGlobal, 'user.email']).trim(),
+      projectTags: sh('git', ['for-each-ref', '--format=%(refname:short) %(taggeremail)', 'refs/tags'], projectPath),
+      // The app's own question, asked from here with the app's global config, and the raw bytes it parses.
+      gitConfigAsApp: (() => {
+        try {
+          return execFileSync('git', ['-C', projectPath, 'config', '--show-origin', '--get-all', 'user.email'], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: app.gitConfigGlobal } })
+        } catch (e) {
+          return `error: ${e.message}`
+        }
+      })(),
+      rawTagRefs: sh('git', ['for-each-ref', '--format=%(refname:short)%00%(taggeremail)', 'refs/tags'], projectPath),
+      gitVersion: sh('git', ['--version']).trim(),
+      listOwnTags: await app.page.evaluate((p) => window.dataladDesktop.listOwnTags(p).catch((e) => `error: ${e.message}`), projectPath),
+      remoteTags: tags
+    }, null, 2)
+  if (!/v1\.0/.test(tags)) {
+    assert.fail(await why())
+  }
   assert.doesNotMatch(tags, /theirs/, 'a collaborator\'s tag is not republished')
 })
 
@@ -99,5 +125,5 @@ test('Time Machine marks the datalad run commit and shows its command', async ()
   await app.page.waitForSelector('.run-chip', { timeout: 30_000 })
   await app.page.evaluate(() => document.querySelector('.tm-commit-item .run-chip').closest('.tm-commit-item').click())
   await app.page.waitForSelector('.tm-run-record pre', { timeout: 30_000 })
-  assert.match(await app.page.evaluate(() => document.querySelector('.tm-run-record pre').textContent), /wc -c data\.bin/)
+  assert.match(await app.page.evaluate(() => document.querySelector('.tm-run-record pre').textContent), /statSync\('data\.bin'\)/)
 })
