@@ -17,7 +17,7 @@ import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
 import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from './folder-trust.js'
 import { createTrustStore } from './trust-store.js'
-import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from './trust-gate.js'
+import { createTrustGate, describeTrustPrompt, folderState, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -454,7 +454,11 @@ handle('adapter:prepareFolderRemote', async (event, payload = {}) => {
   if (isUnsafeBackupLocation(folderPath)) {
     throw new Error('Choose a new folder for the copy, not a whole drive or your home folder (for example USB/my-study).')
   }
-  if (!(await isEmptyOrMissing(folderPath))) {
+  const state = await folderState(folderPath)
+  if (state === 'unreadable') {
+    throw new Error('This folder cannot be read. Check its permissions, or choose another folder.')
+  }
+  if (state === 'has-files') {
     // A retry after a later step failed: nothing to write, and not trusted here, so Publish asks about it.
     if (await adapter.isPreparedFolderRemote(folderPath)) {
       return { ok: true, folderPath, alreadyPrepared: true }

@@ -6,7 +6,8 @@ import {
   computeAnnexToolGating,
   computeRemoteGating,
   computeSyncSectionVisible,
-  computeSyncActionsQuietMessage
+  computeSyncActionsQuietMessage,
+  remoteNameForProject
 } from '../src/gui/renderer/button-gating.js'
 
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
@@ -214,4 +215,12 @@ test('computeAnnexToolGating enables annex-only actions for datasets with the gi
 test('computeRemoteGating offers Add a Remote only when there is none', () => {
   assert.equal(computeRemoteGating({ hasUpstream: false }).addRemote.hidden, false)
   assert.equal(computeRemoteGating({ hasUpstream: true, upstream: 'origin/main' }).addRemote.hidden, true)
+})
+
+test('remoteNameForProject names the remote only when the health snapshot is for that very project', () => {
+  const health = { projectPath: '/proj', hasUpstream: true, upstream: 'origin/main' }
+  assert.equal(remoteNameForProject(health, '/proj'), 'origin')
+  assert.equal(remoteNameForProject(health, '/proj/sub-dataset'), null) // a subdataset has its own remotes
+  assert.equal(remoteNameForProject({ projectPath: '/proj', hasUpstream: false }, '/proj'), null)
+  assert.equal(remoteNameForProject(null, '/proj'), null)
 })

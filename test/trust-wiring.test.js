@@ -5,7 +5,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
+// A Windows checkout has CRLF line endings; block() below looks for '\n})\n', and without it would return the rest of the file.
+const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const block = (start) => {
   const at = main.indexOf(start)
   assert.ok(at !== -1, `missing ${start}`)
@@ -141,7 +142,7 @@ test('Get and Publish report file-count progress to the page', () => {
 test('a folder remote is only ever created in an empty folder, confirmed when not picked, then trusted as app-made', () => {
   const body = block("handle('adapter:prepareFolderRemote'")
   const name = body.indexOf('adapter.assertNewRemoteName(')
-  const empty = body.indexOf('isEmptyOrMissing(folderPath)')
+  const empty = body.indexOf('folderState(folderPath)')
   const prepare = body.indexOf('adapter.prepareFolderRemote')
   assert.ok(name !== -1 && name < empty, 'the remote name is checked before the folder is touched')
   assert.match(body, /requireAuthorizedRoot\(payload\.projectPath\)/)
@@ -196,5 +197,5 @@ test('every command that writes to a remote is re-checked in main.js', async () 
 test('a folder remote is refused at a drive root or the home folder before anything is checked or written', () => {
   const body = block("handle('adapter:prepareFolderRemote'")
   const unsafe = body.indexOf('isUnsafeBackupLocation(folderPath)')
-  assert.ok(unsafe !== -1 && unsafe < body.indexOf('isEmptyOrMissing(folderPath)'))
+  assert.ok(unsafe !== -1 && unsafe < body.indexOf('folderState(folderPath)'))
 })
