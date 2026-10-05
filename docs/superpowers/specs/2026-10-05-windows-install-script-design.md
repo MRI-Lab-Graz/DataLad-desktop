@@ -60,7 +60,10 @@ Steps:
 
 Rules (each has a test):
 
-- No admin rights needed; no `-Verb RunAs`; the machine PATH is never written.
+- No admin rights needed; no `-Verb RunAs`; the machine PATH is never written. The app finds `datalad` only through
+  PATH (`src/datalad/resolve-tool.js` has no install-folder fallback), so the private environment's `Scripts` folder is
+  added to the **user** PATH (`HKCU`, current user only). The script ends by printing where `datalad` resolves, and warns
+  when it is not the private environment's copy (another install earlier on PATH).
 - Every downloaded file is hash-checked before it is run or extracted.
 - A step that cannot finish (offline, hash mismatch) is logged with a clear message and does not leave a half-installed
   app: the previous install, if any, stays in place.
@@ -78,8 +81,8 @@ lock file; delete `.old` only once the new install starts (`datalad --version` w
 
 ## Uninstall
 
-`uninstall.cmd` is copied into the install folder. It removes the install folder and the shortcuts. It never removes
-Python, Git or git-annex (other software may use them), and there is no PATH entry to remove.
+`uninstall.cmd` is copied into the install folder. It removes the install folder, the shortcuts and the user PATH entry
+the install added. It never removes Python, Git or git-annex (other software may use them).
 
 ## Testing
 
@@ -87,7 +90,7 @@ Tests first, run with `npm test` (Node test runner), in the style of `test/windo
 
 1. Text-level tests, one per rule above: no `RunAs`, no machine-PATH write, a SHA-256 check before every download is
    used, `install.cmd` has no parenthesised blocks, the git-annex URL is a versioned mirror URL and never `current`,
-   the install folder is under `LOCALAPPDATA`, uninstall never removes Python, Git or git-annex.
+   the install folder is under `LOCALAPPDATA`, only the user PATH is written, uninstall never removes Python, Git or git-annex.
 2. Pin freshness: adapt the check in `installer-smoke.yml` so CI fails when the pinned git-annex or Git hash no longer
    matches the file at its URL, and reports when a newer git-annex version exists on the mirror.
 3. A CI job on `windows-latest` runs `install.cmd -FromDir` with a zip built in the same run, then checks that
