@@ -84,12 +84,74 @@ function Install-App {
     Write-Log "Installed the app in '$InstallDir'."
 }
 
+# The app finds datalad only through PATH, so the private environment's Scripts folder goes on the user PATH
+# (current user only, no admin rights). The machine PATH is never written.
+# ponytail: writing the expanded user PATH back turns any %VAR% entries into literal paths; acceptable here.
+function Add-UserPath([string]$Dir) {
+    $entries = @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Where-Object { $_ })
+    if ($entries -contains $Dir) {
+        return
+    }
+    # In front, so this copy wins over a stale datalad elsewhere in the user PATH.
+    [Environment]::SetEnvironmentVariable('Path', ((@($Dir) + $entries) -join ';'), 'User')
+    Write-Log "Added '$Dir' to your user PATH. Open a new terminal to use it."
+}
+
+function Install-DataladEnv {
+    $ErrorActionPreference = 'Continue'   # uv reports progress on stderr; only its exit code decides
+    $uv = Join-Path $InstallDir 'resources\uv\uv.exe'
+    $requirements = Join-Path $InstallDir 'resources\datalad-requirements.txt'
+    $venv = Join-Path $InstallDir 'datalad-env'
+    $env:UV_PYTHON_INSTALL_DIR = Join-Path $InstallDir 'python'
+    $env:UV_CACHE_DIR = Join-Path ([IO.Path]::GetTempPath()) 'dlad-uv-cache'
+    Write-Log 'Installing DataLad into its own environment (downloads Python 3.12, takes a few minutes)...'
+    $output = & $uv venv --clear --no-config --managed-python --python 3.12 $venv 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log $output
+        throw "uv could not create the DataLad environment (exit code $LASTEXITCODE)."
+    }
+    $output = & $uv pip install --no-config --python $venv --link-mode copy --index-url https://pypi.org/simple --require-hashes --only-binary :all: --no-deps -r $requirements 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log $output
+        throw "uv could not install DataLad (exit code $LASTEXITCODE)."
+    }
+    Add-UserPath (Join-Path $venv 'Scripts')
+}
+
+function Test-Datalad {
+    $exe = Join-Path $InstallDir 'datalad-env\Scripts\datalad.exe'
+    if (-not (Test-Path -LiteralPath $exe)) {
+        return $false
+    }
+    $ErrorActionPreference = 'Continue'
+    & $exe --version *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Write-Report {
+    $ours = Join-Path $InstallDir 'datalad-env\Scripts\datalad.exe'
+    # This process still has the PATH it started with: look at what a new terminal will see.
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+    $found = Get-Command datalad -ErrorAction SilentlyContinue
+    if (-not (Test-Datalad)) {
+        $script:Failures += 'DataLad was installed but "datalad --version" does not run.'
+    } elseif (-not $found) {
+        $script:Failures += "datalad is not found on PATH. Add '$(Split-Path $ours -Parent)' to your user PATH."
+    } elseif ($found.Source -ne $ours) {
+        Write-Log "WARNING: 'datalad' resolves to $($found.Source), not to the copy installed here ($ours). Remove that entry from your PATH, or the app may use the wrong DataLad."
+    } else {
+        Write-Log "datalad resolves to $ours."
+    }
+}
+
 try {
     New-Item -ItemType Directory -Force -Path (Split-Path $InstallDir -Parent) | Out-Null
     if ($AppVersion -like '__*') {
         throw 'This is the unrendered template. Download install.cmd and install.ps1 from a release page instead.'
     }
     Install-App
+    Install-DataladEnv
+    Write-Report
     if ($script:Failures.Count -gt 0) {
         Write-Log 'Finished with problems:'
         $script:Failures | ForEach-Object { Write-Log "  - $_" }

@@ -106,3 +106,52 @@ test('a step that cannot finish is collected and makes the script exit non-zero 
   assert.match(ps, /\$script:Failures = @\(\)/)
   assert.match(ps, /\$script:Failures\.Count -gt 0[\s\S]*exit 1/)
 })
+
+// ---- install.ps1: DataLad environment, user PATH, report ----
+test('DataLad installs from the zip\'s own uv and its hash-locked, wheels-only requirements', async () => {
+  const fn = body(await read('install.ps1'), 'Install-DataladEnv')
+  assert.match(fn, /resources\\uv\\uv\.exe/)
+  assert.match(fn, /resources\\datalad-requirements\.txt/)
+  for (const flag of ['--require-hashes', '--only-binary :all:', '--no-deps', '--index-url https://pypi.org/simple']) {
+    assert.ok(fn.includes(flag), `missing ${flag}`)
+  }
+})
+
+test('uv runs on its own managed Python 3.12 and ignores any uv config', async () => {
+  const fn = body(await read('install.ps1'), 'Install-DataladEnv')
+  assert.match(fn, /venv --clear --no-config --managed-python --python 3\.12/)
+  assert.match(fn, /pip install --no-config/)
+  assert.equal(fn.match(/\$LASTEXITCODE -ne 0/g)?.length, 2, 'both uv calls must be checked')
+})
+
+test('no system Python is ever run', async () => {
+  const ps = await read('install.ps1')
+  assert.doesNotMatch(ps, /^\s*&?\s*(python|py)(\.exe)?\s/m)
+  assert.doesNotMatch(ps, /Get-Command\s+(python|py)\b/)
+})
+
+test('only the user PATH is read and written to add the environment, and it is not added twice', async () => {
+  const fn = body(await read('install.ps1'), 'Add-UserPath')
+  assert.match(fn, /GetEnvironmentVariable\('Path', 'User'\)/)
+  assert.match(fn, /SetEnvironmentVariable\('Path', .*'User'\)/)
+  assert.doesNotMatch(fn, /Machine/)
+  assert.match(fn, /-contains \$Dir/)
+})
+
+test('DataLad is installed after the app and its Scripts folder goes on the user PATH', async () => {
+  const ps = await read('install.ps1')
+  const main = ps.slice(ps.indexOf('\ntry {'))
+  assert.ok(main.indexOf('Install-App') < main.indexOf('Install-DataladEnv'))
+  assert.match(body(ps, 'Install-DataladEnv'), /Add-UserPath \(Join-Path \$venv 'Scripts'\)/)
+})
+
+test('the report names where datalad resolves and warns when it is not the private environment\'s copy', async () => {
+  const fn = body(await read('install.ps1'), 'Write-Report')
+  assert.match(fn, /Get-Command datalad/)
+  assert.match(fn, /datalad-env\\Scripts\\datalad\.exe/)
+  assert.match(fn, /WARNING/)
+})
+
+test('a failing uv call is written to the log with its output', async () => {
+  assert.match(body(await read('install.ps1'), 'Install-DataladEnv'), /Write-Log \$output/)
+})
