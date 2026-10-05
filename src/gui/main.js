@@ -12,7 +12,7 @@ import { ProcessRunner } from '../datalad/process-runner.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
-import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
+import { initialAuthorizedRoots, isUnsafeBackupLocation, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
 import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from './folder-trust.js'
@@ -428,6 +428,11 @@ handle('adapter:getCommitDetails', async (_event, payload = {}) => {
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
 })
 
+handle('adapter:listOwnTags', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.listOwnTags(projectPath)
+})
+
 handle('adapter:getProjectHealth', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.getProjectHealth(projectPath)
@@ -445,6 +450,9 @@ handle('adapter:prepareFolderRemote', async (event, payload = {}) => {
   await adapter.assertNewRemoteName(payload.projectPath, payload.remoteName)
   if (typeof folderPath !== 'string' || !folderPath.trim()) {
     throw new Error('Choose a folder first.')
+  }
+  if (isUnsafeBackupLocation(folderPath)) {
+    throw new Error('Choose a new folder for the copy, not a whole drive or your home folder (for example USB/my-study).')
   }
   if (!(await isEmptyOrMissing(folderPath))) {
     // A retry after a later step failed: nothing to write, and not trusted here, so Publish asks about it.

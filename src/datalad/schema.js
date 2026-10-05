@@ -20,7 +20,7 @@ export const COMMAND_SCHEMAS = Object.freeze({
     optional: []
   },
   pushTags: {
-    required: ['projectPath', 'remoteName'],
+    required: ['projectPath', 'remoteName', 'tagNames'],
     optional: []
   },
   verify: {
@@ -116,7 +116,7 @@ export function assertCommandRequest(commandName, request) {
   // Text fields must be text: spawn() turns an array into a string, and the main process compares strings.
   for (const field of [...schema.required, ...schema.optional]) {
     const value = request[field]
-    if (field === 'paths' || value === undefined || value === null) {
+    if (field === 'paths' || field === 'tagNames' || value === undefined || value === null) {
       continue
     }
     if (field === 'force' ? typeof value !== 'boolean' : typeof value !== 'string') {
@@ -147,6 +147,12 @@ export function assertCommandRequest(commandName, request) {
   const transportField = { cloneInstall: 'source', addRemote: 'url' }[commandName]
   if (transportField && /^\s*ext::/i.test(request[transportField])) {
     throw new Error(`Invalid request for ${commandName}: the ext:: transport is not allowed`)
+  }
+
+  if (commandName === 'pushTags') {
+    if (!Array.isArray(request.tagNames) || request.tagNames.length === 0 || request.tagNames.some((n) => typeof n !== 'string')) {
+      throw new Error('Invalid request for pushTags: tagNames must be a non-empty array of strings')
+    }
   }
 
   for (const pathValue of request.paths ?? []) {

@@ -329,6 +329,23 @@ export class DataLadAdapter {
     return { ok: true, removed: existed, lockPath }
   }
 
+  // The annotated tags made under the current git identity: the versions this person marked, which Publish
+  // sends. Tags that arrived from a collaborator's remote are not theirs to republish.
+  async listOwnTags(projectPath) {
+    const email = this.#firstLine((await this.runner.run('git', ['-C', projectPath, 'config', 'user.email'])).stdout)
+    if (!email) {
+      return []
+    }
+    const listed = await this.runner.run('git', [
+      '-C', projectPath, 'for-each-ref', '--format=%(refname:short)%00%(taggeremail)', 'refs/tags'
+    ])
+    return (listed.stdout ?? '')
+      .split(/\r?\n/)
+      .map((line) => line.split('\u0000'))
+      .filter(([name, tagger]) => tagger === `<${email}>` && isSafeName(name))
+      .map(([name]) => name)
+  }
+
   // Checked before a folder is written to, so a bad or taken name never leaves a half-made copy behind.
   async assertNewRemoteName(projectPath, remoteName) {
     assertSafeRemoteName(remoteName)
@@ -1311,9 +1328,15 @@ export class DataLadAdapter {
       case 'pushTags': {
         // A path or URL here would push to a repository the trust re-check never looked at.
         assertSafeRemoteName(request.remoteName)
+        // Only the named versions, never --tags: that would also republish tags that came from a collaborator.
+        for (const tagName of request.tagNames) {
+          if (!isSafeName(tagName)) {
+            throw new Error(`Invalid version name: ${tagName}. Use letters, digits, dot, dash or underscore.`)
+          }
+        }
         return {
           command: 'git',
-          args: ['-C', request.projectPath, 'push', '--tags', request.remoteName],
+          args: ['-C', request.projectPath, 'push', request.remoteName, ...request.tagNames.map((t) => `refs/tags/${t}`)],
           options: { cwd: request.projectPath }
         }
       }

@@ -102,7 +102,7 @@ test('createProject into an empty target ignores force, so a folder filled in be
 // folder, or a documented read-only exception. Otherwise this test fails until someone decides.
 test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
-  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
   const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'env:ensure', 'console:setEnabled', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
@@ -191,4 +191,10 @@ test('every command that writes to a remote is re-checked in main.js', async () 
 
   const listed = /const PUSHES = new Set\(\[([^\]]*)\]\)/.exec(main)[1].match(/'([^']+)'/g).map((n) => n.slice(1, -1))
   assert.deepEqual(listed.sort(), pushes.sort())
+})
+
+test('a folder remote is refused at a drive root or the home folder before anything is checked or written', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  const unsafe = body.indexOf('isUnsafeBackupLocation(folderPath)')
+  assert.ok(unsafe !== -1 && unsafe < body.indexOf('isEmptyOrMissing(folderPath)'))
 })

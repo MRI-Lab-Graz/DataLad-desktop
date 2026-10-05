@@ -998,10 +998,13 @@ elements.publishProjectButton.addEventListener('click', async () => {
   const result = await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
   const remoteName = state.projectHealthSnapshot?.upstream?.split('/')[0]
   if (result?.ok && remoteName) {
-    // datalad push does not send tags; an up-to-date --tags push is a no-op.
-    const tags = await api.runCommand('pushTags', { projectPath, remoteName }, createRunId())
-    if (!tags?.ok) {
-      setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+    // datalad push does not send tags; send the versions this person marked (an up-to-date push is a no-op).
+    const tagNames = await api.listOwnTags(projectPath)
+    if (tagNames.length > 0) {
+      const tags = await api.runCommand('pushTags', { projectPath, remoteName, tagNames }, createRunId())
+      if (!tags?.ok) {
+        setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+      }
     }
   }
 })

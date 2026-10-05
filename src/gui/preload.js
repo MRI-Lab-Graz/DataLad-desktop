@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     }),
   getCommitDetails: (projectPath, commitHash) =>
     ipcRenderer.invoke('adapter:getCommitDetails', { projectPath, commitHash }),
+  listOwnTags: (projectPath) => ipcRenderer.invoke('adapter:listOwnTags', projectPath),
   getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   clearRepositoryLock: (projectPath) => ipcRenderer.invoke('adapter:clearRepositoryLock', projectPath),
   prepareFolderRemote: (projectPath, remoteName, folderPath) =>

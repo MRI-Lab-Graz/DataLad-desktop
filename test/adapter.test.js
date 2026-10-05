@@ -2148,18 +2148,47 @@ test('listRecentCommits returns the version tags on each commit', async () => {
   assert.deepEqual(history.commits.map((c) => c.tags), [['v1.0', 'submitted'], []])
 })
 
-test('runCommand pushes version tags to the named remote (datalad push does not)', async () => {
+test('runCommand pushes only the named version tags to the named remote (datalad push does not push tags)', async () => {
   const runner = new FakeRunner()
-  runner.set('git', ['-C', '/tmp/project', 'push', '--tags', 'origin'], {})
+  runner.set('git', ['-C', '/tmp/project', 'push', 'origin', 'refs/tags/v1.0', 'refs/tags/final'], {})
 
-  const result = await new DataLadAdapter({ runner }).runCommand('pushTags', { projectPath: '/tmp/project', remoteName: 'origin' })
+  const result = await new DataLadAdapter({ runner }).runCommand('pushTags', {
+    projectPath: '/tmp/project', remoteName: 'origin', tagNames: ['v1.0', 'final']
+  })
 
   assert.equal(result.ok, true)
 })
 
+test('pushTags needs at least one tag and refuses names that are not plain version names', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('pushTags', { projectPath: '/p', remoteName: 'origin', tagNames: [] }), /tagNames/)
+  for (const tagName of ['--delete', ':refs/heads/main', 'a b', '+v1']) {
+    await assert.rejects(
+      adapter.runCommand('pushTags', { projectPath: '/p', remoteName: 'origin', tagNames: [tagName] }),
+      /version name/i,
+      tagName
+    )
+  }
+})
+
+test('listOwnTags returns only annotated tags made under the current git identity', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'config', 'user.email'], { stdout: 'ana@x.org\n' })
+  runner.set('git', ['-C', '/p', 'for-each-ref', '--format=%(refname:short)%00%(taggeremail)', 'refs/tags'], {
+    stdout: 'v1.0\u0000<ana@x.org>\ntheirs\u0000<bob@x.org>\nlight\u0000\nodd name\u0000<ana@x.org>\n'
+  })
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).listOwnTags('/p'), ['v1.0'])
+})
+
+test('listOwnTags returns nothing when no git identity is set', async () => {
+  const runner = new FakeRunner() // config unmocked => fails
+  assert.deepEqual(await new DataLadAdapter({ runner }).listOwnTags('/p'), [])
+})
+
 test('pushTags refuses a remote name that looks like a flag', async () => {
   await assert.rejects(
-    new DataLadAdapter({ runner: new FakeRunner() }).runCommand('pushTags', { projectPath: '/tmp/p', remoteName: '--mirror' }),
+    new DataLadAdapter({ runner: new FakeRunner() }).runCommand('pushTags', { projectPath: '/tmp/p', remoteName: '--mirror', tagNames: ['v1'] }),
     /cannot start with -/
   )
 })
@@ -2240,7 +2269,7 @@ test('trackRemote refuses an unsafe remote name', async () => {
 test('pushTags and push only accept a configured-remote-style name, never a path or URL', async () => {
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })
   for (const remoteName of ['/Volumes/stick/evil.git', 'https://x/y', 'a b', '../x']) {
-    await assert.rejects(adapter.runCommand('pushTags', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
+    await assert.rejects(adapter.runCommand('pushTags', { projectPath: '/tmp/p', remoteName, tagNames: ['v1'] }), /remote name/i, remoteName)
     await assert.rejects(adapter.runCommand('push', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
   }
 })

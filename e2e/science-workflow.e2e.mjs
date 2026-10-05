@@ -80,7 +80,9 @@ test('Free Up Space removes the local copy now that the backup has one', async (
 })
 
 test('a version marked in git reaches the remote on Publish', async () => {
-  sh('git', ['tag', '-a', 'v1.0', '-m', 'Version v1.0'], projectPath) // the UI path is covered by unit tests
+  // made under the app's git identity (E2E Test), like Mark As Version does; the UI path is covered by unit tests
+  sh('git', ['-c', 'user.email=e2e@example.org', '-c', 'user.name=E2E Test', 'tag', '-a', 'v1.0', '-m', 'Version v1.0'], projectPath)
+  sh('git', ['-c', 'user.email=bob@example.org', '-c', 'user.name=Bob', 'tag', '-a', 'theirs', '-m', 'from a collaborator'], projectPath)
   await app.page.evaluate(() => document.getElementById('publish-project').click())
   // The tag push runs right after Publish finishes (the button is idle by then): poll the remote.
   let tags = ''
@@ -89,6 +91,7 @@ test('a version marked in git reaches the remote on Publish', async () => {
     tags = sh('git', ['--git-dir', backupPath, 'tag'])
   }
   assert.match(tags, /v1\.0/, await commandOutput())
+  assert.doesNotMatch(tags, /theirs/, 'a collaborator\'s tag is not republished')
 })
 
 test('Time Machine marks the datalad run commit and shows its command', async () => {
