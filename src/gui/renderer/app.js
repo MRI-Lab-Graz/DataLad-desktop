@@ -18,6 +18,7 @@ import {
   createRunId,
   formatActivityLine,
   formatDurationLine,
+  formatProgress,
   renderRunningRows,
   shouldShowUserErrorMessage,
   shouldStopSequence
@@ -884,10 +885,11 @@ elements.getDataButton.addEventListener('click', async () => {
     return
   }
 
-  await runWorkflowCommand('get', {
-    projectPath,
-    paths: parsePaths(elements.paths.value)
-  }, elements.getDataButton)
+  const paths = parsePaths(elements.paths.value)
+  // ponytail: total known only for "get everything" in the root dataset (health counts the root only).
+  const progressTotal =
+    paths.length === 0 && projectPath === state.rootProjectPath ? state.projectHealthSnapshot?.missingContentCount ?? null : null
+  await runWorkflowCommand('get', { projectPath, paths }, elements.getDataButton, undefined, { progressTotal })
 
   await refreshFileBrowser(projectPath)
 })
@@ -1486,8 +1488,8 @@ function renderRunningCommands() {
   elements.runningCommands.innerHTML = renderRunningRows(runs)
 }
 
-function trackRun(runId, label) {
-  state.activeRuns.set(runId, { runId, label, line: '', stopping: false })
+function trackRun(runId, label, total = null) {
+  state.activeRuns.set(runId, { runId, label, line: '', stopping: false, total, progress: '' })
   renderRunningCommands()
 }
 
@@ -1507,6 +1509,20 @@ api.onCommandActivity(({ runId, line }) => {
   const span = elements.runningCommands.querySelector(`[data-run-row="${CSS.escape(runId)}"] .running-line`)
   if (span) {
     span.textContent = run.line
+  }
+})
+
+api.onCommandProgress(({ runId, done }) => {
+  const run = state.activeRuns.get(runId)
+  if (!run) {
+    return
+  }
+  run.progress = formatProgress(done, run.total)
+  const span = elements.runningCommands.querySelector(`[data-run-row="${CSS.escape(runId)}"] .running-progress`)
+  if (span) {
+    span.textContent = run.progress
+  } else {
+    renderRunningCommands()
   }
 })
 
@@ -1535,7 +1551,7 @@ elements.runningCommands.addEventListener('click', (event) => {
 })
 
 async function runWorkflowCommand(commandName, request, button = null, busyLabelOverride = undefined, options = {}) {
-  const { skipBackgroundRefresh = false } = options
+  const { skipBackgroundRefresh = false, progressTotal = null } = options
 
   if (state.sequenceStopRequested) {
     return cancelledResult(commandName)
@@ -1559,7 +1575,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
 
   state.pendingCommands.add(commandName)
   const runId = createRunId()
-  trackRun(runId, actionLabel(commandName))
+  trackRun(runId, actionLabel(commandName), progressTotal)
   const pathCount = Array.isArray(request.paths) ? request.paths.length : 0
   const busyLabel =
     busyLabelOverride ??
