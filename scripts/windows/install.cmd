@@ -14,7 +14,7 @@ powershell -NoProfile -Command "Unblock-File -Path '.\install.cmd','.\install.ps
 
 powershell -NoProfile -ExecutionPolicy Bypass -File ".\install.ps1" %*
 if errorlevel 1 echo.
-if errorlevel 1 echo Setup failed - see the messages above and install.log in the install folder.
+if errorlevel 1 echo Setup failed - see the messages above and "DataLad Desktop install.log" next to the install folder.
 if errorlevel 1 pause
 if errorlevel 1 exit /b 1
 
