@@ -98,6 +98,16 @@ test('a version marked in git reaches the remote on Publish', async () => {
       lastActionState: await app.page.evaluate(() => document.getElementById('last-action-state')?.textContent),
       appEmail: sh('git', ['config', '--file', app.gitConfigGlobal, 'user.email']).trim(),
       projectTags: sh('git', ['for-each-ref', '--format=%(refname:short) %(taggeremail)', 'refs/tags'], projectPath),
+      // The app's own question, asked from here with the app's global config, and the raw bytes it parses.
+      gitConfigAsApp: (() => {
+        try {
+          return execFileSync('git', ['-C', projectPath, 'config', '--show-origin', '--get-all', 'user.email'], { encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: app.gitConfigGlobal } })
+        } catch (e) {
+          return `error: ${e.message}`
+        }
+      })(),
+      rawTagRefs: sh('git', ['for-each-ref', '--format=%(refname:short)%00%(taggeremail)', 'refs/tags'], projectPath),
+      gitVersion: sh('git', ['--version']).trim(),
       listOwnTags: await app.page.evaluate((p) => window.dataladDesktop.listOwnTags(p).catch((e) => `error: ${e.message}`), projectPath),
       remoteTags: tags
     }, null, 2)
