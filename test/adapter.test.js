@@ -2205,3 +2205,32 @@ test('push can target one named remote', async () => {
 
   assert.equal(result.ok, true)
 })
+
+test('prepareFolderRemote creates an annex-ready bare repository so the first Publish carries data', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['init', '--bare', '--', '/Volumes/USB/study'], {})
+  runner.set('git', ['-C', '/Volumes/USB/study', 'annex', 'init', 'DataLad Desktop backup'], {})
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).prepareFolderRemote('/Volumes/USB/study'), {
+    ok: true, folderPath: '/Volumes/USB/study'
+  })
+  assert.equal(runner.calls.length, 2)
+})
+
+test('prepareFolderRemote stops at the first failing step', async () => {
+  const runner = new FakeRunner() // git init unmocked => fails
+  await assert.rejects(new DataLadAdapter({ runner }).prepareFolderRemote('/x'), /Could not prepare/)
+  assert.equal(runner.calls.length, 1)
+})
+
+test('trackRemote points the current branch at the remote (adjusted branches track their base)', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+})
+
+test('trackRemote refuses an unsafe remote name', async () => {
+  await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).trackRemote('/p', '-x'), /remote name/i)
+})

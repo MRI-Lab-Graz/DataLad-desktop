@@ -316,6 +316,40 @@ export class DataLadAdapter {
     return { ok: true, removed: existed, lockPath }
   }
 
+  // An empty folder (USB drive, mounted share) becomes a bare repository. git-annex must be initialised
+  // in it up front, or the first `datalad push` sends history only and no data (verified with DataLad 1.6).
+  async prepareFolderRemote(folderPath) {
+    for (const args of [
+      ['init', '--bare', '--', folderPath],
+      ['-C', folderPath, 'annex', 'init', 'DataLad Desktop backup']
+    ]) {
+      const result = await this.runner.run('git', args)
+      if (result.failed) {
+        throw new Error(`Could not prepare ${folderPath}: ${(result.stderr || result.stdout).trim()}`)
+      }
+    }
+    return { ok: true, folderPath }
+  }
+
+  // After the first `push --to`, make that remote the branch's upstream so Update/Publish use it.
+  async trackRemote(projectPath, remoteName) {
+    if (!isSafeName(remoteName)) {
+      throw new Error(`Invalid remote name: ${remoteName}`)
+    }
+    const current = this.#firstLine((await this.runner.run('git', ['-C', projectPath, 'branch', '--show-current'])).stdout)
+    if (!current) {
+      throw new Error('Not on a branch: switch to a branch first.')
+    }
+    // Windows datasets sit on "adjusted/<branch>(unlocked)"; datalad pushes <branch> itself.
+    const branch = current.replace(/^adjusted\//, '').replace(/\([^)]*\)$/, '')
+    const upstream = `${remoteName}/${branch}`
+    const result = await this.runner.run('git', ['-C', projectPath, 'branch', `--set-upstream-to=${upstream}`])
+    if (result.failed) {
+      throw new Error(`Could not connect the branch to ${upstream}: ${(result.stderr || result.stdout).trim()}`)
+    }
+    return { ok: true, upstream }
+  }
+
   // Best-effort, called on every project open (see detectProjectType in
   // app.js) so OS noise files are ALWAYS excluded — not something the
   // researcher has to remember to click. .git/info/exclude rather than
