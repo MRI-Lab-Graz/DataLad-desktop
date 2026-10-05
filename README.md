@@ -50,8 +50,10 @@ Most researchers should just download the ready-to-run app:
 1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases)
    and download the build for your system:
    - **macOS:** the `.dmg` file
-   - **Windows:** `DataLad Desktop Setup *.exe` (installer, needs admin rights) or
-     `DataLad Desktop *.exe` (portable, no admin rights or install step — just run it)
+   - **Windows:** `install.cmd` + `install.ps1` (script install, no admin rights; see
+     [Windows: install with a script](#windows-install-with-a-script)), `DataLad Desktop Setup *.exe`
+     (installer, needs admin rights) or `DataLad Desktop *.exe` (portable, no admin rights or install
+     step — just run it)
 2. Open the downloaded file and follow the install prompts (installer), or just run it (portable).
 3. Launch **DataLad Desktop** like any other app.
 
@@ -86,6 +88,25 @@ instead). Only needed once. Or from a terminal:
 ```bash
 xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
 ```
+
+### Windows: install with a script
+
+For one user, without administrator rights. From the release page download **both** `install.cmd` and
+`install.ps1` into the same folder and double-click `install.cmd`. It:
+
+1. downloads the app and refuses to continue unless its SHA-256 matches the one written into `install.ps1`;
+2. puts DataLad in its own private environment next to the app (hash-locked packages and its own Python; a
+   Python you installed is never run) and adds that environment to **your** user PATH;
+3. installs Git and git-annex only when they are missing, from pinned, checksum-verified downloads. If Git is
+   installed for all users (in Program Files), git-annex needs an administrator once; the script says so;
+4. adds Start-menu and desktop shortcuts.
+
+Everything lands in `%LOCALAPPDATA%\DataLad Desktop`; the log is `DataLad Desktop install.log` next to that
+folder. Start the app from the shortcut, not from a terminal that was already open, so it sees the new PATH.
+
+To upgrade, run `install.cmd` from a newer release: the old version is put back if the new one fails. To remove it,
+run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
+entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.
 
 ### Windows: "Windows protected your PC" warning
 
