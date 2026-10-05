@@ -609,3 +609,12 @@ test('pushing to, cloning from and fetching from local bare and work-tree remote
   execFileSync('git', ['-C', work, 'config', 'receive.denyCurrentBranch', 'updateInstead'])
   assert.equal((await git('-C', clone, 'push', '-q', work, 'HEAD:refs/heads/main')).failed, false)
 })
+
+test('ProcessRunner hands every stdout chunk to onData, untouched', async () => {
+  const chunks = []
+  const runner = new ProcessRunner()
+  await runner.run(process.execPath, ['-e', 'process.stdout.write("get(ok): a (file)\\n"); process.stderr.write("noise\\n")'], {
+    onData: (chunk) => chunks.push(chunk)
+  })
+  assert.equal(chunks.join(''), 'get(ok): a (file)\n')
+})

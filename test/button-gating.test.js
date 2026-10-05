@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   computeDatasetGating,
   computeUnlockGating,
+  computeAnnexToolGating,
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
@@ -197,3 +198,20 @@ test('computeSyncActionsQuietMessage uses git-only wording for a plain git proje
   assert.doesNotMatch(message, /Get Data/)
 })
 
+
+test('computeAnnexToolGating disables annex-only actions for a plain git project', () => {
+  const gating = computeAnnexToolGating('git', 'Ready.')
+  assert.equal(gating.disabled, true)
+  assert.match(gating.title, /plain Git project/)
+})
+
+test('computeAnnexToolGating enables annex-only actions for datasets with the given title', () => {
+  for (const classification of ['dataset', 'superdataset']) {
+    assert.deepEqual(computeAnnexToolGating(classification, 'Ready.'), { disabled: false, title: 'Ready.' })
+  }
+})
+
+test('computeRemoteGating offers Add a Remote only when there is none', () => {
+  assert.equal(computeRemoteGating({ hasUpstream: false }).addRemote.hidden, false)
+  assert.equal(computeRemoteGating({ hasUpstream: true, upstream: 'origin/main' }).addRemote.hidden, true)
+})

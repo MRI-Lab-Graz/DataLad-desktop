@@ -11,6 +11,22 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  drop: {
+    required: ['projectPath'],
+    optional: ['paths']
+  },
+  createTag: {
+    required: ['projectPath', 'tagName', 'message', 'commitHash'],
+    optional: []
+  },
+  pushTags: {
+    required: ['projectPath', 'remoteName'],
+    optional: []
+  },
+  verify: {
+    required: ['projectPath'],
+    optional: []
+  },
   save: {
     required: ['projectPath', 'message'],
     optional: ['paths']
@@ -21,6 +37,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
   },
   push: {
     required: ['projectPath'],
+    optional: ['remoteName']
+  },
+  addRemote: {
+    required: ['projectPath', 'remoteName', 'url'],
     optional: []
   },
   createBranch: {
@@ -63,6 +83,10 @@ const LEADING_DASH_FIELDS = Object.freeze({
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
+  createTag: ['tagName'],
+  pushTags: ['remoteName'],
+  addRemote: ['remoteName', 'url'],
+  push: ['remoteName'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
   disconnectRemote: ['remoteName']
@@ -115,8 +139,9 @@ export function assertCommandRequest(commandName, request) {
     }
   }
 
-  if (commandName === 'cloneInstall' && /^\s*ext::/i.test(request.source)) {
-    throw new Error('Invalid request for cloneInstall: the ext:: transport is not allowed')
+  const transportField = { cloneInstall: 'source', addRemote: 'url' }[commandName]
+  if (transportField && /^\s*ext::/i.test(request[transportField])) {
+    throw new Error(`Invalid request for ${commandName}: the ext:: transport is not allowed`)
   }
 
   for (const pathValue of request.paths ?? []) {

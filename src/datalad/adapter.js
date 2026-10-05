@@ -23,9 +23,24 @@ const CURATED_COMMANDS = new Set([
   'createBranchAt',
   'restoreFileFromCommit',
   'discardChanges',
-  'unlock'
+  'unlock',
+  'drop',
+  'createTag',
+  'pushTags',
+  'verify',
+  'addRemote'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+// Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
+export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
+function isSafeName(name) {
+  return SAFE_NAME_PATTERN.test(name) && !name.includes('..') && !name.endsWith('.lock')
+}
+function assertSafeRemoteName(name) {
+  if (!isSafeName(name)) {
+    throw new Error(`Invalid remote name: ${name}. Use letters, digits, dot, dash or underscore.`)
+  }
+}
 const BIDS_MARKER_FILE = 'dataset_description.json'
 // Detection probes must answer promptly; a hung one falls back to the
 // .datalad/config marker instead of stalling project open. Kept below the e2e
@@ -304,6 +319,53 @@ export class DataLadAdapter {
     }
 
     return { ok: true, removed: existed, lockPath }
+  }
+
+  // Checked before a folder is written to, so a bad or taken name never leaves a half-made copy behind.
+  async assertNewRemoteName(projectPath, remoteName) {
+    assertSafeRemoteName(remoteName)
+    const known = (await this.runner.run('git', ['-C', projectPath, 'remote'])).stdout.split(/\r?\n/).map((n) => n.trim())
+    if (known.includes(remoteName)) {
+      throw new Error(`This project already has a remote named "${remoteName}". Pick a different name.`)
+    }
+  }
+
+  // A bare repository the app already set up for git-annex (a retry after a later step failed).
+  async isPreparedFolderRemote(folderPath) {
+    const bare = await this.runner.run('git', ['--git-dir', folderPath, 'rev-parse', '--is-bare-repository'])
+    return !bare.failed && bare.stdout.trim() === 'true' && (await fileExists(join(folderPath, 'annex')))
+  }
+
+  // An empty folder (USB drive, mounted share) becomes a bare repository. git-annex must be initialised
+  // in it up front, or the first `datalad push` sends history only and no data (verified with DataLad 1.6).
+  async prepareFolderRemote(folderPath) {
+    for (const args of [
+      ['init', '--bare', '--', folderPath],
+      ['--git-dir', folderPath, 'annex', 'init', 'DataLad Desktop backup'] // bare repo: the runner's safe.bareRepository=explicit needs this
+    ]) {
+      const result = await this.runner.run('git', args)
+      if (result.failed) {
+        throw new Error(`Could not prepare ${folderPath}: ${(result.stderr || result.stdout).trim()}`)
+      }
+    }
+    return { ok: true, folderPath }
+  }
+
+  // After the first `push --to`, make that remote the branch's upstream so Update/Publish use it.
+  async trackRemote(projectPath, remoteName) {
+    assertSafeRemoteName(remoteName)
+    const current = this.#firstLine((await this.runner.run('git', ['-C', projectPath, 'branch', '--show-current'])).stdout)
+    if (!current) {
+      throw new Error('Not on a branch: switch to a branch first.')
+    }
+    // Windows datasets sit on "adjusted/<branch>(unlocked)"; datalad pushes <branch> itself.
+    const branch = current.replace(/^adjusted\//, '').replace(/\([^)]*\)$/, '')
+    const upstream = `${remoteName}/${branch}`
+    const result = await this.runner.run('git', ['-C', projectPath, 'branch', `--set-upstream-to=${upstream}`])
+    if (result.failed) {
+      throw new Error(`Could not connect the branch to ${upstream}: ${(result.stderr || result.stdout).trim()}`)
+    }
+    return { ok: true, upstream }
   }
 
   // Best-effort, called on every project open (see detectProjectType in
@@ -651,7 +713,7 @@ export class DataLadAdapter {
       'log',
       '-n',
       String(limit),
-      '--format=%ct%x00%h%x00%an%x00%s'
+      '--format=%ct%x00%h%x00%an%x00%s%x00%D'
     ])
 
     if (result.failed) {
@@ -674,7 +736,7 @@ export class DataLadAdapter {
         continue
       }
 
-      const [timestampRaw, commitHash, author, subject] = line.split('\u0000')
+      const [timestampRaw, commitHash, author, subject, decorations] = line.split('\u0000')
       const timestamp = Number.parseInt(timestampRaw, 10)
       if (!Number.isFinite(timestamp)) {
         continue
@@ -684,7 +746,11 @@ export class DataLadAdapter {
         timestamp,
         commitHash: (commitHash ?? '').trim(),
         author: (author ?? '').trim(),
-        subject: (subject ?? '').trim()
+        subject: (subject ?? '').trim(),
+        tags: (decorations ?? '')
+          .split(', ')
+          .filter((d) => d.startsWith('tag: '))
+          .map((d) => d.slice('tag: '.length).trim())
       })
     }
 
@@ -1134,9 +1200,19 @@ export class DataLadAdapter {
       }
       case 'push': {
         const projectPath = request.projectPath
+        const args = ['-C', projectPath, 'push']
+        if (request.remoteName) {
+          assertSafeRemoteName(request.remoteName)
+          args.push('--to', request.remoteName)
+        }
+        return { command: 'datalad', args, options: { cwd: projectPath } }
+      }
+      case 'addRemote': {
+        const { projectPath, remoteName, url } = request
+        assertSafeRemoteName(remoteName)
         return {
           command: 'datalad',
-          args: ['-C', projectPath, 'push'],
+          args: ['siblings', 'add', '-d', projectPath, '-s', remoteName, '--url', url],
           options: { cwd: projectPath }
         }
       }
@@ -1207,6 +1283,47 @@ export class DataLadAdapter {
         return {
           command: 'datalad',
           args: ['-C', projectPath, 'unlock', '--', ...request.paths],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'createTag': {
+        const { projectPath, tagName, message, commitHash } = request
+        if (!isSafeName(tagName)) {
+          throw new Error(`Invalid version name: ${tagName}. Use letters, digits, dot, dash or underscore.`)
+        }
+        if (!COMMIT_HASH_PATTERN.test(commitHash)) {
+          throw new Error(`Invalid commit hash format: ${commitHash}`)
+        }
+        return {
+          command: 'git',
+          args: ['-C', projectPath, 'tag', '-a', `--message=${message}`, tagName, commitHash],
+          options: { cwd: projectPath }
+        }
+      }
+      case 'pushTags': {
+        // A path or URL here would push to a repository the trust re-check never looked at.
+        assertSafeRemoteName(request.remoteName)
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'push', '--tags', request.remoteName],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'verify': {
+        // ponytail: this dataset only, not nested subdatasets; add a per-dataset loop if researchers ask.
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'annex', 'fsck', '--json', '--in=here'],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'drop': {
+        // datalad refuses to drop the last verified copy by itself (no --reckless here, ever).
+        const projectPath = request.projectPath
+        const paths = request.paths ?? []
+        return {
+          command: 'datalad',
+          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--', ...paths] : ['-C', projectPath, 'drop'],
           options: { cwd: projectPath }
         }
       }

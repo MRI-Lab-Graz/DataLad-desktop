@@ -425,6 +425,7 @@
 
           <div id="sync-actions-strip" class="action-strip">
             <button id="get-data" class="button button-ghost" type="button">Get Data</button>
+            <button id="drop-data" class="button button-ghost" type="button">Free Up Space</button>
             <span class="sibling-action-group">
               <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
               <button
@@ -458,6 +459,30 @@
           </p>
           <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>
+
+          <details id="add-remote" class="branch-details" hidden>
+            <summary>Add a Remote</summary>
+            <p class="lede-small">
+              Keep a second copy on a USB drive or network share, or connect an empty repository you created on
+              GIN, GitHub or GitLab. The first Publish sends everything.
+            </p>
+            <div class="field-row">
+              <label><input type="radio" name="add-remote-mode" id="add-remote-mode-folder" value="folder" checked /> Folder</label>
+              <label><input type="radio" name="add-remote-mode" id="add-remote-mode-url" value="url" /> Repository URL</label>
+            </div>
+            <label class="field">
+              <span>Location</span>
+              <div class="field-row">
+                <input id="add-remote-location" type="text" placeholder="/Volumes/USB/my-study  or  https://gin.g-node.org/me/my-study" />
+                <button id="add-remote-browse" class="button button-ghost button-inline" type="button">Browse</button>
+              </div>
+            </label>
+            <label class="field">
+              <span>Name</span>
+              <input id="add-remote-name" type="text" value="backup" />
+            </label>
+            <button id="add-remote-connect" class="button button-primary" type="button">Connect and Publish</button>
+          </details>
         </section>
 
         <section id="files-panel" class="card reveal" aria-labelledby="files-title" role="tabpanel" hidden>
@@ -486,6 +511,10 @@
           <div id="project-health-output" class="panel panel-muted panel-compact">
             Select a project to see its save, sync, and data status.
           </div>
+          <div class="action-strip">
+            <button id="verify-data" class="button button-ghost" type="button">Check Data Integrity</button>
+          </div>
+          <div id="verify-output" class="panel panel-muted panel-compact" hidden></div>
 
           <section class="status-box" aria-labelledby="working-tree-title">
             <div class="section-head branch-head">
@@ -625,6 +654,16 @@
               </label>
               <p class="hint-inline">
                 Creates a new branch starting at this save point. Your current work stays untouched.
+              </p>
+              <label class="field">
+                <span>Mark As Version</span>
+                <div class="field-row">
+                  <input id="tm-version-name" type="text" placeholder="v1.0-submission" />
+                  <button id="tm-mark-version" class="button button-ghost button-inline" type="button">Mark</button>
+                </div>
+              </label>
+              <p class="hint-inline">
+                Gives this save point a permanent name you can cite in a paper. Publish sends it to your remote.
               </p>
             </div>
 

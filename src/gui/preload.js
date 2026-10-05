@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.on('command:activity', listener)
     return () => ipcRenderer.removeListener('command:activity', listener)
   },
+  onCommandProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('command:progress', listener)
+    return () => ipcRenderer.removeListener('command:progress', listener)
+  },
   runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getGitIdentity: () => ipcRenderer.invoke('identity:get'),
@@ -47,6 +52,9 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.invoke('adapter:getCommitDetails', { projectPath, commitHash }),
   getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   clearRepositoryLock: (projectPath) => ipcRenderer.invoke('adapter:clearRepositoryLock', projectPath),
+  prepareFolderRemote: (projectPath, remoteName, folderPath) =>
+    ipcRenderer.invoke('adapter:prepareFolderRemote', { projectPath, remoteName, folderPath }),
+  trackRemote: (projectPath, remoteName) => ipcRenderer.invoke('adapter:trackRemote', { projectPath, remoteName }),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>

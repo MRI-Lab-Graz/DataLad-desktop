@@ -925,7 +925,7 @@ test('listRecentCommits returns commit metadata in log order', async () => {
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-n', '2', '--format=%ct%x00%h%x00%an%x00%s'], {
+  runner.set('git', ['-C', root, 'log', '-n', '2', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
     exitCode: 0,
     stdout: '1716200000\u0000a1b2c3d\u0000Ada Lovelace\u0000Save figures\n1716100000\u0000d4e5f6g\u0000Grace Hopper\u0000Initial import\n',
     stderr: '',
@@ -940,7 +940,8 @@ test('listRecentCommits returns commit metadata in log order', async () => {
     timestamp: 1716200000,
     commitHash: 'a1b2c3d',
     author: 'Ada Lovelace',
-    subject: 'Save figures'
+    subject: 'Save figures',
+    tags: []
   })
 })
 
@@ -953,7 +954,7 @@ test('listRecentCommits returns empty list when repository has no commits', asyn
     stderr: '',
     failed: false
   })
-  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s'], {
+  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
     exitCode: 128,
     stdout: '',
     stderr: 'fatal: your current branch main has no commits yet',
@@ -2080,4 +2081,188 @@ test('ignoreOsNoiseFiles never writes through a symlinked info folder', { skip: 
   await new DataLadAdapter({ runner: gitDirRunner(root) }).ignoreOsNoiseFiles(root)
 
   assert.deepEqual(await readdir(outsideDir), [])
+})
+
+test('runCommand routes drop for selected paths through datalad drop', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('drop', {
+    projectPath: '/tmp/project',
+    paths: ['sub-01/anat.nii.gz']
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'])
+})
+
+test('runCommand drops the whole dataset content when no paths are given', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop'], { stdout: 'drop(ok): . (directory)\n' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop'])
+})
+
+test('runCommand creates an annotated version tag at a save point', async () => {
+  const runner = new FakeRunner()
+  const args = ['-C', '/tmp/project', 'tag', '-a', '--message=paper submission', 'v1.0', 'abc1234']
+  runner.set('git', args, {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('createTag', {
+    projectPath: '/tmp/project',
+    tagName: 'v1.0',
+    message: 'paper submission',
+    commitHash: 'abc1234'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, args)
+})
+
+test('runCommand rejects version names git or a shell could misread', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const tagName of ['-f', 'v 1', 'a/b', 'v1..2', 'v1.lock', 'versión', '.hidden']) {
+    await assert.rejects(
+      adapter.runCommand('createTag', { projectPath: '/tmp/p', tagName, message: 'm', commitHash: 'abc1234' }),
+      /version name|cannot start with -/i,
+      tagName
+    )
+  }
+})
+
+test('listRecentCommits returns the version tags on each commit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-tags-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'log', '-n', '20', '--format=%ct%x00%h%x00%an%x00%s%x00%D'], {
+    stdout:
+      '1700000100\u0000bbb2222\u0000Ana\u0000final\u0000HEAD -> main, tag: v1.0, tag: submitted, origin/main\n' +
+      '1700000000\u0000aaa1111\u0000Ana\u0000first\u0000\n'
+  })
+
+  const history = await new DataLadAdapter({ runner }).listRecentCommits(root)
+
+  assert.deepEqual(history.commits.map((c) => c.tags), [['v1.0', 'submitted'], []])
+})
+
+test('runCommand pushes version tags to the named remote (datalad push does not)', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'push', '--tags', 'origin'], {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('pushTags', { projectPath: '/tmp/project', remoteName: 'origin' })
+
+  assert.equal(result.ok, true)
+})
+
+test('pushTags refuses a remote name that looks like a flag', async () => {
+  await assert.rejects(
+    new DataLadAdapter({ runner: new FakeRunner() }).runCommand('pushTags', { projectPath: '/tmp/p', remoteName: '--mirror' }),
+    /cannot start with -/
+  )
+})
+
+test('runCommand verifies stored data with a full git-annex checksum pass', async () => {
+  const runner = new FakeRunner()
+  // --in=here: only files whose content is on this computer (others have nothing to check)
+  runner.set('git', ['-C', '/tmp/project', 'annex', 'fsck', '--json', '--in=here'], { stdout: '' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('verify', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+})
+
+test('runCommand adds a remote as a DataLad sibling', async () => {
+  const runner = new FakeRunner()
+  const args = ['siblings', 'add', '-d', '/tmp/project', '-s', 'backup', '--url', '/Volumes/USB/study']
+  runner.set('datalad', args, {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('addRemote', {
+    projectPath: '/tmp/project', remoteName: 'backup', url: '/Volumes/USB/study'
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(runner.calls[0].args, args)
+})
+
+test('addRemote rejects unsafe remote names', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const remoteName of ['my remote', 'a/b', 'x..y', 'origin.lock']) {
+    await assert.rejects(
+      adapter.runCommand('addRemote', { projectPath: '/tmp/p', remoteName, url: 'https://x/y' }),
+      /remote name/i,
+      remoteName
+    )
+  }
+})
+
+test('push can target one named remote', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'push', '--to', 'backup'], {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('push', { projectPath: '/tmp/project', remoteName: 'backup' })
+
+  assert.equal(result.ok, true)
+})
+
+test('prepareFolderRemote creates an annex-ready bare repository so the first Publish carries data', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['init', '--bare', '--', '/Volumes/USB/study'], {})
+  // explicit --git-dir: the runner sets safe.bareRepository=explicit, which refuses `-C <bare repo>`
+  runner.set('git', ['--git-dir', '/Volumes/USB/study', 'annex', 'init', 'DataLad Desktop backup'], {})
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).prepareFolderRemote('/Volumes/USB/study'), {
+    ok: true, folderPath: '/Volumes/USB/study'
+  })
+  assert.equal(runner.calls.length, 2)
+})
+
+test('prepareFolderRemote stops at the first failing step', async () => {
+  const runner = new FakeRunner() // git init unmocked => fails
+  await assert.rejects(new DataLadAdapter({ runner }).prepareFolderRemote('/x'), /Could not prepare/)
+  assert.equal(runner.calls.length, 1)
+})
+
+test('trackRemote points the current branch at the remote (adjusted branches track their base)', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+})
+
+test('trackRemote refuses an unsafe remote name', async () => {
+  await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).trackRemote('/p', '-x'), /remote name/i)
+})
+
+test('pushTags and push only accept a configured-remote-style name, never a path or URL', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const remoteName of ['/Volumes/stick/evil.git', 'https://x/y', 'a b', '../x']) {
+    await assert.rejects(adapter.runCommand('pushTags', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
+    await assert.rejects(adapter.runCommand('push', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
+  }
+})
+
+test('assertNewRemoteName refuses unsafe names and names the project already has', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'remote'], { stdout: 'origin\nbackup\n' })
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(adapter.assertNewRemoteName('/p', 'my backup'), /remote name/i)
+  await assert.rejects(adapter.assertNewRemoteName('/p', 'origin'), /already/i)
+  await adapter.assertNewRemoteName('/p', 'usb')
+})
+
+test('isPreparedFolderRemote is true only for a bare repository the app already set up for git-annex', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'dlad-prepared-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['--git-dir', folder, 'rev-parse', '--is-bare-repository'], { stdout: 'true\n' })
+  const adapter = new DataLadAdapter({ runner })
+
+  assert.equal(await adapter.isPreparedFolderRemote(folder), false) // bare, but git-annex was never initialised
+  await mkdir(join(folder, 'annex'))
+  assert.equal(await adapter.isPreparedFolderRemote(folder), true)
+  assert.equal(await new DataLadAdapter({ runner: new FakeRunner() }).isPreparedFolderRemote(folder), false) // not a repository
 })

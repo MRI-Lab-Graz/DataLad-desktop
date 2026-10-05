@@ -1908,3 +1908,8 @@ select:disabled {
   border: 1px solid rgba(131, 89, 36, 0.36);
   color: #835924;
 }
+
+.history-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tag-chip { font-size: 0.75rem; padding: 1px 8px; border-radius: 999px; background: var(--bg-accent); border: 1px solid var(--teal); }
+.run-chip { font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; background: var(--bg-accent); border: 1px solid var(--teal); }
+.tm-run-record { margin-top: 8px; }
