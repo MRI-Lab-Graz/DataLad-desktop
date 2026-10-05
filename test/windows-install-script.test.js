@@ -228,6 +228,15 @@ test('uninstall.cmd runs a copy of install.ps1 from TEMP, because its own folder
   assert.ok(mainBlock(ps).includes('Install-Uninstaller'))
 })
 
+// uninstall.cmd deletes the folder it lives in: cmd reads a batch file line by line, so a pause on its own line would
+// fail with "path not found" and close the window before the result is read. Chained on the same line it is already parsed.
+test('uninstall.cmd chains its pause onto the same line as the uninstall, not on a line of its own', async () => {
+  const ps = await read('install.ps1')
+  assert.match(ps, /^\(goto\) 2>nul & powershell [^\n]*-Uninstall -InstallDir "%~dp0\." & pause\r?$/m, '(goto) 2>nul ends the batch context first, so cmd never re-reads the deleted file')
+  assert.doesNotMatch(ps, /exit \/b\r?\n'@/, 'exit /b would close the shell the file was run from')
+  assert.doesNotMatch(ps, /^pause\s*$/m)
+})
+
 test('the install folder is normalised so a trailing backslash or dot (from uninstall.cmd) matches the PATH entry', async () => {
   assert.match(await read('install.ps1'), /\$InstallDir = \[IO\.Path\]::GetFullPath\(\$InstallDir\)/)
 })

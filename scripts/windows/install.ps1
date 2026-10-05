@@ -108,8 +108,9 @@ function Install-Uninstaller {
 REM Removes DataLad Desktop. Runs a copy of the install script from TEMP, because this folder is deleted.
 setlocal
 copy /y "%~dp0install.ps1" "%TEMP%\dlad-uninstall.ps1" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\dlad-uninstall.ps1" -Uninstall -InstallDir "%~dp0."
-pause
+REM This file is deleted while it runs, and cmd re-reads a batch file after every command. (goto) 2>nul ends the batch
+REM context first, so the rest of the line runs from memory.
+(goto) 2>nul & powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\dlad-uninstall.ps1" -Uninstall -InstallDir "%~dp0." & pause
 '@
     Set-Content -LiteralPath (Join-Path $InstallDir 'uninstall.cmd') -Value $cmd -Encoding ASCII
 }
