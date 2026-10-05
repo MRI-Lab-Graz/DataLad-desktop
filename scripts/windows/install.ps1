@@ -38,8 +38,11 @@ $script:Failures = @()
 # True once the new app folder has replaced the old one: from then on a failure has to put the old one back.
 $script:Swapped = $false
 
-# Next to the install folder, not inside it: an upgrade swaps that folder.
-$LogPath = Join-Path (Split-Path $InstallDir -Parent) 'DataLad Desktop install.log'
+# Next to the install folder, not inside it: an upgrade swaps that folder. A drive root has no parent; the check that
+# refuses it needs a log to write to first.
+$LogParent = [IO.Path]::GetDirectoryName($InstallDir)
+if (-not $LogParent) { $LogParent = $env:LOCALAPPDATA }
+$LogPath = Join-Path $LogParent 'DataLad Desktop install.log'
 
 function Write-Log([string]$Message) {
     Write-Host $Message
@@ -65,6 +68,19 @@ function Get-VerifiedFile([string]$Url, [string]$Sha256, [string]$OutFile) {
     if ($actual -ne $Sha256) {
         Remove-Item -LiteralPath $OutFile -Force
         throw "Hash mismatch for $(Split-Path $Url -Leaf): expected $Sha256, got $actual. The file was deleted and not used."
+    }
+}
+
+# $InstallDir is deleted recursively: the old install after an upgrade, everything on uninstall. A folder that is not
+# ours must never get that far. Most installers treat -InstallDir D:\Software as a parent folder, and a drive root
+# is no folder of its own.
+function Assert-SafeInstallDir {
+    if ([IO.Path]::GetPathRoot("$InstallDir\") -eq "$InstallDir\") {
+        throw "'$InstallDir' is a drive or share root. Give the install a folder of its own, for example '$InstallDir\DataLad Desktop'."
+    }
+    $hasContent = (Test-Path -LiteralPath $InstallDir) -and (Get-ChildItem -LiteralPath $InstallDir -Force | Select-Object -First 1)
+    if ($hasContent -and -not (Test-Path -LiteralPath (Join-Path $InstallDir 'DataLad Desktop.exe'))) {
+        throw "'$InstallDir' already exists and is not a DataLad Desktop install, so it is left alone. Choose a folder of its own."
     }
 }
 
@@ -96,7 +112,7 @@ function Install-App {
     }
     Move-Item -LiteralPath $work -Destination $InstallDir
     $script:Swapped = $true
-    Write-Log "Installed the app in '$InstallDir'."
+    Write-Log "Installed DataLad Desktop $AppVersion in '$InstallDir'."
 }
 
 # Written into the install folder so it can be removed without this download; it runs from TEMP because it deletes
@@ -135,6 +151,12 @@ function New-Shortcuts {
 function Restore-PreviousInstall {
     $old = "$InstallDir.old"
     Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    # A file in use (an antivirus scan of the new exe files) can leave the folder half deleted; moving .old into it
+    # would nest the previous install inside the broken one and still report success.
+    if (Test-Path -LiteralPath $InstallDir) {
+        Write-Log "WARNING: '$InstallDir' could not be removed completely, a file may be in use. Any previous install is intact in '$old'. Close the program using it, delete '$InstallDir', and rename '$old' back to '$InstallDir'."
+        return
+    }
     if (Test-Path -LiteralPath $old) {
         Move-Item -LiteralPath $old -Destination $InstallDir
         Write-Log 'The previous install was restored.'
@@ -158,7 +180,9 @@ function Invoke-Uninstall {
         Remove-Item -LiteralPath (Join-Path $dir 'DataLad Desktop.lnk') -Force -ErrorAction SilentlyContinue
     }
     Remove-UserPath (Join-Path $InstallDir 'datalad-env\Scripts')
-    Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    if (Test-Path -LiteralPath $InstallDir) {
+        Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    }
     Remove-Item -LiteralPath "$InstallDir.new", "$InstallDir.old" -Recurse -Force -ErrorAction SilentlyContinue
     Write-Log 'DataLad Desktop was removed. Shared tools were left alone.'
 }
@@ -181,8 +205,16 @@ function Install-Git {
         return
     }
     Write-Log 'Installing Git for Windows for your user...'
-    $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES', '/CURRENTUSER' -Wait -PassThru
-    Remove-Item -LiteralPath $installer -Force
+    # Starting an unknown exe from TEMP can be refused (AppLocker, Defender, a declined prompt): that is a failure to
+    # report with instructions, not a reason to roll the whole install back.
+    try {
+        $process = Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/NORESTART', '/NOCANCEL', '/SP-', '/SUPPRESSMSGBOXES', '/CURRENTUSER' -Wait -PassThru
+    } catch {
+        $script:Failures += "Git for Windows could not be started: $($_.Exception.Message) Install it from https://git-scm.com/download/win and run this script again."
+        return
+    } finally {
+        Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
+    }
     Update-ProcessPath
     if ($process.ExitCode -ne 0 -or -not (Get-Command git -ErrorAction SilentlyContinue)) {
         $script:Failures += "Git for Windows could not be installed (exit code $($process.ExitCode)). Install it from https://git-scm.com/download/win and run this script again."
@@ -203,8 +235,14 @@ function Install-GitAnnex {
         return
     }
     Write-Log 'Installing git-annex...'
-    $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
-    Remove-Item -LiteralPath $installer -Force
+    try {
+        $process = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
+    } catch {
+        $script:Failures += "git-annex could not be started: $($_.Exception.Message) $manual"
+        return
+    } finally {
+        Remove-Item -LiteralPath $installer -Force -ErrorAction SilentlyContinue
+    }
     Update-ProcessPath
     if ($process.ExitCode -ne 0 -or -not (Get-Command git-annex -ErrorAction SilentlyContinue)) {
         $script:Failures += "git-annex could not be installed (exit code $($process.ExitCode)). git-annex installs into Git for Windows. $manual"
@@ -271,6 +309,7 @@ function Write-Report {
 }
 
 try {
+    Assert-SafeInstallDir
     New-Item -ItemType Directory -Force -Path (Split-Path $InstallDir -Parent) | Out-Null
     if ($Uninstall) {
         Invoke-Uninstall
