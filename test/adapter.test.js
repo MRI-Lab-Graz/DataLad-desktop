@@ -1087,9 +1087,10 @@ test('getProjectHealth degrades gracefully without an upstream or git-annex', as
   assert.equal(health.missingContentCount, null)
 })
 
-test('runCommand routes get without explicit paths to a bare datalad get', async () => {
+test('runCommand routes get without explicit paths to datalad get on the whole dataset', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'get'], {
+  // a bare `datalad get` is rejected by DataLad 1.6 ("Neither dataset nor target path(s) provided")
+  runner.set('datalad', ['-C', '/tmp/project', 'get', '-d', '.'], {
     exitCode: 0,
     stdout: 'get ok\n',
     stderr: '',
@@ -1100,7 +1101,7 @@ test('runCommand routes get without explicit paths to a bare datalad get', async
   const result = await adapter.runCommand('get', { projectPath: '/tmp/project' })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'get'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'get', '-d', '.'])
 })
 
 test('runCommand routes update through datalad update --merge', async () => {

@@ -1209,7 +1209,9 @@ export class DataLadAdapter {
         const paths = request.paths ?? []
         return {
           command: 'datalad',
-          args: paths.length > 0 ? ['-C', projectPath, 'get', '--', ...paths] : ['-C', projectPath, 'get'],
+          // No paths = everything in this dataset. A bare `datalad get` is rejected by DataLad ("Neither dataset nor
+          // target path(s) provided"), so name the dataset. ponytail: this dataset only, not nested ones (-r).
+          args: paths.length > 0 ? ['-C', projectPath, 'get', '--', ...paths] : ['-C', projectPath, 'get', '-d', '.'],
           options: { cwd: projectPath }
         }
       }
