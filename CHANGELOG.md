@@ -2,6 +2,19 @@
 
 Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0.
 
+## Unreleased: science workflow
+
+Six additions for the normal cycle of collect, analyse, save, share and publish. The app stays a small, curated tool: anything else is still one terminal command away.
+
+- **Free Up Space:** removes the local copy of downloaded data, only when another copy is confirmed (it never forces; DataLad's own check cannot be lowered by a dataset's settings). Get Data brings it back.
+- **Versions:** *Mark As Version* in Time Machine gives a save point a permanent name to cite in a paper; version chips show in the history. Publish also sends the versions you marked (not tags that came from collaborators).
+- **Check Data Integrity:** re-checks every downloaded file against its recorded checksum and lists damaged ones.
+- **Recorded runs:** commits made by `datalad run` show a "recorded run" chip and, in Time Machine, the command, its inputs and outputs. Display only: nothing is re-run.
+- **Progress:** the running strip shows "N of M files" for Get Data and Publish.
+- **Add a Remote:** one flow for a second copy on a USB drive or network share (a new folder of its own), or an empty repository on GIN, GitHub or GitLab. It connects, publishes everything and makes the remote the branch's upstream.
+- **Security** (see `SECURITY.md`): Add a Remote with a local path is trust-checked; remotes and versions are named, never paths or URLs; the `ext::` transport is off; URL passwords and tokens are hidden and refused in Add a Remote; a backup folder cannot be a whole drive or the home folder. A test now derives which commands write to a remote and fails if one escapes the trust re-check.
+- Fixed: a version or remote name ending in a dot, a relative or unreadable backup folder, a half-made backup folder that blocked a retry, and the Stop button not covering the version push.
+
 ## Unreleased: security hardening
 
 Result of an independent security review (see `SECURITY.md` for what is protected and what is not).

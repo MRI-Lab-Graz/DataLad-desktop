@@ -28,6 +28,16 @@ across nested sub-projects? The app shows you exactly what changed and where.
   remote without memorizing remote/branch syntax.
 - **Keep noise out of your history** — manage `.gitignore` rules per project
   or sub-project right from the app.
+- **Free up disk space safely** — remove the local copy of downloaded data; the
+  app only does it when another copy (your remote or backup) is confirmed.
+- **Name the version you cite** — mark a save point as a version (for a paper or
+  a release) and Publish sends it along.
+- **Check your data is intact** — one click re-checks every downloaded file
+  against its checksum.
+- **See how a result was made** — commits recorded with `datalad run` show their
+  command, inputs and outputs in Time Machine.
+- **Keep a second copy** — add a USB drive, network share or an empty GIN/GitHub/
+  GitLab repository as a remote in one step.
 - **Branch when you need to**, without it getting in the way when you don't —
   branch management lives in an optional "Project Setup" area.
 
