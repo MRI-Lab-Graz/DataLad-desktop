@@ -8,6 +8,7 @@ import {
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
 import { summarizeFsck } from './integrity.js'
+import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -2259,7 +2260,8 @@ function renderTimeMachineHistory() {
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
         `<span class="history-age">${escapeHtml(age)} ago</span>` +
         '</div>' +
-        `<div class="history-subject">${escapeHtml(subject)}</div>` +
+        `<div class="history-subject">${isRunCommit(subject) ? '<span class="run-chip">recorded run</span> ' : ''}` +
+        `${escapeHtml(subject.replace('[DATALAD RUNCMD] ', ''))}</div>` +
         (entry.tags?.length
           ? `<div class="history-tags">${entry.tags.map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`).join('')}</div>`
           : '') +
@@ -2320,8 +2322,22 @@ function renderTimeMachineDetail() {
     : ''
 
   const bodyText = (details.message ?? '').replace(/^\s*\n*/, '').trim()
+  const run = parseRunRecord(details.message)
+  const runHtml = !run
+    ? ''
+    : run.sidecar
+      ? '<div class="tm-run-record"><h4>Produced by a recorded command</h4><p class="hint-inline">The command is stored in the project\'s .datalad/runinfo folder.</p></div>'
+      : '<div class="tm-run-record"><h4>Produced by a recorded command</h4>' +
+        `<pre class="panel panel-code">${escapeHtml(run.cmd)}</pre>` +
+        `<p class="hint-inline">Ran in <code>${escapeHtml(run.pwd)}</code>` +
+        (run.exit === null ? '' : `, exit code ${run.exit}`) + '.</p>' +
+        (run.inputs.length ? `<p class="hint-inline">Inputs: ${run.inputs.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}</p>` : '') +
+        (run.outputs.length ? `<p class="hint-inline">Outputs: ${run.outputs.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}</p>` : '') +
+        '</div>'
+
+  // A run commit's body is the raw record block: shown above as runHtml instead.
   const bodyHtml =
-    bodyText && bodyText !== details.subject
+    !run && bodyText && bodyText !== details.subject
       ? `<p class="tm-detail-body">${escapeHtml(bodyText)}</p>`
       : ''
 
@@ -2356,6 +2372,7 @@ function renderTimeMachineDetail() {
     '</div>' +
     `<p class="tm-detail-subject">${escapeHtml(details.subject ?? '')}</p>` +
     bodyHtml +
+    runHtml +
     statHtml +
     restoreFilesHtml
 
