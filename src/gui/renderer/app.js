@@ -1,6 +1,7 @@
 import {
   computeDatasetGating,
   computeUnlockGating,
+  computeAnnexToolGating,
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
@@ -161,6 +162,7 @@ const elements = {
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
+  dropDataButton: document.getElementById('drop-data'),
   unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
@@ -911,6 +913,28 @@ elements.unlockFilesButton.addEventListener('click', async () => {
 
   await runWorkflowCommand('unlock', { projectPath, paths }, elements.unlockFilesButton)
 
+  await refreshFileBrowser(projectPath)
+})
+
+elements.dropDataButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const paths = parsePaths(elements.paths.value)
+  const scope = paths.length > 0 ? `${paths.length} selected item(s)` : 'all downloaded data in this folder'
+  const confirmed = window.confirm(
+    `Free up space by removing the local copy of ${scope}?\n\n` +
+      '- Only removed when another copy (your remote or backup) is confirmed. Otherwise nothing happens.\n' +
+      '- Files stay listed; use Get Data to download them again.\n\n' +
+      'Continue?'
+  )
+  if (!confirmed) {
+    return
+  }
+
+  await runWorkflowCommand('drop', { projectPath, paths }, elements.dropDataButton)
   await refreshFileBrowser(projectPath)
 })
 
@@ -2856,6 +2880,10 @@ function actionLabel(commandName) {
     return 'Unlock for Editing'
   }
 
+  if (commandName === 'drop') {
+    return 'Free Up Space'
+  }
+
   return 'Action'
 }
 
@@ -2975,6 +3003,13 @@ function updateGetDataGating() {
   const unlockGating = computeUnlockGating(state.currentProjectClassification)
   elements.unlockFilesButton.disabled = unlockGating.disabled
   elements.unlockFilesButton.title = unlockGating.title
+
+  const dropGating = computeAnnexToolGating(
+    state.currentProjectClassification,
+    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get Data brings it back.'
+  )
+  elements.dropDataButton.disabled = dropGating.disabled
+  elements.dropDataButton.title = dropGating.title
 }
 
 function updateSyncSectionVisibility() {

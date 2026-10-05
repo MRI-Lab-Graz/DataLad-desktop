@@ -59,6 +59,20 @@ export function computeUnlockGating(classification) {
   return { disabled: false, title: UNLOCK_READY_TITLE }
 }
 
+const NOT_A_DATASET_ANNEX_TITLE =
+  'This is a plain Git project, not a DataLad dataset, so it has no separately stored data.'
+
+/**
+ * Actions that only make sense on git-annex content (Free Up Space, Check Data Integrity).
+ * @param {string|null|undefined} classification
+ * @param {string} readyTitle tooltip when the action is available
+ * @returns {{ disabled: boolean, title: string }}
+ */
+export function computeAnnexToolGating(classification, readyTitle) {
+  const isDataLadDataset = classification === 'dataset' || classification === 'superdataset'
+  return isDataLadDataset ? { disabled: false, title: readyTitle } : { disabled: true, title: NOT_A_DATASET_ANNEX_TITLE }
+}
+
 /**
  * @param {{ hasUpstream?: boolean, upstream?: string|null, remoteUrl?: string|null } | null | undefined} health
  * @returns {{
