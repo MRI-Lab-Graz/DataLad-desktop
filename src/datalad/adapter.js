@@ -25,7 +25,8 @@ const CURATED_COMMANDS = new Set([
   'discardChanges',
   'unlock',
   'drop',
-  'createTag'
+  'createTag',
+  'pushTags'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
@@ -1233,6 +1234,13 @@ export class DataLadAdapter {
           command: 'git',
           args: ['-C', projectPath, 'tag', '-a', `--message=${message}`, tagName, commitHash],
           options: { cwd: projectPath }
+        }
+      }
+      case 'pushTags': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'push', '--tags', request.remoteName],
+          options: { cwd: request.projectPath }
         }
       }
       case 'drop': {

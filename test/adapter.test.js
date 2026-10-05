@@ -2147,3 +2147,19 @@ test('listRecentCommits returns the version tags on each commit', async () => {
 
   assert.deepEqual(history.commits.map((c) => c.tags), [['v1.0', 'submitted'], []])
 })
+
+test('runCommand pushes version tags to the named remote (datalad push does not)', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'push', '--tags', 'origin'], {})
+
+  const result = await new DataLadAdapter({ runner }).runCommand('pushTags', { projectPath: '/tmp/project', remoteName: 'origin' })
+
+  assert.equal(result.ok, true)
+})
+
+test('pushTags refuses a remote name that looks like a flag', async () => {
+  await assert.rejects(
+    new DataLadAdapter({ runner: new FakeRunner() }).runCommand('pushTags', { projectPath: '/tmp/p', remoteName: '--mirror' }),
+    /cannot start with -/
+  )
+})

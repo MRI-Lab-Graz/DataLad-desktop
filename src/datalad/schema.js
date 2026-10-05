@@ -19,6 +19,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath', 'tagName', 'message', 'commitHash'],
     optional: []
   },
+  pushTags: {
+    required: ['projectPath', 'remoteName'],
+    optional: []
+  },
   save: {
     required: ['projectPath', 'message'],
     optional: ['paths']
@@ -72,6 +76,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
   createTag: ['tagName'],
+  pushTags: ['remoteName'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
   disconnectRemote: ['remoteName']

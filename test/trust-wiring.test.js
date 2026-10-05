@@ -122,3 +122,10 @@ test('the push/nesting re-check runs inside the registered run, so a Stop presse
   assert.match(body, /runWithHandle\(event, payload\.runId, async \(runOptions\) => \{\s*await recheckTrust\(\)\s*return adapter\.runCommand\(/)
   assert.match(body, /recheckTrust = async \(\) => \{\s*if \(payload\.commandName === 'push' \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
 })
+
+test('sending versions to a remote re-checks trust exactly like Publish', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(main, /const PUSHES = new Set\(\['push', 'pushTags'\]\)/)
+  assert.match(body, /PUSHES\.has\(payload\.commandName\)/)
+  assert.doesNotMatch(body, /payload\.commandName === 'push'/)
+})

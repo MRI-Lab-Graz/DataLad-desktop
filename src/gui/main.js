@@ -254,6 +254,8 @@ handle('adapter:untrackPath', async (_event, payload = {}) => {
 
 // create/clone targets do not exist yet (or are empty); see the trust rules in the handler below.
 const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
+// Everything that writes to a remote: a local-path remote runs its own hooks, so trust is re-checked first.
+const PUSHES = new Set(['push', 'pushTags'])
 
 handle('adapter:runCommand', async (event, payload) => {
   const target = payload.request?.targetPath
@@ -267,10 +269,10 @@ handle('adapter:runCommand', async (event, payload) => {
     // This scans (seconds on a big project), so it runs inside the registered run below: a Stop pressed meanwhile
     // is honoured instead of finding nothing to cancel.
     recheckTrust = async () => {
-      if (payload.commandName === 'push' || payload.commandName === 'createSubdataset') {
+      if (PUSHES.has(payload.commandName) || payload.commandName === 'createSubdataset') {
         await trustGate().require(payload.request.projectPath, { event })
       }
-      if (payload.commandName === 'push') {
+      if (PUSHES.has(payload.commandName)) {
         for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
           await trustGate().require(remote.path, { kind: 'remote', event })
         }
