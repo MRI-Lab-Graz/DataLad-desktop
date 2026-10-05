@@ -1,0 +1,109 @@
+name: Install Script Smoke (Windows)
+
+# Manual + release tags only: scripts/windows/install.ps1 downloads git-annex from a third-party mirror (and
+# Git when missing), so this must not gate every push.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  install-script:
+    name: install.cmd (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs x86_64-pc-windows-msvc
+
+      # Deliberately NOT installing DataLad or git-annex here: the script has to provide them.
+      - name: Build the unpacked app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --win dir --x64 --publish never
+
+      # The same zip and rendering as the release job, into a folder the script reads with -FromDir.
+      - name: Zip the app and render the install script
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $out = Join-Path $env:RUNNER_TEMP 'release'
+          New-Item -ItemType Directory $out | Out-Null
+          $zip = Join-Path $out "DataLad-Desktop-$version-win-x64.zip"
+          Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
+          node scripts/render-install-script.mjs $version $zip (Join-Path $out 'install.ps1')
+          Copy-Item scripts/windows/install.cmd (Join-Path $out 'install.cmd')
+
+      # `< NUL` answers the pause at the end of install.cmd.
+      - name: Install with install.cmd
+        shell: cmd
+        timeout-minutes: 25
+        run: |
+          cd /d "%RUNNER_TEMP%\release"
+          install.cmd -FromDir "%RUNNER_TEMP%\release" < NUL
+
+      # Actions steps keep the PATH they started with, but a researcher opening the app after setup gets the
+      # PATH the installers updated.
+      - name: Refresh PATH from the registry
+        shell: pwsh
+        run: |
+          $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          "Path=$machine;$user" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Script left working git, DataLad and git-annex
+        shell: pwsh
+        run: |
+          git --version
+          datalad --version
+          git annex version
+          $source = (Get-Command datalad).Source
+          $expected = Join-Path $env:LOCALAPPDATA 'DataLad Desktop\datalad-env\Scripts'
+          if ($source -notlike "$expected\*") { throw "datalad resolved outside the private env: $source" }
+
+      - name: Drive the installed app
+        shell: pwsh
+        run: |
+          $env:DLAD_APP_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'DataLad Desktop\DataLad Desktop.exe'
+          node --test e2e/packaged.e2e.mjs
+
+      - name: Pins still match what the hosts serve
+        run: node scripts/check-install-pins.mjs
+
+      # uninstall.cmd runs a copy of the script from TEMP and ends with a pause, so it gets an empty line on stdin.
+      - name: Uninstall with uninstall.cmd
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'DataLad Desktop'
+          '' | & "$dir\uninstall.cmd"
+          for ($i = 0; $i -lt 30 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 2 }
+          if (Test-Path $dir) { throw 'Uninstall left the install folder behind' }
+          foreach ($folder in 'Programs', 'Desktop') {
+            if (Test-Path (Join-Path ([Environment]::GetFolderPath($folder)) 'DataLad Desktop.lnk')) { throw "Uninstall left a $folder shortcut behind" }
+          }
+          if (([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -match 'DataLad Desktop') { throw 'Uninstall left a user PATH entry behind' }
+
+      - name: Install log (on failure)
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Content (Join-Path $env:LOCALAPPDATA 'DataLad Desktop install.log')
+          Get-Command git, git-annex, datalad -ErrorAction SilentlyContinue | Format-Table Name, Source
