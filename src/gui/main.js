@@ -431,6 +431,36 @@ handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
   return adapter.clearRepositoryLock(projectPath)
 })
 
+// Writes a new repository into a folder the user chose (USB drive, share). Never into one with content.
+handle('adapter:prepareFolderRemote', async (event, folderPath) => {
+  if (typeof folderPath !== 'string' || !folderPath.trim()) {
+    throw new Error('Choose a folder first.')
+  }
+  if (!(await isEmptyOrMissing(folderPath))) {
+    throw new Error('Choose an empty folder: this one already has files in it.')
+  }
+  if (!isWithinRoots(folderPath, pickedLocations)) {
+    const ok = await confirmNative(event, {
+      title: 'Create a backup copy here?',
+      message: 'This folder was typed, not picked.',
+      detail: `${folderPath}\n\nA copy of the project will be stored in it.`,
+      confirmLabel: 'Use this folder'
+    })
+    if (!ok) {
+      throw new Error('Not created: the location was not confirmed.')
+    }
+  }
+  const result = await adapter.prepareFolderRemote(folderPath)
+  // Publish re-checks a local remote's trust; this one the app made itself, empty.
+  trustGate().createdByApp(folderPath)
+  return result
+})
+
+handle('adapter:trackRemote', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.trackRemote(payload.projectPath, payload.remoteName)
+})
+
 handle('watch:setActiveProject', async (event, projectPath = null) => {
   if (activeProjectWatcher) {
     activeProjectWatcher.stop()

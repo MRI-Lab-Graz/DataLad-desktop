@@ -102,11 +102,12 @@ test('createProject into an empty target ignores force, so a folder filled in be
 // folder, or a documented read-only exception. Otherwise this test fails until someone decides.
 test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
-  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath']
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
   const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'env:ensure', 'console:setEnabled', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
-  assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException].sort(), 'classify new handlers here')
+  const newEmptyFolder = ['adapter:prepareFolderRemote'] // writes only into an empty folder, confirmed unless picked (own test below)
+  assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException, ...newEmptyFolder].sort(), 'classify new handlers here')
   for (const name of guarded) {
     assert.match(block(`handle('${name}'`), /requireAuthorizedRoot\(|isWithinAuthorizedRoot\(/, `${name} does not check the authorized roots`)
   }
@@ -135,4 +136,17 @@ test('Get and Publish report file-count progress to the page', () => {
   assert.match(main, /'command:progress'/)
   const body = block("handle('adapter:runCommand'")
   assert.match(body, /progress: payload\.commandName === 'get' \|\| payload\.commandName === 'push'/)
+})
+
+test('a folder remote is only ever created in an empty folder, confirmed when not picked, then trusted as app-made', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  const empty = body.indexOf('isEmptyOrMissing(folderPath)')
+  const prepare = body.indexOf('adapter.prepareFolderRemote')
+  assert.ok(empty !== -1 && empty < prepare, 'emptiness is checked before anything is written')
+  assert.match(body, /isWithinRoots\(folderPath, pickedLocations\)[\s\S]*?confirmNative\(/)
+  assert.ok(body.indexOf('createdByApp(folderPath)') > prepare)
+})
+
+test('trackRemote requires an opened project', () => {
+  assert.match(block("handle('adapter:trackRemote'"), /requireAuthorizedRoot\(payload\.projectPath\)/)
 })

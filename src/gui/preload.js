@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.invoke('adapter:getCommitDetails', { projectPath, commitHash }),
   getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   clearRepositoryLock: (projectPath) => ipcRenderer.invoke('adapter:clearRepositoryLock', projectPath),
+  prepareFolderRemote: (folderPath) => ipcRenderer.invoke('adapter:prepareFolderRemote', folderPath),
+  trackRemote: (projectPath, remoteName) => ipcRenderer.invoke('adapter:trackRemote', { projectPath, remoteName }),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>
