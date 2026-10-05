@@ -459,6 +459,30 @@
           </p>
           <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>
+
+          <details id="add-remote" class="branch-details" hidden>
+            <summary>Add a Remote</summary>
+            <p class="lede-small">
+              Keep a second copy on a USB drive or network share, or connect an empty repository you created on
+              GIN, GitHub or GitLab. The first Publish sends everything.
+            </p>
+            <div class="field-row">
+              <label><input type="radio" name="add-remote-mode" id="add-remote-mode-folder" value="folder" checked /> Folder</label>
+              <label><input type="radio" name="add-remote-mode" id="add-remote-mode-url" value="url" /> Repository URL</label>
+            </div>
+            <label class="field">
+              <span>Location</span>
+              <div class="field-row">
+                <input id="add-remote-location" type="text" placeholder="/Volumes/USB/my-study  or  https://gin.g-node.org/me/my-study" />
+                <button id="add-remote-browse" class="button button-ghost button-inline" type="button">Browse</button>
+              </div>
+            </label>
+            <label class="field">
+              <span>Name</span>
+              <input id="add-remote-name" type="text" value="backup" />
+            </label>
+            <button id="add-remote-connect" class="button button-primary" type="button">Connect and Publish</button>
+          </details>
         </section>
 
         <section id="files-panel" class="card reveal" aria-labelledby="files-title" role="tabpanel" hidden>

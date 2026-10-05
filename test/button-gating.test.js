@@ -210,3 +210,8 @@ test('computeAnnexToolGating enables annex-only actions for datasets with the gi
     assert.deepEqual(computeAnnexToolGating(classification, 'Ready.'), { disabled: false, title: 'Ready.' })
   }
 })
+
+test('computeRemoteGating offers Add a Remote only when there is none', () => {
+  assert.equal(computeRemoteGating({ hasUpstream: false }).addRemote.hidden, false)
+  assert.equal(computeRemoteGating({ hasUpstream: true, upstream: 'origin/main' }).addRemote.hidden, true)
+})

@@ -79,6 +79,7 @@ export function computeAnnexToolGating(classification, readyTitle) {
  *   update: { disabled: boolean, title: string },
  *   publish: { disabled: boolean, title: string },
  *   disconnect: { disabled: boolean, title: string },
+ *   addRemote: { hidden: boolean },
  *   remoteInfo: { hidden: boolean, text: string }
  * }}
  */
@@ -90,6 +91,7 @@ export function computeRemoteGating(health) {
       update: { disabled: true, title: NO_REMOTE_TITLE },
       publish: { disabled: true, title: NO_REMOTE_TITLE },
       disconnect: { disabled: true, title: NO_REMOTE_TITLE },
+      addRemote: { hidden: false },
       remoteInfo: { hidden: true, text: '' }
     }
   }
@@ -107,6 +109,7 @@ export function computeRemoteGating(health) {
         `(e.g. OpenNeuro) you never intend to push to or pull further updates from — nothing already ` +
         `saved here is affected, this project just stops being linked to ${remoteName}.`
     },
+    addRemote: { hidden: true },
     remoteInfo: { hidden: false, text: `Remote: ${remoteLabel}` }
   }
 }
@@ -155,6 +158,6 @@ export function computeSyncActionsQuietMessage(classification, health) {
   const isDataLadDataset = classification === 'dataset' || classification === 'superdataset'
 
   return isDataLadDataset
-    ? 'Nothing to sync right now — add a remote to enable Update/Publish, or Get Data once files have missing content.'
-    : 'Nothing to sync right now — add a remote to enable Update and Publish.'
+    ? 'Nothing to sync right now — use Add a Remote below to enable Update/Publish, or Get Data once files have missing content.'
+    : 'Nothing to sync right now — use Add a Remote below to enable Update and Publish.'
 }

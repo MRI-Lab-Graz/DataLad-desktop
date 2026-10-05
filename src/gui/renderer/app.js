@@ -204,6 +204,12 @@ const elements = {
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
   remoteInfo: document.getElementById('remote-info'),
+  addRemote: document.getElementById('add-remote'),
+  addRemoteModeFolder: document.getElementById('add-remote-mode-folder'),
+  addRemoteLocation: document.getElementById('add-remote-location'),
+  addRemoteBrowse: document.getElementById('add-remote-browse'),
+  addRemoteName: document.getElementById('add-remote-name'),
+  addRemoteConnect: document.getElementById('add-remote-connect'),
   powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
   consoleHelpText: document.getElementById('console-help-text'),
@@ -997,6 +1003,48 @@ elements.publishProjectButton.addEventListener('click', async () => {
     if (!tags?.ok) {
       setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
     }
+  }
+})
+
+elements.addRemoteBrowse.addEventListener('click', async () => {
+  const picked = await api.pickDirectory({ title: 'Choose an empty folder for the copy' })
+  if (picked) {
+    elements.addRemoteLocation.value = picked
+    elements.addRemoteModeFolder.checked = true
+  }
+})
+
+elements.addRemoteConnect.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const location = elements.addRemoteLocation.value.trim()
+  const remoteName = elements.addRemoteName.value.trim()
+  if (!projectPath) {
+    return
+  }
+  if (!location || !remoteName) {
+    setLastActionState('Enter a location and a name first.', 'error')
+    return
+  }
+
+  try {
+    if (elements.addRemoteModeFolder.checked) {
+      await api.prepareFolderRemote(location)
+    }
+    const added = await runWorkflowCommand('addRemote', { projectPath, remoteName, url: location }, elements.addRemoteConnect)
+    if (!added?.ok) {
+      return
+    }
+    const pushed = await runWorkflowCommand('push', { projectPath, remoteName }, elements.addRemoteConnect)
+    if (!pushed?.ok) {
+      return
+    }
+    await api.trackRemote(projectPath, remoteName)
+    setLastActionState(`Connected to ${remoteName} and published.`, 'success')
+  } catch (error) {
+    elements.commandOutput.textContent = String(error.message)
+    setLastActionState('Add a Remote failed.', 'error')
+  } finally {
+    await refreshProjectHealth(projectPath)
   }
 })
 
@@ -2996,6 +3044,10 @@ function actionLabel(commandName) {
     return 'Mark As Version'
   }
 
+  if (commandName === 'addRemote') {
+    return 'Add a Remote'
+  }
+
   if (commandName === 'verify') {
     return 'Check Data Integrity'
   }
@@ -3243,6 +3295,7 @@ function applyRemoteGatedButtons(health) {
   elements.disconnectRemoteButton.disabled = gating.disconnect.disabled
   elements.disconnectRemoteButton.title = gating.disconnect.title
 
+  elements.addRemote.hidden = gating.addRemote.hidden || !state.rootProjectPath
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
 
