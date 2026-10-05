@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.on('command:activity', listener)
     return () => ipcRenderer.removeListener('command:activity', listener)
   },
+  onCommandProgress: (callback) => {
+    const listener = (_event, payload) => callback(payload)
+    ipcRenderer.on('command:progress', listener)
+    return () => ipcRenderer.removeListener('command:progress', listener)
+  },
   runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
   setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getGitIdentity: () => ipcRenderer.invoke('identity:get'),

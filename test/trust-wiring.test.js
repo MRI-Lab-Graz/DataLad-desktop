@@ -126,6 +126,13 @@ test('the push/nesting re-check runs inside the registered run, so a Stop presse
 test('sending versions to a remote re-checks trust exactly like Publish', () => {
   const body = block("handle('adapter:runCommand'")
   assert.match(main, /const PUSHES = new Set\(\['push', 'pushTags'\]\)/)
-  assert.match(body, /PUSHES\.has\(payload\.commandName\)/)
-  assert.doesNotMatch(body, /payload\.commandName === 'push'/)
+  const recheck = body.slice(body.indexOf('recheckTrust = async'), body.indexOf('} else {'))
+  assert.match(recheck, /PUSHES\.has\(payload\.commandName\)/)
+  assert.doesNotMatch(recheck, /payload\.commandName === 'push'/)
+})
+
+test('Get and Publish report file-count progress to the page', () => {
+  assert.match(main, /'command:progress'/)
+  const body = block("handle('adapter:runCommand'")
+  assert.match(body, /progress: payload\.commandName === 'get' \|\| payload\.commandName === 'push'/)
 })

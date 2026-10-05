@@ -9,6 +9,7 @@ import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
+import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
@@ -52,21 +53,30 @@ const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')
 const handle = (channel, fn) => ipcMain.handle(channel, guardedHandler(APP_RENDERER_URL, fn))
 // Runs `run({ signal, onOutput })` as a cancellable, observable run when the
 // renderer supplied a runId; otherwise runs it plain, as before.
-async function runWithHandle(event, runId, run) {
+async function runWithHandle(event, runId, run, { progress = false } = {}) {
   if (runId === undefined) {
     return run({})
   }
 
   const signal = runRegistry.register(runId)
-  const activity = createLatestLineThrottle((line) => {
+  const send = (channel, payload) => {
     if (!event.sender.isDestroyed()) {
-      event.sender.send('command:activity', { runId, line })
+      event.sender.send(channel, payload)
     }
-  })
+  }
+  const activity = createLatestLineThrottle((line) => send('command:activity', { runId, line }))
+  // The throttle only ever sends the newest value, which is what a running count needs.
+  const counted = progress ? createLatestLineThrottle((done) => send('command:progress', { runId, done })) : null
+  const counter = progress ? createResultCounter() : null
   try {
-    return await run({ signal, onOutput: activity.push })
+    return await run({
+      signal,
+      onOutput: activity.push,
+      ...(counted ? { onData: (chunk) => counted.push(counter.push(chunk)) } : {})
+    })
   } finally {
     activity.stop()
+    counted?.stop()
     runRegistry.finish(runId)
   }
 }
@@ -321,7 +331,7 @@ handle('adapter:runCommand', async (event, payload) => {
   const result = await runWithHandle(event, payload.runId, async (runOptions) => {
     await recheckTrust()
     return adapter.runCommand(payload.commandName, request, runOptions)
-  })
+  }, { progress: payload.commandName === 'get' || payload.commandName === 'push' })
   if (result?.ok && createdEmpty) {
     trustGate().createdByApp(request.targetPath)
   }
