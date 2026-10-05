@@ -398,9 +398,14 @@ export class DataLadAdapter {
     // Windows datasets sit on "adjusted/<branch>(unlocked)"; datalad pushes <branch> itself.
     const branch = current.replace(/^adjusted\//, '').replace(/\([^)]*\)$/, '')
     const upstream = `${remoteName}/${branch}`
-    const result = await this.runner.run('git', ['-C', projectPath, 'branch', `--set-upstream-to=${upstream}`])
-    if (result.failed) {
-      throw new Error(`Could not connect the branch to ${upstream}: ${(result.stderr || result.stdout).trim()}`)
+    // The checked-out branch drives the app's status (@{u}); on an adjusted branch DataLad looks up the push
+    // target on the base branch, so that one needs it too (otherwise a plain Publish finds no target).
+    const targets = branch === current ? [[]] : [[], [branch]]
+    for (const extra of targets) {
+      const result = await this.runner.run('git', ['-C', projectPath, 'branch', `--set-upstream-to=${upstream}`, ...extra])
+      if (result.failed) {
+        throw new Error(`Could not connect the branch to ${upstream}: ${(result.stderr || result.stdout).trim()}`)
+      }
     }
     return { ok: true, upstream }
   }

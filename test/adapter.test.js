@@ -2255,12 +2255,23 @@ test('prepareFolderRemote stops at the first failing step', async () => {
   assert.equal(runner.calls.length, 1)
 })
 
-test('trackRemote points the current branch at the remote (adjusted branches track their base)', async () => {
+test('trackRemote points the current branch at the remote', async () => {
   const runner = new FakeRunner()
-  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'main\n' })
   runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+  assert.equal(runner.calls.length, 2) // branch --show-current, then one --set-upstream-to
+})
+
+test('trackRemote also sets the upstream on the base branch of an adjusted branch, where DataLad looks for its push target', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {}) // the checked-out adjusted branch (the app's status)
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main', 'main'], {}) // the base branch (datalad push)
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+  assert.equal(runner.calls.length, 3)
 })
 
 test('trackRemote refuses an unsafe remote name', async () => {
