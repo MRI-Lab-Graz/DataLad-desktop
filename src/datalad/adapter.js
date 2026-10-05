@@ -31,11 +31,13 @@ export const CURATED_COMMANDS = new Set([
   'verify',
   'addRemote'
 ])
+// What `git init --bare` creates: the only things cleaned up after a failed folder-remote setup.
+const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 function isSafeName(name) {
-  return SAFE_NAME_PATTERN.test(name) && !name.includes('..') && !name.endsWith('.lock')
+  return SAFE_NAME_PATTERN.test(name) && !name.includes('..') && !name.endsWith('.lock') && !name.endsWith('.')
 }
 function assertSafeRemoteName(name) {
   if (!isSafeName(name)) {
@@ -364,12 +366,22 @@ export class DataLadAdapter {
   // An empty folder (USB drive, mounted share) becomes a bare repository. git-annex must be initialised
   // in it up front, or the first `datalad push` sends history only and no data (verified with DataLad 1.6).
   async prepareFolderRemote(folderPath) {
+    if (!isAbsolute(folderPath)) {
+      throw new Error('Use the full path of the folder (for example /Volumes/USB/my-study).')
+    }
+    // Only a folder that was empty (or missing) when we started may be cleaned up afterwards.
+    const before = await readdir(folderPath).catch(() => null)
+    const startedEmpty = before === null || before.length === 0
     for (const args of [
       ['init', '--bare', '--', folderPath],
       ['--git-dir', folderPath, 'annex', 'init', 'DataLad Desktop backup'] // bare repo: the runner's safe.bareRepository=explicit needs this
     ]) {
       const result = await this.runner.run('git', args)
       if (result.failed) {
+        // A half-made repository would make the folder look "not empty" and block a retry.
+        if (startedEmpty) {
+          await Promise.all(BARE_REPOSITORY_ENTRIES.map((name) => rm(join(folderPath, name), { recursive: true, force: true })))
+        }
         throw new Error(`Could not prepare ${folderPath}: ${(result.stderr || result.stdout).trim()}`)
       }
     }

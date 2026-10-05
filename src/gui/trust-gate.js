@@ -3,12 +3,20 @@ import { resolve } from 'node:path'
 import { describeVectors } from './folder-trust.js'
 
 // A missing folder or one with no entries has nothing foreign in it.
-export async function isEmptyOrMissing(path) {
+// 'unreadable' (no permission, and the like) is not "has files": the user should be told to fix permissions.
+export async function folderState(path) {
   try {
-    return (await readdir(path)).length === 0
+    return (await readdir(path)).length === 0 ? 'empty' : 'has-files'
   } catch (error) {
-    return error.code === 'ENOENT'
+    if (error.code === 'ENOENT') {
+      return 'missing'
+    }
+    return error.code === 'ENOTDIR' ? 'has-files' : 'unreadable'
   }
+}
+
+export async function isEmptyOrMissing(path) {
+  return ['empty', 'missing'].includes(await folderState(path))
 }
 
 // The path is shown the way the folder really is: ".." resolved, control and bidi characters removed, and kept

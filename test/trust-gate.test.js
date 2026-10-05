@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from '../src/gui/trust-gate.js'
+import { createTrustGate, describeTrustPrompt, folderState, isEmptyOrMissing } from '../src/gui/trust-gate.js'
 import { createTrustStore } from '../src/gui/trust-store.js'
 
 const fakeStore = ({ covers = false, trusted = false } = {}) => {
@@ -130,4 +130,28 @@ test('the prompt shows a cleaned, resolved, shortened path: control and bidi cha
   const long = describeTrustPrompt({ path: `/${'a'.repeat(900)}/ds`, kind: 'folder', vectors: [] }).detail.split('\n\n')[0]
   assert.ok(long.length <= 300, String(long.length))
   assert.match(long, /[\\/]ds$/)
+})
+
+test('folderState tells empty, missing, has-files and unreadable apart', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'dlad-state-'))
+  const empty = join(base, 'empty')
+  await mkdir(empty)
+  assert.equal(await folderState(join(base, 'nope')), 'missing')
+  assert.equal(await folderState(empty), 'empty')
+  await writeFile(join(empty, 'f'), 'x')
+  assert.equal(await folderState(empty), 'has-files')
+  assert.equal(await folderState(join(empty, 'f')), 'has-files') // a file is not a place for a new folder either
+})
+
+test('folderState reports a folder it may not read as unreadable, not as having files', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, async () => {
+  const base = await mkdtemp(join(tmpdir(), 'dlad-state-'))
+  const locked = join(base, 'locked')
+  await mkdir(locked)
+  await chmod(locked, 0o000)
+  try {
+    assert.equal(await folderState(locked), 'unreadable')
+    assert.equal(await isEmptyOrMissing(locked), false) // unchanged: still not a place to create a project
+  } finally {
+    await chmod(locked, 0o700)
+  }
 })

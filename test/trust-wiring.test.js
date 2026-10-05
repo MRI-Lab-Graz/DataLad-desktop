@@ -141,7 +141,7 @@ test('Get and Publish report file-count progress to the page', () => {
 test('a folder remote is only ever created in an empty folder, confirmed when not picked, then trusted as app-made', () => {
   const body = block("handle('adapter:prepareFolderRemote'")
   const name = body.indexOf('adapter.assertNewRemoteName(')
-  const empty = body.indexOf('isEmptyOrMissing(folderPath)')
+  const empty = body.indexOf('folderState(folderPath)')
   const prepare = body.indexOf('adapter.prepareFolderRemote')
   assert.ok(name !== -1 && name < empty, 'the remote name is checked before the folder is touched')
   assert.match(body, /requireAuthorizedRoot\(payload\.projectPath\)/)
@@ -196,5 +196,5 @@ test('every command that writes to a remote is re-checked in main.js', async () 
 test('a folder remote is refused at a drive root or the home folder before anything is checked or written', () => {
   const body = block("handle('adapter:prepareFolderRemote'")
   const unsafe = body.indexOf('isUnsafeBackupLocation(folderPath)')
-  assert.ok(unsafe !== -1 && unsafe < body.indexOf('isEmptyOrMissing(folderPath)'))
+  assert.ok(unsafe !== -1 && unsafe < body.indexOf('folderState(folderPath)'))
 })

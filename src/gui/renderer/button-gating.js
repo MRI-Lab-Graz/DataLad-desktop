@@ -74,6 +74,17 @@ export function computeAnnexToolGating(classification, readyTitle) {
 }
 
 /**
+ * The remote Publish uses for `projectPath`, or null. A health snapshot belongs to one project: a subdataset
+ * has its own remotes, so another project's snapshot must not name one for it.
+ * @param {{ projectPath?: string, hasUpstream?: boolean, upstream?: string|null } | null | undefined} health
+ * @param {string} projectPath
+ * @returns {string|null}
+ */
+export function remoteNameForProject(health, projectPath) {
+  return health?.hasUpstream && health.projectPath === projectPath ? health.upstream?.split('/')[0] ?? null : null
+}
+
+/**
  * @param {{ hasUpstream?: boolean, upstream?: string|null, remoteUrl?: string|null } | null | undefined} health
  * @returns {{
  *   update: { disabled: boolean, title: string },

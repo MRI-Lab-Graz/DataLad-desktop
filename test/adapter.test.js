@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
@@ -2326,4 +2326,46 @@ test('getProjectHealth shows a remote URL without its credentials', async () => 
   const health = await new DataLadAdapter({ runner }).getProjectHealth(root)
 
   assert.equal(health.remoteUrl, 'https://***@github.com/me/x.git')
+})
+
+test('a version or remote name ending in a dot is refused up front (git rejects it as a ref)', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('createTag', { projectPath: '/p', tagName: 'v1.', message: 'm', commitHash: 'abc1234' }), /version name/i)
+  await assert.rejects(adapter.runCommand('addRemote', { projectPath: '/p', remoteName: 'backup.', url: 'https://x/y' }), /remote name/i)
+})
+
+test('prepareFolderRemote refuses a relative path (git and datalad would resolve it against different folders)', async () => {
+  const runner = new FakeRunner()
+  await assert.rejects(new DataLadAdapter({ runner }).prepareFolderRemote('usb/study'), /full path/i)
+  assert.equal(runner.calls.length, 0)
+})
+
+test('prepareFolderRemote removes what git init made when git-annex cannot be set up, so a retry is possible', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'dlad-half-'))
+  const runner = {
+    run: async (_command, args) => {
+      if (args[0] === 'init') {
+        // what `git init --bare` leaves behind, plus a file that is not part of a bare repository
+        for (const name of ['HEAD', 'config', 'description']) await writeFile(join(folder, name), 'x')
+        for (const name of ['objects', 'refs', 'hooks', 'info', 'branches']) await mkdir(join(folder, name))
+        await writeFile(join(folder, 'not-ours.txt'), 'keep me')
+        return { command: 'git', args, exitCode: 0, stdout: '', stderr: '', failed: false }
+      }
+      return { command: 'git', args, exitCode: 1, stdout: '', stderr: 'annex init failed', failed: true }
+    }
+  }
+
+  await assert.rejects(new DataLadAdapter({ runner }).prepareFolderRemote(folder), /Could not prepare/)
+
+  assert.deepEqual(await readdir(folder), ['not-ours.txt'], 'only the entries a bare repository has are removed')
+})
+
+test('prepareFolderRemote never cleans up a folder that already had content when it started', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'dlad-existing-'))
+  await writeFile(join(folder, 'HEAD'), 'someone else\'s repository')
+  const runner = { run: async (_c, args) => ({ command: 'git', args, exitCode: 1, stdout: '', stderr: 'nope', failed: true }) }
+
+  await assert.rejects(new DataLadAdapter({ runner }).prepareFolderRemote(folder), /Could not prepare/)
+
+  assert.deepEqual(await readdir(folder), ['HEAD'])
 })

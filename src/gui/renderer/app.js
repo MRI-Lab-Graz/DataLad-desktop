@@ -3,6 +3,7 @@ import {
   computeUnlockGating,
   computeAnnexToolGating,
   computeRemoteGating,
+  remoteNameForProject,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage
 } from './button-gating.js'
@@ -958,6 +959,7 @@ elements.verifyDataButton.addEventListener('click', async () => {
     return
   }
 
+  elements.verifyOutput.hidden = true // never leave the previous result up while a new check runs or fails
   const result = await runWorkflowCommand('verify', { projectPath }, elements.verifyDataButton)
   if (!result) {
     return
@@ -996,13 +998,23 @@ elements.publishProjectButton.addEventListener('click', async () => {
   }
 
   const result = await runWorkflowCommand('push', { projectPath }, elements.publishProjectButton)
-  const remoteName = state.projectHealthSnapshot?.upstream?.split('/')[0]
+  const remoteName = remoteNameForProject(state.projectHealthSnapshot, projectPath)
   if (result?.ok && remoteName) {
     // datalad push does not send tags; send the versions this person marked (an up-to-date push is a no-op).
     const tagNames = await api.listOwnTags(projectPath)
     if (tagNames.length > 0) {
-      const tags = await api.runCommand('pushTags', { projectPath, remoteName, tagNames }, createRunId())
-      if (!tags?.ok) {
+      // Tracked like any run, so the running strip shows it and Stop can cancel it.
+      const runId = createRunId()
+      trackRun(runId, actionLabel('pushTags'))
+      let tags
+      try {
+        tags = await api.runCommand('pushTags', { projectPath, remoteName, tagNames }, runId)
+      } finally {
+        untrackRun(runId)
+      }
+      if (tags?.cancelled) {
+        setLastActionState('Published; sending versions was stopped.', 'warning')
+      } else if (!tags?.ok) {
         setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
       }
     }
