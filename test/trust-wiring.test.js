@@ -61,7 +61,7 @@ test('a clone is never trusted or authorized by the app: its first open asks', (
 
 test('a push re-checks the project and every local-path remote right before the command', () => {
   const body = block("handle('adapter:runCommand'")
-  const project = body.search(/commandName === 'push'[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
+  const project = body.search(/PUSHES\.has\(payload\.commandName\)[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
   const remotes = body.search(/localRemotePaths\(consoleRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
   assert.ok(project !== -1 && remotes !== -1)
   assert.ok(remotes < body.indexOf('adapter.runCommand('))
@@ -120,7 +120,7 @@ test('every IPC handler is classified', () => {
 test('the push/nesting re-check runs inside the registered run, so a Stop pressed during it is honoured', () => {
   const body = block("handle('adapter:runCommand'")
   assert.match(body, /runWithHandle\(event, payload\.runId, async \(runOptions\) => \{\s*await recheckTrust\(\)\s*return adapter\.runCommand\(/)
-  assert.match(body, /recheckTrust = async \(\) => \{\s*if \(payload\.commandName === 'push' \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
+  assert.match(body, /recheckTrust = async \(\) => \{\s*if \(PUSHES\.has\(payload\.commandName\) \|\| payload\.commandName === 'createSubdataset'\) \{\s*await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)[\s\S]*?localRemotePaths\(/)
 })
 
 test('sending versions to a remote re-checks trust exactly like Publish', () => {
