@@ -2266,3 +2266,35 @@ test('isPreparedFolderRemote is true only for a bare repository the app already 
   assert.equal(await adapter.isPreparedFolderRemote(folder), true)
   assert.equal(await new DataLadAdapter({ runner: new FakeRunner() }).isPreparedFolderRemote(folder), false) // not a repository
 })
+
+test('runCommand results never carry a URL password or token', async () => {
+  const runner = new FakeRunner()
+  const url = 'https://u:s3cret@gin.g-node.org/me/x'
+  runner.set('datalad', ['install', '-r', '-s', url, '--', '/tmp/target'], {
+    exitCode: 1,
+    failed: true,
+    stdout: `install(error): /tmp/target (dataset) [cannot clone ${url}]\n`,
+    stderr: `fatal: unable to access '${url}/'\n`
+  })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('cloneInstall', { source: url, targetPath: '/tmp/target' })
+
+  const shown = JSON.stringify([result.args, result.stdout, result.stderr, result.userError])
+  assert.doesNotMatch(shown, /s3cret/)
+  assert.match(result.stdout, /https:\/\/\*\*\*@gin\.g-node\.org/)
+  assert.equal(runner.calls[0].args[3], url) // the real command still got the real URL
+})
+
+test('getProjectHealth shows a remote URL without its credentials', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-redact-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { stdout: 'origin/main\n' })
+  runner.set('git', ['-C', root, 'remote', 'get-url', 'origin'], { stdout: 'https://ghp_TOKEN@github.com/me/x.git\n' })
+  runner.set('git', ['-C', root, 'rev-list', '--left-right', '--count', 'origin/main...HEAD'], { stdout: '0\t0\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in', 'here'], { stdout: '' })
+
+  const health = await new DataLadAdapter({ runner }).getProjectHealth(root)
+
+  assert.equal(health.remoteUrl, 'https://***@github.com/me/x.git')
+})

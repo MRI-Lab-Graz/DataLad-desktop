@@ -15,7 +15,7 @@ import { listDirectory } from './list-directory.js'
 import { initialAuthorizedRoots, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
-import { findExecVectors, findRemoteVectors, localRemotePaths } from './folder-trust.js'
+import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from './folder-trust.js'
 import { createTrustStore } from './trust-store.js'
 import { createTrustGate, describeTrustPrompt, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
@@ -285,6 +285,13 @@ handle('adapter:runCommand', async (event, payload) => {
       if (PUSHES.has(payload.commandName)) {
         for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
           await trustGate().require(remote.path, { kind: 'remote', event })
+        }
+      }
+      // Adding a remote that is a local path reads that repository (its config, its hooks folder): judge it first.
+      if (payload.commandName === 'addRemote') {
+        const local = localPath(payload.request.url, payload.request.projectPath)
+        if (local) {
+          await trustGate().require(local, { kind: 'remote', event })
         }
       }
     }

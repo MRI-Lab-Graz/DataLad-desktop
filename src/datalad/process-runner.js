@@ -38,7 +38,7 @@ export const HOOKS_DIR = resolveHooksDir()
 // hooks run, and datalad never runs procedures a dataset ships.
 function childEnv(extra = {}) {
   const env = { ...process.env, ...extra }
-  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit']]) {
+  for (const [key, value] of [['core.fsmonitor', 'false'], ['core.hooksPath', HOOKS_DIR], ['safe.bareRepository', 'explicit'], ['protocol.ext.allow', 'never']]) {
     const n = Number.parseInt(env.GIT_CONFIG_COUNT ?? '0', 10) || 0
     env[`GIT_CONFIG_KEY_${n}`] = key
     env[`GIT_CONFIG_VALUE_${n}`] = value

@@ -2,6 +2,7 @@ import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:f
 import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError } from './errors.js'
+import { redactUrlCredentials } from './redact.js'
 import { ProcessRunner } from './process-runner.js'
 import { parseGitStatusPorcelain } from './status.js'
 import {
@@ -9,7 +10,7 @@ import {
   buildCommandResult
 } from './schema.js'
 
-const CURATED_COMMANDS = new Set([
+export const CURATED_COMMANDS = new Set([
   'cloneInstall',
   'createProject',
   'createSubdataset',
@@ -293,10 +294,17 @@ export class DataLadAdapter {
     assertCommandRequest(commandName, request)
 
     const commandSpec = this.#buildCommand(commandName, request)
-    let result = await this.runner.run(commandSpec.command, commandSpec.args, {
+    const raw = await this.runner.run(commandSpec.command, commandSpec.args, {
       ...commandSpec.options,
       ...runOptions
     })
+    // What the page shows (and a pasted bug report carries) never includes a URL password or token.
+    const result = {
+      ...raw,
+      args: (raw.args ?? []).map(redactUrlCredentials),
+      stdout: redactUrlCredentials(raw.stdout),
+      stderr: redactUrlCredentials(raw.stderr)
+    }
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {
@@ -972,7 +980,7 @@ export class DataLadAdapter {
       return null
     }
 
-    return this.#firstLine(result.stdout)
+    return redactUrlCredentials(this.#firstLine(result.stdout))
   }
 
   async #readMissingContentStatus(projectPath) {

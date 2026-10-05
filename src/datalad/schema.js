@@ -139,6 +139,11 @@ export function assertCommandRequest(commandName, request) {
     }
   }
 
+  // Stored in plain text in .git/config and shown on screen: the credential helper is the place for secrets.
+  if (commandName === 'addRemote' && /^\s*(https?|ftps?):\/\/[^/@\s]+@/i.test(request.url)) {
+    throw new Error('Invalid request for addRemote: the URL must not contain a password or token; use your credential helper')
+  }
+
   const transportField = { cloneInstall: 'source', addRemote: 'url' }[commandName]
   if (transportField && /^\s*ext::/i.test(request[transportField])) {
     throw new Error(`Invalid request for ${commandName}: the ext:: transport is not allowed`)

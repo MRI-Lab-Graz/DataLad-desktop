@@ -160,3 +160,35 @@ test('a retry on a folder the app already prepared writes nothing and is not tru
 test('trackRemote requires an opened project', () => {
   assert.match(block("handle('adapter:trackRemote'"), /requireAuthorizedRoot\(payload\.projectPath\)/)
 })
+
+test('adding a remote that is a local path (a share, a USB stick) trust-checks that path first', () => {
+  const body = block("handle('adapter:runCommand'")
+  assert.match(
+    body,
+    /payload\.commandName === 'addRemote'[\s\S]*?localPath\(payload\.request\.url, payload\.request\.projectPath\)[\s\S]*?trustGate\(\)\.require\([^)]*kind: 'remote'/
+  )
+})
+
+// The list of commands that reach a remote is kept by hand in main.js. A new one that is forgotten there is a
+// trust bypass (pushTags was, once), so the list is derived from what each command really runs.
+test('every command that writes to a remote is re-checked in main.js', async () => {
+  const { DataLadAdapter, CURATED_COMMANDS } = await import('../src/datalad/adapter.js')
+  const request = {
+    projectPath: '/p', paths: ['a'], message: 'm', branchName: 'b', startPoint: 'abc1234', commitHash: 'abc1234',
+    tagName: 't', tagNames: ['t'], remoteName: 'r', url: '/x', targetPath: '/t', source: 's', relativePath: 'rel'
+  }
+  const pushes = []
+  const addsRemote = []
+  for (const name of CURATED_COMMANDS) {
+    let args = []
+    const runner = { run: async (_command, a) => ((args = a), { command: 'x', args: a, exitCode: 0, stdout: '', stderr: '', failed: false }) }
+    await new DataLadAdapter({ runner }).runCommand(name, request)
+    if (args.includes('push')) pushes.push(name)
+    if (args.includes('siblings') && args.includes('add')) addsRemote.push(name)
+  }
+  assert.deepEqual(pushes.sort(), ['push', 'pushTags'], 'a new command that pushes must join PUSHES in main.js')
+  assert.deepEqual(addsRemote, ['addRemote'], 'a new command that adds a remote needs its own re-check in main.js')
+
+  const listed = /const PUSHES = new Set\(\[([^\]]*)\]\)/.exec(main)[1].match(/'([^']+)'/g).map((n) => n.slice(1, -1))
+  assert.deepEqual(listed.sort(), pushes.sort())
+})
