@@ -93,9 +93,12 @@ test('$InstallDir is never followed by a backslash outside a quoted string', asy
 })
 
 test('an upgrade stops with a message while the app runs, and a leftover .old is never overwritten', async () => {
-  const fn = body(await read('install.ps1'), 'Install-App')
-  assert.match(fn, /Get-Process/)
-  assert.match(fn, /Close it/i)
+  const ps = await read('install.ps1')
+  const guard = body(ps, 'Assert-AppNotRunning')
+  assert.match(guard, /Get-Process/)
+  assert.match(guard, /Close it/i)
+  const fn = body(ps, 'Install-App')
+  assert.match(fn, /Assert-AppNotRunning/)
   assert.match(fn, /Test-Path -LiteralPath \$old[\s\S]*throw/)
 })
 
@@ -158,6 +161,75 @@ test('the report names where datalad resolves and warns when it is not the priva
 
 test('a failing uv call is written to the log with its output', async () => {
   assert.match(body(await read('install.ps1'), 'Install-DataladEnv'), /Write-Log \$output/)
+})
+
+// ---- install.ps1: shortcuts, upgrade rollback, uninstall ----
+const mainBlock = (ps) => ps.slice(ps.indexOf('\ntry {'))
+
+test('shortcuts are made in the Start menu and on the desktop, pointing at the installed app', async () => {
+  const fn = body(await read('install.ps1'), 'New-Shortcuts')
+  assert.match(fn, /WScript\.Shell/)
+  assert.match(fn, /GetFolderPath\('Programs'\)/)
+  assert.match(fn, /GetFolderPath\('Desktop'\)/)
+  assert.match(fn, /Join-Path \$InstallDir 'DataLad Desktop\.exe'/)
+})
+
+test('the old install is restored when a step after the swap fails', async () => {
+  const ps = await read('install.ps1')
+  assert.match(body(ps, 'Restore-PreviousInstall'), /Move-Item -LiteralPath \$old -Destination \$InstallDir/)
+  assert.match(mainBlock(ps), /catch \{[\s\S]*\$script:Swapped[\s\S]*Restore-PreviousInstall[\s\S]*exit 1/)
+  assert.match(body(ps, 'Install-App'), /\$script:Swapped = \$true/)
+})
+
+test('a failed first install leaves no half-installed app and no PATH entry', async () => {
+  const fn = body(await read('install.ps1'), 'Restore-PreviousInstall')
+  assert.match(fn, /Remove-UserPath/)
+})
+
+test('.old is deleted only after datalad --version has succeeded in the new install', async () => {
+  const ps = await read('install.ps1')
+  const fn = body(ps, 'Complete-Upgrade')
+  assert.ok(fn.indexOf('Test-Datalad') !== -1 && fn.indexOf('Test-Datalad') < fn.indexOf('Remove-Item'))
+  assert.match(fn, /throw/)
+  const main = mainBlock(ps)
+  assert.ok(main.indexOf('Install-DataladEnv') < main.indexOf('Complete-Upgrade'))
+})
+
+test('a successful run leaves neither .new nor .old behind, so the same version can be installed twice', async () => {
+  const ps = await read('install.ps1')
+  assert.match(body(ps, 'Complete-Upgrade'), /Remove-Item -LiteralPath "\$InstallDir\.old" -Recurse -Force/)
+  assert.match(body(ps, 'Install-App'), /Remove-Item -LiteralPath \$work -Recurse -Force/)
+})
+
+test('the user PATH entry is removed from the user PATH only', async () => {
+  const fn = body(await read('install.ps1'), 'Remove-UserPath')
+  assert.match(fn, /GetEnvironmentVariable\('Path', 'User'\)/)
+  assert.match(fn, /SetEnvironmentVariable\('Path', .*'User'\)/)
+  assert.doesNotMatch(fn, /Machine/)
+})
+
+test('uninstall removes the install folder, the shortcuts and the PATH entry, and nothing shared', async () => {
+  const fn = body(await read('install.ps1'), 'Invoke-Uninstall')
+  assert.match(fn, /Remove-UserPath \(Join-Path \$InstallDir 'datalad-env\\Scripts'\)/)
+  assert.match(fn, /DataLad Desktop\.lnk/)
+  assert.match(fn, /Remove-Item -LiteralPath \$InstallDir -Recurse -Force/)
+  assert.doesNotMatch(fn, /git-annex|unins\d+|msiexec|winget|choco|Git\\/i, 'Python, Git and git-annex are shared tools and stay')
+})
+
+test('uninstall refuses while the app is running, like an upgrade', async () => {
+  assert.match(body(await read('install.ps1'), 'Invoke-Uninstall'), /^\s*Assert-AppNotRunning/m)
+})
+
+test('uninstall.cmd runs a copy of install.ps1 from TEMP, because its own folder is deleted', async () => {
+  const ps = await read('install.ps1')
+  assert.match(ps, /copy \/y "%~dp0install\.ps1" "%TEMP%\\dlad-uninstall\.ps1"/)
+  assert.match(ps, /-File "%TEMP%\\dlad-uninstall\.ps1" -Uninstall -InstallDir "%~dp0\."/)
+  assert.match(body(ps, 'Install-Uninstaller'), /\$PSCommandPath/)
+  assert.ok(mainBlock(ps).includes('Install-Uninstaller'))
+})
+
+test('the install folder is normalised so a trailing backslash or dot (from uninstall.cmd) matches the PATH entry', async () => {
+  assert.match(await read('install.ps1'), /\$InstallDir = \[IO\.Path\]::GetFullPath\(\$InstallDir\)/)
 })
 
 // ---- install.ps1: Git and git-annex ----

@@ -16,6 +16,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # the progress bar makes downloads in Windows PowerShell 5.1 very slow
+# Full path without a trailing backslash or dot: uninstall.cmd passes its own folder, and the PATH entry is compared as text.
+$InstallDir = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # ---- Pins: the only places a version or a hash is written down ----
@@ -33,6 +35,8 @@ $GitAnnexUrl = "https://datasets.datalad.org/datalad/packages/windows/git-annex-
 
 # Steps that cannot finish are collected here; the script reports them and exits non-zero at the end.
 $script:Failures = @()
+# True once the new app folder has replaced the old one: from then on a failure has to put the old one back.
+$script:Swapped = $false
 
 # Next to the install folder, not inside it: an upgrade swaps that folder.
 $LogPath = Join-Path (Split-Path $InstallDir -Parent) 'DataLad Desktop install.log'
@@ -64,12 +68,16 @@ function Get-VerifiedFile([string]$Url, [string]$Sha256, [string]$OutFile) {
     }
 }
 
-function Install-App {
+function Assert-AppNotRunning {
     $running = Get-Process -Name 'DataLad Desktop' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase) }
     if ($running) {
         throw 'DataLad Desktop is running. Close it and run this script again.'
     }
+}
+
+function Install-App {
+    Assert-AppNotRunning
     $work = "$InstallDir.new"
     $old = "$InstallDir.old"
     if (Test-Path -LiteralPath $old) {
@@ -87,7 +95,71 @@ function Install-App {
         Move-Item -LiteralPath $InstallDir -Destination $old
     }
     Move-Item -LiteralPath $work -Destination $InstallDir
+    $script:Swapped = $true
     Write-Log "Installed the app in '$InstallDir'."
+}
+
+# Written into the install folder so it can be removed without this download; it runs from TEMP because it deletes
+# the folder it lives in.
+function Install-Uninstaller {
+    Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $InstallDir 'install.ps1') -Force
+    $cmd = @'
+@echo off
+REM Removes DataLad Desktop. Runs a copy of the install script from TEMP, because this folder is deleted.
+setlocal
+copy /y "%~dp0install.ps1" "%TEMP%\dlad-uninstall.ps1" >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%TEMP%\dlad-uninstall.ps1" -Uninstall -InstallDir "%~dp0."
+pause
+'@
+    Set-Content -LiteralPath (Join-Path $InstallDir 'uninstall.cmd') -Value $cmd -Encoding ASCII
+}
+
+function Remove-UserPath([string]$Dir) {
+    $entries = @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';' | Where-Object { $_ -and $_ -ne $Dir })
+    [Environment]::SetEnvironmentVariable('Path', ($entries -join ';'), 'User')
+}
+
+function New-Shortcuts {
+    $target = Join-Path $InstallDir 'DataLad Desktop.exe'
+    $shell = New-Object -ComObject WScript.Shell
+    foreach ($dir in @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'))) {
+        $link = $shell.CreateShortcut((Join-Path $dir 'DataLad Desktop.lnk'))
+        $link.TargetPath = $target
+        $link.WorkingDirectory = $env:USERPROFILE
+        $link.Save()
+    }
+}
+
+# Only called after the swap, so $InstallDir is the new, unfinished copy. The previous install, if any, comes back.
+function Restore-PreviousInstall {
+    $old = "$InstallDir.old"
+    Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $old) {
+        Move-Item -LiteralPath $old -Destination $InstallDir
+        Write-Log 'The previous install was restored.'
+    } else {
+        Remove-UserPath (Join-Path $InstallDir 'datalad-env\Scripts')
+        Write-Log 'The unfinished install was removed.'
+    }
+}
+
+# The old install goes only once the new one has proved it starts.
+function Complete-Upgrade {
+    if (-not (Test-Datalad)) {
+        throw 'DataLad does not start in the new install.'
+    }
+    Remove-Item -LiteralPath "$InstallDir.old" -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+function Invoke-Uninstall {
+    Assert-AppNotRunning
+    foreach ($dir in @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'))) {
+        Remove-Item -LiteralPath (Join-Path $dir 'DataLad Desktop.lnk') -Force -ErrorAction SilentlyContinue
+    }
+    Remove-UserPath (Join-Path $InstallDir 'datalad-env\Scripts')
+    Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    Remove-Item -LiteralPath "$InstallDir.new", "$InstallDir.old" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Log 'DataLad Desktop was removed. Shared tools were left alone.'
 }
 
 # This process keeps the PATH it started with; installers update the registry. Look at what a new terminal will see.
@@ -199,13 +271,20 @@ function Write-Report {
 
 try {
     New-Item -ItemType Directory -Force -Path (Split-Path $InstallDir -Parent) | Out-Null
+    if ($Uninstall) {
+        Invoke-Uninstall
+        exit 0
+    }
     if ($AppVersion -like '__*') {
         throw 'This is the unrendered template. Download install.cmd and install.ps1 from a release page instead.'
     }
     Install-App
+    Install-Uninstaller
     Install-Git
     Install-GitAnnex
     Install-DataladEnv
+    Complete-Upgrade
+    New-Shortcuts
     Write-Report
     if ($script:Failures.Count -gt 0) {
         Write-Log 'Finished with problems:'
@@ -215,5 +294,8 @@ try {
     Write-Log 'Done.'
 } catch {
     Write-Log "ERROR: $($_.Exception.Message)"
+    if ($script:Swapped) {
+        Restore-PreviousInstall
+    }
     exit 1
 }
