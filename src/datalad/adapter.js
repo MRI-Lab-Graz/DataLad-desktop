@@ -26,7 +26,8 @@ const CURATED_COMMANDS = new Set([
   'unlock',
   'drop',
   'createTag',
-  'pushTags'
+  'pushTags',
+  'verify'
 ])
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
@@ -1240,6 +1241,14 @@ export class DataLadAdapter {
         return {
           command: 'git',
           args: ['-C', request.projectPath, 'push', '--tags', request.remoteName],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'verify': {
+        // ponytail: this dataset only, not nested subdatasets; add a per-dataset loop if researchers ask.
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'annex', 'fsck', '--json'],
           options: { cwd: request.projectPath }
         }
       }

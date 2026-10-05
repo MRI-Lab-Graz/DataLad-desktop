@@ -2163,3 +2163,12 @@ test('pushTags refuses a remote name that looks like a flag', async () => {
     /cannot start with -/
   )
 })
+
+test('runCommand verifies stored data with a full git-annex checksum pass', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'annex', 'fsck', '--json'], { stdout: '' })
+
+  const result = await new DataLadAdapter({ runner }).runCommand('verify', { projectPath: '/tmp/project' })
+
+  assert.equal(result.ok, true)
+})

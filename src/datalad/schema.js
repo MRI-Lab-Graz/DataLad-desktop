@@ -23,6 +23,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath', 'remoteName'],
     optional: []
   },
+  verify: {
+    required: ['projectPath'],
+    optional: []
+  },
   save: {
     required: ['projectPath', 'message'],
     optional: ['paths']
