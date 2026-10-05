@@ -2,6 +2,14 @@
 
 Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0.
 
+## Unreleased: Windows install script
+
+A second way to install on Windows that needs no administrator rights and no code-signing certificate. The NSIS installer is unchanged.
+
+- **`install.cmd` + `install.ps1`** on the release page: downloads the unpacked app and checks its SHA-256 (written into that release's `install.ps1`), builds a private DataLad environment from the hash-locked requirements, adds it to the user PATH, installs Git and git-annex only when missing (pinned, checksum-verified), creates shortcuts. Upgrades roll back on failure; `uninstall.cmd` removes only what the script added. Design: `docs/superpowers/specs/2026-10-05-windows-install-script-design.md`.
+- git-annex is pinned to a versioned file on DataLad's mirror, not the author's moving `current/` URL; a CI check reports when a pin no longer matches its file or a newer version exists.
+- CI: `install-script-smoke.yml` (manual and release tags) runs `install.cmd` on a clean Windows runner, drives the installed app and uninstalls.
+
 ## Unreleased: science workflow
 
 Six additions for the normal cycle of collect, analyse, save, share and publish. The app stays a small, curated tool: anything else is still one terminal command away.

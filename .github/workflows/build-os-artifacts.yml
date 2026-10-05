@@ -127,11 +127,29 @@ jobs:
             cp "$signed" "dist/$name"
           done
 
+      # The script install (scripts/windows/install.ps1) downloads this zip from the tag's release and checks it
+      # against the SHA-256 rendered into its own copy of the script, so the tag has to match the package version.
+      - name: Zip the unpacked app and render the install script
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF -like 'refs/tags/v*' -and $env:GITHUB_REF -ne "refs/tags/v$version") {
+            throw "Tag $env:GITHUB_REF does not match the package.json version $version"
+          }
+          $zip = "dist/DataLad-Desktop-$version-win-x64.zip"
+          Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
+          node scripts/render-install-script.mjs $version $zip dist/install.ps1
+          Copy-Item scripts/windows/install.cmd dist/install.cmd
+
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: datalad-desktop-windows-x64
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/install.cmd
+            dist/install.ps1
           if-no-files-found: error
           retention-days: 14
 
@@ -193,7 +211,7 @@ jobs:
         working-directory: release-assets
         run: |
           shopt -s nullglob
-          sha256sum *.dmg *.zip *.exe *.AppImage > SHA256SUMS.txt
+          sha256sum *.dmg *.zip *.exe *.AppImage *.cmd *.ps1 > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
@@ -204,6 +222,8 @@ jobs:
             release-assets/*.zip
             release-assets/*.exe
             release-assets/*.AppImage
+            release-assets/*.cmd
+            release-assets/*.ps1
 
       # Be explicit about what users are getting: unsigned builds trigger OS warnings, so
       # tell them how to check the download against what CI built instead.
@@ -242,4 +262,6 @@ jobs:
             release-assets/*.zip
             release-assets/*.exe
             release-assets/*.AppImage
+            release-assets/*.cmd
+            release-assets/*.ps1
             release-assets/SHA256SUMS.txt
