@@ -7,6 +7,7 @@ import {
   computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
+import { summarizeFsck } from './integrity.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -163,6 +164,8 @@ const elements = {
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   getDataButton: document.getElementById('get-data'),
   dropDataButton: document.getElementById('drop-data'),
+  verifyDataButton: document.getElementById('verify-data'),
+  verifyOutput: document.getElementById('verify-output'),
   unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
@@ -938,6 +941,34 @@ elements.dropDataButton.addEventListener('click', async () => {
 
   await runWorkflowCommand('drop', { projectPath, paths }, elements.dropDataButton)
   await refreshFileBrowser(projectPath)
+})
+
+elements.verifyDataButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+
+  const result = await runWorkflowCommand('verify', { projectPath }, elements.verifyDataButton)
+  if (!result) {
+    return
+  }
+  // fsck exits non-zero when it finds damage, so read the summary even for a "failed" result.
+  const { checked, damaged } = summarizeFsck(result.stdout)
+  if (checked === 0 && !result.ok) {
+    return // a real failure; runWorkflowCommand already rendered it
+  }
+  elements.verifyOutput.innerHTML = damaged.length === 0
+    ? `<p>All ${checked} downloaded file(s) are intact.</p>`
+    : `<p><strong>${damaged.length} of ${checked} file(s) are damaged.</strong> The damaged copies were set aside; ` +
+      'use Get Data to fetch a good copy from your remote or backup.</p>' +
+      `<ul>${damaged.map((f) => `<li><code>${escapeHtml(f)}</code></li>`).join('')}</ul>`
+  elements.verifyOutput.hidden = false
+  if (damaged.length > 0) {
+    setLastActionState(`${damaged.length} damaged file(s) found.`, 'error')
+  } else {
+    setLastActionState('All data intact.', 'success')
+  }
 })
 
 elements.updateProjectButton.addEventListener('click', async () => {
@@ -2159,6 +2190,7 @@ function clearTimeMachine() {
   elements.timeMachineDetail.hidden = true
   elements.timeMachineActionOutput.hidden = true
   elements.timeMachineBranchName.value = ''
+  elements.verifyOutput.hidden = true // a previous project's integrity result must not linger
   renderTimeMachineHistory()
 }
 
@@ -2931,6 +2963,10 @@ function actionLabel(commandName) {
     return 'Mark As Version'
   }
 
+  if (commandName === 'verify') {
+    return 'Check Data Integrity'
+  }
+
   if (commandName === 'pushTags') {
     return 'Publish Versions'
   }
@@ -3061,6 +3097,13 @@ function updateGetDataGating() {
   )
   elements.dropDataButton.disabled = dropGating.disabled
   elements.dropDataButton.title = dropGating.title
+
+  const verifyGating = computeAnnexToolGating(
+    state.currentProjectClassification,
+    'Re-check every downloaded file against its recorded checksum. Can take a while on large data.'
+  )
+  elements.verifyDataButton.disabled = verifyGating.disabled
+  elements.verifyDataButton.title = verifyGating.title
 }
 
 function updateSyncSectionVisibility() {
