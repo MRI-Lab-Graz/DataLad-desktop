@@ -36,6 +36,11 @@ export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 function isSafeName(name) {
   return SAFE_NAME_PATTERN.test(name) && !name.includes('..') && !name.endsWith('.lock')
 }
+function assertSafeRemoteName(name) {
+  if (!isSafeName(name)) {
+    throw new Error(`Invalid remote name: ${name}. Use letters, digits, dot, dash or underscore.`)
+  }
+}
 const BIDS_MARKER_FILE = 'dataset_description.json'
 // Detection probes must answer promptly; a hung one falls back to the
 // .datalad/config marker instead of stalling project open. Kept below the e2e
@@ -316,6 +321,21 @@ export class DataLadAdapter {
     return { ok: true, removed: existed, lockPath }
   }
 
+  // Checked before a folder is written to, so a bad or taken name never leaves a half-made copy behind.
+  async assertNewRemoteName(projectPath, remoteName) {
+    assertSafeRemoteName(remoteName)
+    const known = (await this.runner.run('git', ['-C', projectPath, 'remote'])).stdout.split(/\r?\n/).map((n) => n.trim())
+    if (known.includes(remoteName)) {
+      throw new Error(`This project already has a remote named "${remoteName}". Pick a different name.`)
+    }
+  }
+
+  // A bare repository the app already set up for git-annex (a retry after a later step failed).
+  async isPreparedFolderRemote(folderPath) {
+    const bare = await this.runner.run('git', ['--git-dir', folderPath, 'rev-parse', '--is-bare-repository'])
+    return !bare.failed && bare.stdout.trim() === 'true' && (await fileExists(join(folderPath, 'annex')))
+  }
+
   // An empty folder (USB drive, mounted share) becomes a bare repository. git-annex must be initialised
   // in it up front, or the first `datalad push` sends history only and no data (verified with DataLad 1.6).
   async prepareFolderRemote(folderPath) {
@@ -333,9 +353,7 @@ export class DataLadAdapter {
 
   // After the first `push --to`, make that remote the branch's upstream so Update/Publish use it.
   async trackRemote(projectPath, remoteName) {
-    if (!isSafeName(remoteName)) {
-      throw new Error(`Invalid remote name: ${remoteName}`)
-    }
+    assertSafeRemoteName(remoteName)
     const current = this.#firstLine((await this.runner.run('git', ['-C', projectPath, 'branch', '--show-current'])).stdout)
     if (!current) {
       throw new Error('Not on a branch: switch to a branch first.')
@@ -1184,15 +1202,14 @@ export class DataLadAdapter {
         const projectPath = request.projectPath
         const args = ['-C', projectPath, 'push']
         if (request.remoteName) {
+          assertSafeRemoteName(request.remoteName)
           args.push('--to', request.remoteName)
         }
         return { command: 'datalad', args, options: { cwd: projectPath } }
       }
       case 'addRemote': {
         const { projectPath, remoteName, url } = request
-        if (!isSafeName(remoteName)) {
-          throw new Error(`Invalid remote name: ${remoteName}. Use letters, digits, dot, dash or underscore.`)
-        }
+        assertSafeRemoteName(remoteName)
         return {
           command: 'datalad',
           args: ['siblings', 'add', '-d', projectPath, '-s', remoteName, '--url', url],
@@ -1284,6 +1301,8 @@ export class DataLadAdapter {
         }
       }
       case 'pushTags': {
+        // A path or URL here would push to a repository the trust re-check never looked at.
+        assertSafeRemoteName(request.remoteName)
         return {
           command: 'git',
           args: ['-C', request.projectPath, 'push', '--tags', request.remoteName],
@@ -1294,7 +1313,7 @@ export class DataLadAdapter {
         // ponytail: this dataset only, not nested subdatasets; add a per-dataset loop if researchers ask.
         return {
           command: 'git',
-          args: ['-C', request.projectPath, 'annex', 'fsck', '--json'],
+          args: ['-C', request.projectPath, 'annex', 'fsck', '--json', '--in=here'],
           options: { cwd: request.projectPath }
         }
       }

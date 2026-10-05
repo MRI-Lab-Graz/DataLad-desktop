@@ -432,11 +432,18 @@ handle('adapter:clearRepositoryLock', async (_event, projectPath) => {
 })
 
 // Writes a new repository into a folder the user chose (USB drive, share). Never into one with content.
-handle('adapter:prepareFolderRemote', async (event, folderPath) => {
+handle('adapter:prepareFolderRemote', async (event, payload = {}) => {
+  const { folderPath } = payload
+  requireAuthorizedRoot(payload.projectPath)
+  await adapter.assertNewRemoteName(payload.projectPath, payload.remoteName)
   if (typeof folderPath !== 'string' || !folderPath.trim()) {
     throw new Error('Choose a folder first.')
   }
   if (!(await isEmptyOrMissing(folderPath))) {
+    // A retry after a later step failed: nothing to write, and not trusted here, so Publish asks about it.
+    if (await adapter.isPreparedFolderRemote(folderPath)) {
+      return { ok: true, folderPath, alreadyPrepared: true }
+    }
     throw new Error('Choose an empty folder: this one already has files in it.')
   }
   if (!isWithinRoots(folderPath, pickedLocations)) {

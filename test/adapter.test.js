@@ -2166,7 +2166,8 @@ test('pushTags refuses a remote name that looks like a flag', async () => {
 
 test('runCommand verifies stored data with a full git-annex checksum pass', async () => {
   const runner = new FakeRunner()
-  runner.set('git', ['-C', '/tmp/project', 'annex', 'fsck', '--json'], { stdout: '' })
+  // --in=here: only files whose content is on this computer (others have nothing to check)
+  runner.set('git', ['-C', '/tmp/project', 'annex', 'fsck', '--json', '--in=here'], { stdout: '' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('verify', { projectPath: '/tmp/project' })
 
@@ -2234,4 +2235,34 @@ test('trackRemote points the current branch at the remote (adjusted branches tra
 
 test('trackRemote refuses an unsafe remote name', async () => {
   await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).trackRemote('/p', '-x'), /remote name/i)
+})
+
+test('pushTags and push only accept a configured-remote-style name, never a path or URL', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  for (const remoteName of ['/Volumes/stick/evil.git', 'https://x/y', 'a b', '../x']) {
+    await assert.rejects(adapter.runCommand('pushTags', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
+    await assert.rejects(adapter.runCommand('push', { projectPath: '/tmp/p', remoteName }), /remote name/i, remoteName)
+  }
+})
+
+test('assertNewRemoteName refuses unsafe names and names the project already has', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'remote'], { stdout: 'origin\nbackup\n' })
+  const adapter = new DataLadAdapter({ runner })
+
+  await assert.rejects(adapter.assertNewRemoteName('/p', 'my backup'), /remote name/i)
+  await assert.rejects(adapter.assertNewRemoteName('/p', 'origin'), /already/i)
+  await adapter.assertNewRemoteName('/p', 'usb')
+})
+
+test('isPreparedFolderRemote is true only for a bare repository the app already set up for git-annex', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'dlad-prepared-'))
+  const runner = new FakeRunner()
+  runner.set('git', ['--git-dir', folder, 'rev-parse', '--is-bare-repository'], { stdout: 'true\n' })
+  const adapter = new DataLadAdapter({ runner })
+
+  assert.equal(await adapter.isPreparedFolderRemote(folder), false) // bare, but git-annex was never initialised
+  await mkdir(join(folder, 'annex'))
+  assert.equal(await adapter.isPreparedFolderRemote(folder), true)
+  assert.equal(await new DataLadAdapter({ runner: new FakeRunner() }).isPreparedFolderRemote(folder), false) // not a repository
 })

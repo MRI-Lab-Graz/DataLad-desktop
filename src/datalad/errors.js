@@ -191,7 +191,7 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
-  if (commandName === 'addRemote' && hasPattern(`${stdout}\n${stderr}`, /already (exists|present|configured)/)) {
+  if (commandName === 'addRemote' && hasPattern(`${stdout}\n${stderr}`, /already (exists|present|configured|known)/)) {
     return {
       code: 'REMOTE_EXISTS',
       title: 'That remote name is already used',

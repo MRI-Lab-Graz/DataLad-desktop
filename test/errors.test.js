@@ -138,3 +138,11 @@ test('mapCommandError maps a remote name that is already taken', () => {
   const result = mapCommandError('addRemote', { stderr: "fatal: remote origin already exists." })
   assert.equal(result.code, 'REMOTE_EXISTS')
 })
+
+test('mapCommandError maps the real DataLad text for a sibling name that is already known', () => {
+  const result = mapCommandError('addRemote', {
+    stdout: 'add-sibling(error): . (sibling) [sibling is already known: origin, use `configure` instead?]\n',
+    stderr: ''
+  })
+  assert.equal(result.code, 'REMOTE_EXISTS')
+})

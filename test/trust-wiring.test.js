@@ -140,11 +140,21 @@ test('Get and Publish report file-count progress to the page', () => {
 
 test('a folder remote is only ever created in an empty folder, confirmed when not picked, then trusted as app-made', () => {
   const body = block("handle('adapter:prepareFolderRemote'")
+  const name = body.indexOf('adapter.assertNewRemoteName(')
   const empty = body.indexOf('isEmptyOrMissing(folderPath)')
   const prepare = body.indexOf('adapter.prepareFolderRemote')
+  assert.ok(name !== -1 && name < empty, 'the remote name is checked before the folder is touched')
+  assert.match(body, /requireAuthorizedRoot\(payload\.projectPath\)/)
   assert.ok(empty !== -1 && empty < prepare, 'emptiness is checked before anything is written')
   assert.match(body, /isWithinRoots\(folderPath, pickedLocations\)[\s\S]*?confirmNative\(/)
   assert.ok(body.indexOf('createdByApp(folderPath)') > prepare)
+})
+
+test('a retry on a folder the app already prepared writes nothing and is not trusted (Publish asks about it)', () => {
+  const body = block("handle('adapter:prepareFolderRemote'")
+  assert.match(body, /await adapter\.isPreparedFolderRemote\(folderPath\)[\s\S]*?return \{ ok: true, folderPath, alreadyPrepared: true \}/)
+  assert.ok(body.indexOf('isPreparedFolderRemote') < body.indexOf('adapter.prepareFolderRemote'))
+  assert.equal((body.match(/createdByApp\(/g) ?? []).length, 1)
 })
 
 test('trackRemote requires an opened project', () => {

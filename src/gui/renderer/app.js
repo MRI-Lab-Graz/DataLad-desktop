@@ -1014,6 +1014,12 @@ elements.addRemoteBrowse.addEventListener('click', async () => {
   }
 })
 
+// The remote is only useful once Publish worked and the branch tracks it: otherwise remove it again, so
+// the name is free for a retry (Disconnect is disabled while no upstream exists).
+async function undoAddedRemote(projectPath, remoteName) {
+  await api.runCommand('disconnectRemote', { projectPath, remoteName }, createRunId())
+}
+
 elements.addRemoteConnect.addEventListener('click', async () => {
   const projectPath = readProjectPath()
   const location = elements.addRemoteLocation.value.trim()
@@ -1028,7 +1034,7 @@ elements.addRemoteConnect.addEventListener('click', async () => {
 
   try {
     if (elements.addRemoteModeFolder.checked) {
-      await api.prepareFolderRemote(location)
+      await api.prepareFolderRemote(projectPath, remoteName, location)
     }
     const added = await runWorkflowCommand('addRemote', { projectPath, remoteName, url: location }, elements.addRemoteConnect)
     if (!added?.ok) {
@@ -1036,9 +1042,15 @@ elements.addRemoteConnect.addEventListener('click', async () => {
     }
     const pushed = await runWorkflowCommand('push', { projectPath, remoteName }, elements.addRemoteConnect)
     if (!pushed?.ok) {
+      await undoAddedRemote(projectPath, remoteName)
       return
     }
-    await api.trackRemote(projectPath, remoteName)
+    try {
+      await api.trackRemote(projectPath, remoteName)
+    } catch (error) {
+      await undoAddedRemote(projectPath, remoteName)
+      throw error
+    }
     setLastActionState(`Connected to ${remoteName} and published.`, 'success')
   } catch (error) {
     elements.commandOutput.textContent = String(error.message)
