@@ -24,3 +24,7 @@ build/uv/
 # Rust/napi build output (no Rust source is tracked in this repo)
 rust-core/
 native/
+
+# Local worktrees and per-plan execution scratch
+.worktrees/
+.superpowers/
