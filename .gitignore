@@ -20,3 +20,7 @@ build/uv/
 # Local DataLad test dataset (not part of the app source)
 /ds008055/
 .superpowers/
+
+# Rust/napi build output (no Rust source is tracked in this repo)
+rust-core/
+native/
