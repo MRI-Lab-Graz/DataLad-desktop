@@ -42,8 +42,9 @@ Advanced
 6. Create `hotfix/paper-v1-erratum` from release branch.
 7. Apply typo fix and Save with message:
    - `hotfix: correct table value in results summary`
-8. Merge hotfix into release branch, then merge into main.
-9. Publish updated branches.
+8. Save all changes first; Merge refuses to start with unsaved changes. Switch to the release branch and merge the hotfix with **Project Setup → Branch → Merge Into Current Branch** and **Merge**, then switch to `main` and merge the release branch the same way. If the same file changed on both branches, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back).
+9. In Time Machine, use **Mark As Version** on the submitted state.
+10. Publish updated branches.
 
 ## Failure injection
 

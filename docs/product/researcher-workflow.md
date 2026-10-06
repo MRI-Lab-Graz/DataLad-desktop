@@ -41,7 +41,7 @@ For DataLad-enabled projects, the compact action group should include:
 - **Publish** (also sends the versions the researcher marked)
 - **Add a Remote** (only while the project has none: a USB drive, network share or empty repository)
 
-Alongside these, Time Machine offers **Mark As Version** and shows recorded `datalad run` commands, and Project Health offers **Check Data Integrity**. Deliberately not offered: generic command forms, `datalad rerun`, metadata and credential management, container runs. Someone who needs them has the terminal.
+Alongside these, Project Setup offers **Merge Into Current Branch**; conflicts are resolved per file in the Merge banner. Time Machine offers **Mark As Version** and shows recorded `datalad run` commands, and Project Health offers **Check Data Integrity**. Deliberately not offered: generic command forms, `datalad rerun`, metadata and credential management, container runs. Someone who needs them has the terminal.
 
 Clone/Install should live in onboarding and project-opening flow, not as a permanent toolbar action.
 

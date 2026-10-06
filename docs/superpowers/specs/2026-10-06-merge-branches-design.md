@@ -120,3 +120,10 @@ one line saying so.
 
 Rewrite tutorials 03–06 against the real buttons (Merge, the banner, Mark As Version for the paper freeze);
 README feature list; CHANGELOG 0.5.0 entry; SECURITY.md line.
+
+## Amendments made while planning (2026-10-06)
+
+- `resolveConflict` and the subdataset sync are adapter methods with an IPC handler, not `COMMAND_SCHEMAS` commands (they need several git calls). The sync runs inside `runCommand` after a successful `merge`/`finishMerge`; its notes are returned as `warnings`.
+- The conflict-marker check for "I fixed it myself" requires both a `<<<<<<< ` line and a `>>>>>>> ` line.
+- During a merge Save is hidden and disabled with guidance.
+- Merge state is read from `MERGE_HEAD`, before a merge too (a second merge is refused).

@@ -24,6 +24,13 @@ A second way to install on Windows that needs no administrator rights and no cod
 - git-annex is pinned to a versioned file on DataLad's mirror, not the author's moving `current/` URL; a CI check reports when a pin no longer matches its file or a newer version exists.
 - CI: `install-script-smoke.yml` (manual and release tags) runs `install.cmd` on a clean Windows runner, drives the installed app and uninstalls.
 
+### Merge branches
+
+- **Merge Into Current Branch** in Project Setup: pick a local branch and click **Merge**. It needs saved changes and does a fast-forward or a merge commit.
+- When the same file changed on both branches, the merge stops in a **Merge in progress** banner: per file choose **Keep this branch's version**, **Keep X's version** or **I fixed it myself**, then **Finish Merge** (or **Cancel Merge**). Conflicts left by Update use the same banner.
+- Installed subdatasets are moved to the merged version when that is a safe fast-forward; otherwise a notice says they were not moved.
+- Refusals are in plain language: detached HEAD, a merge already open, unrelated histories, a new file in the way.
+
 ### Science workflow
 
 Six additions for the normal cycle of collect, analyse, save, share and publish. The app stays a small, curated tool: anything else is still one terminal command away.
