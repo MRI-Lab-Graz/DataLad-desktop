@@ -146,3 +146,15 @@ test('mapCommandError maps the real DataLad text for a sibling name that is alre
   })
   assert.equal(result.code, 'REMOTE_EXISTS')
 })
+
+test('mapCommandError maps merge refusals to plain language', () => {
+  const untracked = mapCommandError('merge', {
+    stderr: 'error: The following untracked working tree files would be overwritten by merge:\n\tnew.txt\nPlease move or remove them before you merge.'
+  })
+  assert.equal(untracked.code, 'MERGE_UNTRACKED_OVERWRITE')
+  assert.match(untracked.technicalDetails, /new\.txt/)
+  assert.equal(mapCommandError('merge', { stderr: 'fatal: refusing to merge unrelated histories' }).code, 'MERGE_UNRELATED')
+  assert.equal(mapCommandError('merge', { stderr: 'error: Your local changes to the following files would be overwritten by merge:\n\ta.txt' }).code, 'WORKTREE_DIRTY')
+  assert.equal(mapCommandError('finishMerge', { stderr: 'fatal: Exiting because of an unresolved conflict.' }).code, 'MERGE_UNRESOLVED')
+  assert.equal(mapCommandError('finishMerge', { stderr: 'error: Committing is not possible because you have unmerged files.' }).code, 'MERGE_UNRESOLVED')
+})

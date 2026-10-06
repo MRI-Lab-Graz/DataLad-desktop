@@ -2388,3 +2388,55 @@ test('runCommand routes finishMerge and abortMerge to git commit --no-edit and g
   assert.equal((await adapter.runCommand('finishMerge', { projectPath: '/tmp/project' })).ok, true)
   assert.equal((await adapter.runCommand('abortMerge', { projectPath: '/tmp/project' })).ok, true)
 })
+
+function scriptedRunner(script) {
+  const calls = []
+  return {
+    calls,
+    async run(command, args = []) {
+      calls.push({ command, args })
+      const step = script.shift()
+      assert.ok(step, `unexpected extra call: ${command} ${args.join(' ')}`)
+      return { command, args, exitCode: step.failed ? 1 : 0, stdout: '', stderr: '', failed: false, ...step }
+    }
+  }
+}
+
+test('merge stops with a plain message on a detached HEAD and runs no merge', async () => {
+  const runner = scriptedRunner([{ failed: true }]) // git symbolic-ref -q HEAD fails
+  const result = await new DataLadAdapter({ runner }).runCommand('merge', { projectPath: '/p', branchName: 'feature' })
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'DETACHED_HEAD')
+  assert.equal(runner.calls.length, 1)
+})
+
+test('merge refuses while another merge is open', async () => {
+  const runner = scriptedRunner([{ stdout: 'refs/heads/main\n' }, { stdout: 'abc123\n' }]) // MERGE_HEAD exists
+  const result = await new DataLadAdapter({ runner }).runCommand('merge', { projectPath: '/p', branchName: 'feature' })
+  assert.equal(result.userError.code, 'MERGE_IN_PROGRESS')
+  assert.equal(runner.calls.length, 2)
+})
+
+test('a merge that stops on conflicts is ok with conflicts: true, whatever language git speaks', async () => {
+  const runner = scriptedRunner([
+    { stdout: 'refs/heads/main\n' }, // symbolic-ref
+    { failed: true }, // MERGE_HEAD absent: nothing open
+    { failed: true, stdout: 'KONFLIKT (Inhalt): Merge-Konflikt in a.txt\n' }, // merge exits 1
+    { stdout: 'abc123\n' } // MERGE_HEAD now exists
+  ])
+  const result = await new DataLadAdapter({ runner }).runCommand('merge', { projectPath: '/p', branchName: 'feature' })
+  assert.equal(result.ok, true)
+  assert.equal(result.conflicts, true)
+})
+
+test('a merge that fails without leaving MERGE_HEAD is a real failure', async () => {
+  const runner = scriptedRunner([
+    { stdout: 'refs/heads/main\n' },
+    { failed: true },
+    { failed: true, stderr: 'fatal: refusing to merge unrelated histories' },
+    { failed: true }
+  ])
+  const result = await new DataLadAdapter({ runner }).runCommand('merge', { projectPath: '/p', branchName: 'feature' })
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'MERGE_UNRELATED')
+})

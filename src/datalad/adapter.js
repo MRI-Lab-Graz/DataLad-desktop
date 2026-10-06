@@ -1,7 +1,7 @@
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
-import { mapCommandError } from './errors.js'
+import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
 import { redactUrlCredentials } from './redact.js'
 import { ProcessRunner } from './process-runner.js'
 import { parseGitStatusPorcelain } from './status.js'
@@ -298,6 +298,13 @@ export class DataLadAdapter {
 
     assertCommandRequest(commandName, request)
 
+    if (commandName === 'merge') {
+      const refused = await this.#mergePreflight(request.projectPath, runOptions)
+      if (refused) {
+        return refused
+      }
+    }
+
     const commandSpec = this.#buildCommand(commandName, request)
     const raw = await this.runner.run(commandSpec.command, commandSpec.args, {
       ...commandSpec.options,
@@ -316,7 +323,33 @@ export class DataLadAdapter {
       return buildCommandResult(commandName, result, null, warnings)
     }
 
+    // git exits 1 when a merge stops on conflicts. That is a state to resolve, not a failure; MERGE_HEAD (not git's
+    // text, which is translated) says which it is.
+    if (commandName === 'merge' && (await this.#mergeInProgress(request.projectPath, runOptions))) {
+      return { ...buildCommandResult(commandName, { ...result, failed: false }, null, warnings), conflicts: true }
+    }
+
     return buildCommandResult(commandName, result, mapCommandError(commandName, result), warnings)
+  }
+
+  async #mergeInProgress(projectPath, runOptions) {
+    const head = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], runOptions)
+    return !head.failed
+  }
+
+  // A merge needs a branch to merge into and no other merge open. Returns a finished refusal, or null to go ahead.
+  async #mergePreflight(projectPath, runOptions) {
+    const head = await this.runner.run('git', ['-C', projectPath, 'symbolic-ref', '-q', 'HEAD'], runOptions)
+    if (head.cancelled) {
+      return buildCommandResult('merge', head, mapCommandError('merge', head))
+    }
+    if (head.failed) {
+      return buildCommandResult('merge', head, MERGE_PREFLIGHT_ERRORS.DETACHED_HEAD)
+    }
+    if (await this.#mergeInProgress(projectPath, runOptions)) {
+      return buildCommandResult('merge', { ...head, failed: true }, MERGE_PREFLIGHT_ERRORS.MERGE_IN_PROGRESS)
+    }
+    return null
   }
 
   // Recovery action offered alongside the REPO_LOCKED error (errors.js):

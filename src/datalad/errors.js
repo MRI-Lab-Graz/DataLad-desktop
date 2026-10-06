@@ -6,6 +6,22 @@ const DEFAULT_ERROR = {
   technicalDetails: ''
 }
 
+// Raised by the adapter before `git merge` runs (no git output to map).
+export const MERGE_PREFLIGHT_ERRORS = Object.freeze({
+  DETACHED_HEAD: {
+    code: 'DETACHED_HEAD',
+    title: 'Not on a branch',
+    message: 'Switch to a branch before merging.',
+    technicalDetails: ''
+  },
+  MERGE_IN_PROGRESS: {
+    code: 'MERGE_IN_PROGRESS',
+    title: 'A merge is already open',
+    message: 'Finish or cancel the current merge first.',
+    technicalDetails: ''
+  }
+})
+
 function hasPattern(text, pattern) {
   return pattern.test((text ?? '').toLowerCase())
 }
@@ -115,6 +131,43 @@ export function mapCommandError(commandName, runResult) {
       code: 'BRANCH_NOT_FOUND',
       title: 'Branch was not found',
       message: 'The selected branch does not exist in this project.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'merge' && hasPattern(stderr, /untracked working tree files would be overwritten/)) {
+    return {
+      code: 'MERGE_UNTRACKED_OVERWRITE',
+      title: 'A new file is in the way',
+      message:
+        'A file here that was never saved has the same name as one on the other branch. Move or rename it, then merge again. The files are listed in the technical details.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'merge' && hasPattern(stderr, /unrelated histories/)) {
+    return {
+      code: 'MERGE_UNRELATED',
+      title: 'These branches cannot be merged',
+      message: 'These two branches share no history, so they cannot be merged here.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'merge' && hasPattern(stderr, /local changes|would be overwritten|please commit your changes/)) {
+    return {
+      code: 'WORKTREE_DIRTY',
+      title: 'Please save your changes first',
+      message: 'The merge would overwrite changes you have not saved. Save your work first, then merge.',
+      technicalDetails: details
+    }
+  }
+
+  if (commandName === 'finishMerge' && hasPattern(stderr, /unmerged files|unresolved conflict/)) {
+    return {
+      code: 'MERGE_UNRESOLVED',
+      title: 'Some files still need a decision',
+      message: 'Pick a version for every conflicting file, then finish the merge.',
       technicalDetails: details
     }
   }

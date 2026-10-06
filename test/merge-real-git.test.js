@@ -69,3 +69,57 @@ test('merging branches that changed different files makes a merge commit', async
   assert.equal(result.ok, true, result.stderr)
   assert.match(r.git('log', '-1', '--format=%s'), /^Merge branch 'feature'/)
 })
+
+test('a conflicting merge is ok with conflicts: true and leaves the merge open', async () => {
+  const r = await conflictingRepo()
+  const result = await merge(r)
+  assert.equal(result.ok, true)
+  assert.equal(result.conflicts, true)
+  assert.match(await text(r), /<<<<<<< /)
+})
+
+test('merge refuses on a detached HEAD', async () => {
+  const r = await conflictingRepo()
+  r.git('checkout', '-q', '--detach')
+  const result = await merge(r)
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'DETACHED_HEAD')
+})
+
+test('merge refuses while a merge is already open', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  const again = await merge(r)
+  assert.equal(again.ok, false)
+  assert.equal(again.userError.code, 'MERGE_IN_PROGRESS')
+})
+
+test('unrelated histories are refused in plain language', async () => {
+  const r = await conflictingRepo()
+  r.git('checkout', '-q', '--orphan', 'other')
+  r.git('rm', '-rfq', '--', '.')
+  await r.write('x.txt', 'x\n')
+  r.git('add', '--', '.')
+  r.git('commit', '-qm', 'unrelated root')
+  r.git('checkout', '-q', 'main')
+  const result = await merge(r, 'other')
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'MERGE_UNRELATED')
+})
+
+test('an untracked file the merge would overwrite is refused and named', async () => {
+  const r = await makeRepo()
+  await r.write('a.txt', 'a\n')
+  r.git('add', '--', '.')
+  r.git('commit', '-qm', 'base')
+  r.git('checkout', '-qb', 'feature')
+  await r.write('new.txt', 'from feature\n')
+  r.git('add', '--', '.')
+  r.git('commit', '-qm', 'adds new.txt')
+  r.git('checkout', '-q', 'main')
+  await r.write('new.txt', 'mine, never saved\n')
+  const result = await merge(r)
+  assert.equal(result.ok, false)
+  assert.equal(result.userError.code, 'MERGE_UNTRACKED_OVERWRITE')
+  assert.match(result.userError.technicalDetails, /new\.txt/)
+})
