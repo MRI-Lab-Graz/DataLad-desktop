@@ -64,7 +64,9 @@ test('every download goes through Get-VerifiedFile', async () => {
   const ps = await read('install.ps1')
   const fn = body(ps, 'Get-VerifiedFile')
   assert.match(fn, /Invoke-WebRequest/)
-  assert.doesNotMatch(ps.replace(fn, ''), /Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile/)
+  // Resolve-LatestRelease only reads release metadata; nothing it fetches is installed unverified.
+  const rest = ps.replace(fn, '').replace(body(ps, 'Resolve-LatestRelease'), '')
+  assert.doesNotMatch(rest, /Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer|DownloadFile/)
 })
 
 test('a download cannot hang forever: Invoke-WebRequest has a timeout', async () => {
@@ -94,8 +96,22 @@ test('the version and hash pins sit above the first function', async () => {
   }
 })
 
-test('the unrendered template refuses to install anything', async () => {
-  assert.match(await read('install.ps1'), /\$AppVersion -like '__\*'/)
+// A checkout of the repo has no release to render it, so it installs the latest release instead of failing.
+test('the unrendered template installs the latest release instead of refusing', async () => {
+  const ps = await read('install.ps1')
+  assert.doesNotMatch(ps, /unrendered template/)
+  assert.match(ps, /if \(\$AppVersion -like '__\*'\) \{\s*Resolve-LatestRelease\s*\}/)
+})
+
+test('Resolve-LatestRelease takes the tag from GitHub and the zip hash from that release\'s SHA256SUMS.txt', async () => {
+  const fn = body(await read('install.ps1'), 'Resolve-LatestRelease')
+  assert.match(fn, /releases\/latest/)
+  assert.match(fn, /SHA256SUMS\.txt/)
+  assert.match(fn, /\[0-9A-Fa-f\]\{64\}/)
+  assert.match(fn, /throw/)
+  for (const v of ['AppVersion', 'AppZipSha256', 'AppZipName', 'AppZipUrl']) {
+    assert.match(fn, new RegExp(`\\$script:${v} =`), `${v} must be set for the rest of the script`)
+  }
 })
 
 // A path with spaces or non-ASCII characters (C:\Users\Müller\...) only works if every use is quoted or joined.

@@ -72,6 +72,10 @@ For one user, without administrator rights. From the release page download **bot
 Everything lands in `%LOCALAPPDATA%\DataLad Desktop`; the log is `DataLad Desktop install.log` next to that
 folder. Start the app from the shortcut, not from a terminal that was already open, so it sees the new PATH.
 
+From a clone of the repository, run `scripts\windows\install.cmd` instead: that copy has no release pinned, so it
+installs the latest release and takes the zip's SHA-256 from that release's `SHA256SUMS.txt`. The copy from the
+release page is stricter, because its hash is written into the script itself.
+
 To upgrade, run `install.cmd` from a newer release: the old version is put back if the new one fails. To remove it,
 run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
 entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.

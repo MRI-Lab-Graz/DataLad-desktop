@@ -1,7 +1,7 @@
 # Installs DataLad Desktop for the current user. No administrator rights needed.
 #
-# Normally started through install.cmd. Use the copy attached to a GitHub release: CI fills in the version and the
-# SHA-256 of that release's app zip. The copy in the repository is a template and refuses to run.
+# Normally started through install.cmd. The copy attached to a GitHub release has the version and the SHA-256 of that
+# release's app zip filled in by CI. The copy in the repository is a template: it installs the latest release.
 #
 # Options:
 #   -FromDir <folder>   take files that exist there (named as on the release page) instead of downloading them;
@@ -90,6 +90,22 @@ function Assert-AppNotRunning {
     if ($running) {
         throw 'DataLad Desktop is running. Close it and run this script again.'
     }
+}
+
+# Only for the template in a repository checkout: a release copy has its version and hash filled in by CI. The hash comes
+# from the same release as the zip, so it catches a damaged download but not a tampered release.
+function Resolve-LatestRelease {
+    Write-Log 'This copy has no release pinned; installing the latest release.'
+    $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 60).tag_name
+    if ($tag -notmatch '^v([0-9A-Za-z][0-9A-Za-z.+-]*)$') { throw "Unexpected release tag '$tag'." }
+    $version = $Matches[1]
+    $name = "DataLad-Desktop-$version-win-x64.zip"
+    $sums = Invoke-RestMethod -Uri "https://github.com/$Repo/releases/download/$tag/SHA256SUMS.txt" -TimeoutSec 60
+    if ("$sums" -notmatch "(?m)^([0-9A-Fa-f]{64}) [ *]$([regex]::Escape($name))\s*$") { throw "SHA256SUMS.txt of $tag does not list $name." }
+    $script:AppVersion = $version
+    $script:AppZipSha256 = $Matches[1].ToUpper()
+    $script:AppZipName = $name
+    $script:AppZipUrl = "https://github.com/$Repo/releases/download/$tag/$name"
 }
 
 function Install-App {
@@ -316,7 +332,7 @@ try {
         exit 0
     }
     if ($AppVersion -like '__*') {
-        throw 'This is the unrendered template. Download install.cmd and install.ps1 from a release page instead.'
+        Resolve-LatestRelease
     }
     Install-App
     Install-Uninstaller
