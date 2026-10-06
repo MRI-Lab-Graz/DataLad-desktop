@@ -12,6 +12,7 @@ import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
+import { mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -34,6 +35,9 @@ import {
 const api = window.dataladDesktop
 
 const state = {
+  currentBranch: null,
+  detachedHead: false,
+  localBranches: [],
   gitIdentity: null,
   rootProjectPath: null,
   rootProjectClassification: 'unknown',
@@ -143,6 +147,14 @@ const elements = {
   branchSelect: document.getElementById('branch-select'),
   refreshBranchesButton: document.getElementById('refresh-branches'),
   switchBranchButton: document.getElementById('switch-branch'),
+  mergeBranchSelect: document.getElementById('merge-branch-select'),
+  mergeBranchButton: document.getElementById('merge-branch'),
+  mergeBanner: document.getElementById('merge-banner'),
+  mergeBannerTitle: document.getElementById('merge-banner-title'),
+  mergeSummary: document.getElementById('merge-summary'),
+  mergeConflictList: document.getElementById('merge-conflict-list'),
+  mergeCancelButton: document.getElementById('merge-cancel'),
+  mergeFinishButton: document.getElementById('merge-finish'),
   createBranchButton: document.getElementById('create-branch'),
   newBranchNameInput: document.getElementById('new-branch-name'),
   branchStatus: document.getElementById('branch-status'),
@@ -1147,6 +1159,65 @@ elements.switchBranchButton.addEventListener('click', async () => {
   await refreshBranchList(projectPath)
 })
 
+elements.mergeBranchButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+  const branchName = elements.mergeBranchSelect.value.trim()
+  const snapshot = await refreshWorkingTreeStatus(projectPath)
+  const blocked = mergeBlockReason({ branchName, currentBranch: state.currentBranch, detachedHead: state.detachedHead, snapshot })
+  if (blocked) {
+    setBranchStatus(blocked, 'error')
+    setLastActionState(blocked, 'error')
+    return
+  }
+  const result = await runWorkflowCommand('merge', { projectPath, branchName }, elements.mergeBranchButton)
+  if (!result?.ok) {
+    return
+  }
+  if (result.conflicts) {
+    setBranchStatus('Merge stopped: some files changed on both branches. Decide each one in the list above Files To Save.', 'error')
+  } else if (/already up to date/i.test(result.stdout ?? '')) {
+    setBranchStatus(`Nothing to merge: this branch already has everything from ${branchName}.`, 'idle')
+  } else {
+    setBranchStatus(`Merged ${branchName} into ${state.currentBranch}.`, 'success')
+  }
+  await refreshBranchList(projectPath)
+})
+
+elements.mergeConflictList.addEventListener('click', async (event) => {
+  const button = event.target.closest('button[data-side]')
+  const projectPath = readProjectPath()
+  if (!button || !projectPath) {
+    return
+  }
+  button.disabled = true
+  try {
+    await api.resolveConflict(projectPath, button.dataset.path, button.dataset.side)
+  } catch (error) {
+    elements.commandOutput.textContent = String(error.message)
+    setLastActionState('Could not resolve that file.', 'error')
+  } finally {
+    await refreshWorkingTreeStatus(projectPath)
+  }
+})
+
+elements.mergeFinishButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (projectPath) {
+    await runWorkflowCommand('finishMerge', { projectPath }, elements.mergeFinishButton)
+  }
+})
+
+elements.mergeCancelButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  if (!projectPath || !window.confirm('Cancel the merge? Everything goes back to how it was before you started.')) {
+    return
+  }
+  await runWorkflowCommand('abortMerge', { projectPath }, elements.mergeCancelButton)
+})
+
 elements.createBranchButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
   if (!projectPath) {
@@ -2122,6 +2193,9 @@ async function refreshBranchList(projectPath) {
   if (!projectPath) {
     elements.branchSelect.innerHTML = ''
     elements.switchBranchButton.disabled = true
+    state.currentBranch = null
+    state.localBranches = []
+    renderMergeBranchSelect()
     setBranchStatus('Load a project to manage branches.', 'idle')
     return
   }
@@ -2136,6 +2210,10 @@ async function refreshBranchList(projectPath) {
     }
 
     const branchNames = Array.isArray(branchSnapshot.branches) ? branchSnapshot.branches : []
+    state.currentBranch = branchSnapshot.currentBranch || null
+    state.detachedHead = Boolean(branchSnapshot.detachedHead)
+    state.localBranches = branchNames
+    renderMergeBranchSelect()
     elements.branchSelect.innerHTML = ''
 
     if (branchNames.length === 0) {
@@ -2194,6 +2272,7 @@ async function loadWorkingTreeStatus(
 ) {
   if (!projectPath) {
     state.workingTreeSnapshot = null
+    renderMergeBanner()
     state.selectedChangedPaths = new Set()
     state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary()
@@ -2214,6 +2293,7 @@ async function loadWorkingTreeStatus(
     }
 
     state.workingTreeSnapshot = snapshot
+    renderMergeBanner()
     syncSelectedChangedPaths(snapshot.files ?? [], preserveSelection)
     renderWorkingTreeSummary()
     renderChangedFilesSelection()
@@ -2226,6 +2306,7 @@ async function loadWorkingTreeStatus(
     }
 
     state.workingTreeSnapshot = null
+    renderMergeBanner()
     state.selectedChangedPaths = new Set()
     state.hasExplicitChangedSelection = false
     renderWorkingTreeSummary(`Could not load working tree status: ${String(error.message)}`)
@@ -2793,6 +2874,7 @@ function updateSaveButtonState() {
     hasMessage: Boolean(elements.message.value.trim()),
     hasSelection: gatherSavePaths().length > 0,
     hasConflicts: Boolean(snapshot?.conflictCount),
+    mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
     messageLabel: getMessageTermLabel(),
@@ -2800,6 +2882,7 @@ function updateSaveButtonState() {
   })
 
   elements.saveProjectButton.disabled = gating.disabled
+  elements.saveProjectButton.hidden = Boolean(snapshot?.mergeInProgress)
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 }
@@ -2832,9 +2915,41 @@ function setIdleButtonLabel(button, label) {
   button.textContent = label
 }
 
+function renderMergeBranchSelect() {
+  const candidates = mergeCandidates(state.localBranches, state.currentBranch)
+  elements.mergeBranchSelect.innerHTML = candidates.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')
+  elements.mergeBranchButton.disabled = candidates.length === 0
+}
+
+function renderMergeBanner() {
+  const model = mergeBannerModel(state.workingTreeSnapshot, state.currentBranch)
+  elements.mergeBanner.hidden = !model.visible
+  if (!model.visible) {
+    return
+  }
+  elements.mergeBannerTitle.textContent = model.title
+  elements.mergeSummary.textContent = model.summary
+  elements.mergeFinishButton.disabled = !model.canFinish
+  elements.mergeConflictList.innerHTML = model.conflicts
+    .map(
+      (file) =>
+        `<li><span>${escapeHtml(file.path)}</span> ` +
+        `<button type="button" class="button button-ghost button-inline" data-side="ours" data-path="${escapeHtml(file.path)}">${escapeHtml(file.oursLabel)}</button> ` +
+        `<button type="button" class="button button-ghost button-inline" data-side="theirs" data-path="${escapeHtml(file.path)}">${escapeHtml(file.theirsLabel)}</button> ` +
+        `<button type="button" class="button button-ghost button-inline" data-side="manual" data-path="${escapeHtml(file.path)}">I fixed it myself</button></li>`
+    )
+    .join('')
+}
+
 async function ensureBranchActionSafety(projectPath, actionDescription) {
   const snapshot = await refreshWorkingTreeStatus(projectPath)
   if (!snapshot) {
+    return false
+  }
+
+  if (snapshot.mergeInProgress) {
+    setBranchStatus('Finish or cancel the current merge first.', 'error')
+    setLastActionState('Finish or cancel the current merge first.', 'error')
     return false
   }
 
@@ -3015,6 +3130,18 @@ function buildWorkflowStatusLine(result) {
 }
 
 function actionLabel(commandName) {
+  if (commandName === 'merge') {
+    return 'Merge'
+  }
+
+  if (commandName === 'finishMerge') {
+    return 'Finish Merge'
+  }
+
+  if (commandName === 'abortMerge') {
+    return 'Cancel Merge'
+  }
+
   if (commandName === 'cloneInstall') {
     return 'Clone'
   }

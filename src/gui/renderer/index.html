@@ -353,6 +353,18 @@
             <p class="hint-inline">This project has nested datasets — pick which one Save applies to.</p>
           </label>
 
+          <section id="merge-banner" class="status-box" aria-labelledby="merge-banner-title" hidden>
+            <div class="section-head branch-head">
+              <h3 id="merge-banner-title">Merge in progress</h3>
+              <div class="section-actions">
+                <button id="merge-cancel" class="button button-ghost button-inline" type="button">Cancel Merge</button>
+                <button id="merge-finish" class="button button-primary button-inline" type="button">Finish Merge</button>
+              </div>
+            </div>
+            <p id="merge-summary" class="lede-small"></p>
+            <ul id="merge-conflict-list" class="changed-files-list"></ul>
+          </section>
+
           <section class="status-box" aria-labelledby="changed-files-title">
             <div class="section-head branch-head">
               <h3 id="changed-files-title">Files To Save</h3>
@@ -550,6 +562,14 @@
               <div class="field-row">
                 <input id="new-branch-name" type="text" placeholder="feature/my-analysis" />
                 <button id="create-branch" class="button button-ghost button-inline" type="button">Create</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Merge Into Current Branch</span>
+              <div class="field-row">
+                <select id="merge-branch-select"></select>
+                <button id="merge-branch" class="button button-ghost button-inline" type="button">Merge</button>
               </div>
             </label>
 
