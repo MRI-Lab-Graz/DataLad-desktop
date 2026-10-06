@@ -4,7 +4,7 @@ import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
 import { redactUrlCredentials } from './redact.js'
 import { ProcessRunner } from './process-runner.js'
-import { parseGitStatusPorcelain } from './status.js'
+import { parseGitStatusPorcelain, parseUnmerged, parseMergeBranch } from './status.js'
 import {
   assertCommandRequest,
   buildCommandResult
@@ -335,6 +335,28 @@ export class DataLadAdapter {
   async #mergeInProgress(projectPath, runOptions) {
     const head = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], runOptions)
     return !head.failed
+  }
+
+  // One extra `rev-parse` per refresh tells whether a merge is open; the rest is read only when it matters.
+  async #readMergeState(projectPath, conflictCount) {
+    const mergeInProgress = await this.#mergeInProgress(projectPath)
+    let mergeBranch = null
+    let unmerged = new Map()
+    if (mergeInProgress) {
+      const where = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '--git-path', 'MERGE_MSG'])
+      if (!where.failed) {
+        const messagePath = where.stdout.trim()
+        const message = await readFile(isAbsolute(messagePath) ? messagePath : join(projectPath, messagePath), 'utf8').catch(() => '')
+        mergeBranch = parseMergeBranch(message)
+      }
+    }
+    if (mergeInProgress || conflictCount > 0) {
+      const listed = await this.runner.run('git', ['-C', projectPath, 'ls-files', '-u', '-z'])
+      if (!listed.failed) {
+        unmerged = parseUnmerged(listed.stdout ?? '')
+      }
+    }
+    return { mergeInProgress, mergeBranch, unmerged }
   }
 
   // A merge needs a branch to merge into and no other merge open. Returns a finished refusal, or null to go ahead.
@@ -708,10 +730,18 @@ export class DataLadAdapter {
       })
     )
 
+    const merge = await this.#readMergeState(projectPath, parsed.conflictCount)
+    const withSides = files.map((file) => {
+      const stages = merge.unmerged.get(file.path)
+      return file.conflicted && stages ? { ...file, sides: { ours: Boolean(stages['2']), theirs: Boolean(stages['3']) } } : file
+    })
+
     return {
       projectPath,
       ...parsed,
-      files
+      files: withSides,
+      mergeInProgress: merge.mergeInProgress,
+      mergeBranch: merge.mergeBranch
     }
   }
 

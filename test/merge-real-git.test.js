@@ -123,3 +123,21 @@ test('an untracked file the merge would overwrite is refused and named', async (
   assert.equal(result.userError.code, 'MERGE_UNTRACKED_OVERWRITE')
   assert.match(result.userError.technicalDetails, /new\.txt/)
 })
+
+test('the status reports an open merge, the other branch and which sides exist', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  const status = await r.adapter.getWorkingTreeStatus(r.dir)
+  assert.equal(status.mergeInProgress, true)
+  assert.equal(status.mergeBranch, 'feature')
+  const file = status.files.find((f) => f.path === 'file.txt')
+  assert.equal(file.conflicted, true)
+  assert.deepEqual(file.sides, { ours: true, theirs: true })
+})
+
+test('the status of an ordinary project says no merge is open', async () => {
+  const r = await conflictingRepo()
+  const status = await r.adapter.getWorkingTreeStatus(r.dir)
+  assert.equal(status.mergeInProgress, false)
+  assert.equal(status.mergeBranch, null)
+})
