@@ -2,11 +2,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
 import { ProcessRunner } from '../src/datalad/process-runner.js'
+
+const hasDatalad = (() => { try { execFileSync('datalad', ['--version'], { stdio: 'ignore' }); return true } catch { return false } })()
 
 async function makeRepo() {
   const dir = await mkdtemp(join(tmpdir(), 'dlad-merge-'))
@@ -343,4 +345,28 @@ test('a subdataset conflict is resolved by recording the chosen commit', async (
   assert.equal(done.ok, true, done.stderr)
   assert.equal(r.git('ls-tree', 'HEAD', '--', 'sub').split(/\s+/)[2], theirs)
   assert.equal(done.warnings[0]?.code, 'SUBDATASET_NOT_MOVED') // the checkout holds this branch's own commit
+})
+
+test('a conflict on an annexed file is resolved by picking a side', { skip: (!hasDatalad || process.platform === 'win32') && 'needs datalad on POSIX' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dlad-merge-annex-'))
+  const sh = (cmd, ...args) => execFileSync(cmd, args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' })
+  sh('datalad', 'create', '--', '.')
+  await writeFile(join(dir, 'big.bin'), 'base'.repeat(100))
+  sh('datalad', 'save', '-m', 'base')
+  sh('git', 'checkout', '-qb', 'feature')
+  await rm(join(dir, 'big.bin'), { force: true })
+  await writeFile(join(dir, 'big.bin'), 'feature'.repeat(100))
+  sh('datalad', 'save', '-m', 'feature')
+  sh('git', 'checkout', '-q', 'main')
+  await rm(join(dir, 'big.bin'), { force: true })
+  await writeFile(join(dir, 'big.bin'), 'main'.repeat(100))
+  sh('datalad', 'save', '-m', 'main')
+
+  const adapter = new DataLadAdapter({ runner: new ProcessRunner() })
+  const started = await adapter.runCommand('merge', { projectPath: dir, branchName: 'feature' })
+  assert.equal(started.conflicts, true, started.stderr)
+  await adapter.resolveConflict(dir, 'big.bin', 'theirs')
+  const done = await adapter.runCommand('finishMerge', { projectPath: dir })
+  assert.equal(done.ok, true, done.stderr)
+  assert.equal(await readFile(join(dir, 'big.bin'), 'utf8'), 'feature'.repeat(100))
 })
