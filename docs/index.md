@@ -10,6 +10,14 @@ note, and save a checkpoint. Need data that isn't downloaded yet? One click.
 ```{toctree}
 :maxdepth: 2
 :hidden:
+:caption: Get started
+
+install
+```
+
+```{toctree}
+:maxdepth: 2
+:hidden:
 :caption: Tutorial
 
 tutorials/README
