@@ -28,7 +28,7 @@ A second way to install on Windows that needs no administrator rights and no cod
 
 - **Merge Into Current Branch** in Project Setup: pick a local branch and click **Merge**. It needs saved changes and does a fast-forward or a merge commit.
 - When the same file changed on both branches, the merge stops in a **Merge in progress** banner: per file choose **Keep this branch's version**, **Keep X's version** or **I fixed it myself**, then **Finish Merge** (or **Cancel Merge**). Conflicts left by Update use the same banner.
-- Installed subdatasets are moved to the merged version when that is a safe fast-forward; otherwise a notice says they were not moved.
+- Installed subdatasets are moved to the merged version when that is a safe fast-forward of a checkout with no unsaved work; otherwise a notice says they were not moved.
 - Refusals are in plain language: detached HEAD, a merge already open, unrelated histories, a new file in the way.
 
 ### Science workflow

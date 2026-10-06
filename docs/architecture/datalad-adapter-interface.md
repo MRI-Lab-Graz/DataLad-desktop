@@ -18,7 +18,7 @@ Source of truth: `src/datalad/schema.js` (`COMMAND_SCHEMAS`): every command's re
 - Remotes: `update`, `push`, `pushTags`, `addRemote`, `disconnectRemote`
 - Branches: `createBranch`, `switchBranch`, `createBranchAt`, `merge`, `finishMerge`, `abortMerge`
 
-`resolveConflict` and `syncSubdatasets` are adapter methods (several git calls), exposed through the `adapter:resolveConflict` IPC handler and called from `runCommand`.
+`resolveConflict` and `syncSubdatasets` are adapter methods (several git calls), `resolveConflict` is reached through the `adapter:resolveConflict` IPC handler; `syncSubdatasets` is called from `runCommand` after a successful `merge` or `finishMerge`.
 
 A new command needs an entry in `COMMAND_SCHEMAS`; anything that writes to a remote must also be in the trust re-check list (see `SECURITY.md`).
 
