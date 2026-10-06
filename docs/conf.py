@@ -1,5 +1,6 @@
 # Configuration file for the Sphinx documentation builder.
 
+import json
 import os
 import sys
 
@@ -8,7 +9,8 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "DataLad Desktop"
 copyright = "2025-2026, MRI-Lab-Graz"
 author = "MRI-Lab-Graz"
-release = "0.4.0"
+with open(os.path.join(os.path.dirname(__file__), "..", "package.json")) as f:
+    release = json.load(f)["version"]
 
 # -- General configuration ---------------------------------------------------
 extensions = [

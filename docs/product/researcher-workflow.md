@@ -29,6 +29,8 @@ Each active project should display one classification badge:
 - **Dataset**
 - **Superdataset**
 
+A BIDS dataset also gets a **BIDS** badge, and a PRISM project (`project.json` in its root) a **PRISM** badge; Save in a PRISM project only goes through when the PRISM validator reports the whole project valid.
+
 ## DataLad action surface in MVP
 
 For DataLad-enabled projects, the compact action group should include:

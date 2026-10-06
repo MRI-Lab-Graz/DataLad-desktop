@@ -23,15 +23,9 @@ The adapter is responsible for:
 - DataLad dataset
 - DataLad superdataset
 
-## Curated MVP commands
+## Curated commands
 
-The adapter should expose only the MVP operations:
-
-- Clone/Install
-- Get
-- Save
-- Update
-- Push
+The researcher-facing set is Clone/Install, Get Data, Free Up Space, Save, Update, Publish, Add a Remote, Mark As Version and Check Data Integrity, plus branch actions in Project Setup. The full list of adapter commands is in `docs/architecture/datalad-adapter-interface.md`.
 
 Commands such as `status`, `subdatasets`, and `siblings` can be used internally to power UI state, but should not expand the first-wave user-facing command catalog.
 

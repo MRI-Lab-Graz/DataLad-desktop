@@ -42,7 +42,7 @@ keeps the first checkpoint scientifically auditable.
 
 ## Walkthrough tasks
 
-1. In the app header, click **Check Setup**.
+1. In the app header, click **Setup**, then **Check Environment**.
 2. Confirm Python 3, DataLad, and git-annex report `OK`.
 3. In **Create Project**, choose the new folder path.
 4. Click **Create Project**.
