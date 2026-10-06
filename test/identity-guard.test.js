@@ -42,3 +42,10 @@ test('identityMissingResult is a runner-shaped warning that stops sequences', ()
 test('creating a version needs a git identity (annotated tags record the tagger)', () => {
   assert.equal(shouldBlockForIdentity('createTag', { available: true, complete: false }), true)
 })
+
+test('merge and finishMerge create a commit, so they wait for an identity', () => {
+  const missing = { available: true, complete: false }
+  assert.equal(shouldBlockForIdentity('merge', missing), true)
+  assert.equal(shouldBlockForIdentity('finishMerge', missing), true)
+  assert.equal(shouldBlockForIdentity('abortMerge', missing), false)
+})

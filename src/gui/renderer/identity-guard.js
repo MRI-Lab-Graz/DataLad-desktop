@@ -2,8 +2,8 @@
 // Pure logic - the dialog and IPC live in app.js.
 
 // Commands that create a git commit or an annotated tag (re-verified against adapter.js: save, create,
-// create-subdataset, update, tag -a).
-const COMMIT_COMMANDS = new Set(['save', 'createProject', 'createSubdataset', 'update', 'createTag'])
+// create-subdataset, update, tag -a, merge, finishMerge).
+const COMMIT_COMMANDS = new Set(['save', 'createProject', 'createSubdataset', 'update', 'createTag', 'merge', 'finishMerge'])
 
 // `identity` is null until the first read finishes: unknown never blocks.
 // `available: false` (git missing) never blocks either - Check Environment reports it.

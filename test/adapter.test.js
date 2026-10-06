@@ -2369,3 +2369,22 @@ test('prepareFolderRemote never cleans up a folder that already had content when
 
   assert.deepEqual(await readdir(folder), ['HEAD'])
 })
+
+test('runCommand routes merge to git merge --no-edit with the branch after --', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'symbolic-ref', '-q', 'HEAD'], { stdout: 'refs/heads/main\n' })
+  runner.set('git', ['-C', '/tmp/project', 'merge', '--no-edit', '--', 'feature'], { stdout: 'Merge made\n' })
+  const adapter = new DataLadAdapter({ runner })
+  const result = await adapter.runCommand('merge', { projectPath: '/tmp/project', branchName: 'feature' })
+  assert.equal(result.ok, true)
+  assert.ok(runner.calls.some((c) => c.args.join(' ') === '-C /tmp/project merge --no-edit -- feature'))
+})
+
+test('runCommand routes finishMerge and abortMerge to git commit --no-edit and git merge --abort', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'commit', '--no-edit'], {})
+  runner.set('git', ['-C', '/tmp/project', 'merge', '--abort'], {})
+  const adapter = new DataLadAdapter({ runner })
+  assert.equal((await adapter.runCommand('finishMerge', { projectPath: '/tmp/project' })).ok, true)
+  assert.equal((await adapter.runCommand('abortMerge', { projectPath: '/tmp/project' })).ok, true)
+})

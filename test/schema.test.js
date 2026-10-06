@@ -124,3 +124,11 @@ test('addRemote refuses a URL that carries a password or token', () => {
   )
   assertCommandRequest('addRemote', { projectPath: '/p', remoteName: 'x', url: 'ssh://git@host/x' }) // user name only: fine
 })
+
+test('merge needs a project and a branch, and a branch cannot be an option', () => {
+  assert.doesNotThrow(() => assertCommandRequest('merge', { projectPath: '/p', branchName: 'feature' }))
+  assert.throws(() => assertCommandRequest('merge', { projectPath: '/p' }), /branchName/)
+  assert.throws(() => assertCommandRequest('merge', { projectPath: '/p', branchName: '--abort' }), /cannot start with -/)
+  assert.doesNotThrow(() => assertCommandRequest('finishMerge', { projectPath: '/p' }))
+  assert.doesNotThrow(() => assertCommandRequest('abortMerge', { projectPath: '/p' }))
+})

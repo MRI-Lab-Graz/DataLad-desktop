@@ -22,6 +22,9 @@ export const CURATED_COMMANDS = new Set([
   'createBranch',
   'switchBranch',
   'createBranchAt',
+  'merge',
+  'finishMerge',
+  'abortMerge',
   'restoreFileFromCommit',
   'discardChanges',
   'unlock',
@@ -1291,6 +1294,27 @@ export class DataLadAdapter {
           command: 'git',
           args: ['-C', projectPath, 'checkout', '-b', branchName, startPoint],
           options: { cwd: projectPath }
+        }
+      }
+      case 'merge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'merge', '--no-edit', '--', request.branchName],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'finishMerge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'commit', '--no-edit'],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'abortMerge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'merge', '--abort'],
+          options: { cwd: request.projectPath }
         }
       }
       case 'restoreFileFromCommit': {

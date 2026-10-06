@@ -55,6 +55,18 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath', 'branchName', 'startPoint'],
     optional: []
   },
+  merge: {
+    required: ['projectPath', 'branchName'],
+    optional: []
+  },
+  finishMerge: {
+    required: ['projectPath'],
+    optional: []
+  },
+  abortMerge: {
+    required: ['projectPath'],
+    optional: []
+  },
   restoreFileFromCommit: {
     required: ['projectPath', 'commitHash', 'paths'],
     optional: []
@@ -83,6 +95,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
   createBranch: ['branchName'],
   switchBranch: ['branchName'],
   createBranchAt: ['branchName', 'startPoint'],
+  merge: ['branchName'],
   createTag: ['tagName'],
   pushTags: ['remoteName'],
   addRemote: ['remoteName', 'url'],
