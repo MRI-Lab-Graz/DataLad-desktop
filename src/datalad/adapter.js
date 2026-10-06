@@ -291,7 +291,7 @@ export class DataLadAdapter {
         warnings.push({
           code: 'SUBDATASET_NOT_MOVED',
           severity: 'warning',
-          message: `Subdataset ${relative} has its own changes; it was not moved to the merged version.`
+          message: `Subdataset ${relative} was not moved to the merged version (it has unsaved work or commits of its own, or that version is not on this computer yet).`
         })
       }
     }
@@ -838,6 +838,10 @@ export class DataLadAdapter {
       projectPath,
       ...parsed,
       files: withSides,
+      conflicts: [...merge.unmerged].map(([path, stages]) => ({
+        path,
+        sides: { ours: Boolean(stages['2']), theirs: Boolean(stages['3']) }
+      })),
       mergeInProgress: merge.mergeInProgress,
       mergeBranch: merge.mergeBranch
     }

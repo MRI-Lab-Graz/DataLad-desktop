@@ -17,6 +17,7 @@ async function makeRepo() {
   git('config', 'user.email', 'ana@example.org')
   git('config', 'user.name', 'Ana')
   git('config', 'commit.gpgsign', 'false')
+  git('config', 'core.autocrlf', 'false')
   return { dir, git, write: (name, text) => writeFile(join(dir, name), text), adapter: new DataLadAdapter({ runner: new ProcessRunner() }) }
 }
 
@@ -370,3 +371,25 @@ test('a conflict on an annexed file is resolved by picking a side', { skip: (!ha
   assert.equal(done.ok, true, done.stderr)
   assert.equal(await readFile(join(dir, 'big.bin'), 'utf8'), 'feature'.repeat(100))
 })
+
+// The banner takes its paths from getWorkingTreeStatus, so names git quotes in porcelain (space, ") must come back raw.
+const oddNames = [['my notes.txt'], ['Übersicht.txt']]
+if (process.platform !== 'win32') {
+  oddNames.push(['say "hi".txt'])
+}
+for (const [name] of oddNames) {
+  test(`a conflict on ${name} is resolved with the path the status reports`, async () => {
+    const r = await conflictingRepo(name)
+    await merge(r)
+    const status = await r.adapter.getWorkingTreeStatus(r.dir)
+    assert.equal(status.conflicts.length, 1)
+    const conflict = status.conflicts[0]
+    assert.equal(conflict.path, name)
+    assert.deepEqual(conflict.sides, { ours: true, theirs: true })
+    await resolve(r, conflict.path, 'theirs')
+    const done = await finish(r)
+    assert.equal(done.ok, true, done.stderr)
+    assert.equal(await text(r, name), 'feature\n')
+    assert.deepEqual((await r.adapter.getWorkingTreeStatus(r.dir)).conflicts, [])
+  })
+}

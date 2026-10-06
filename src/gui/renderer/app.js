@@ -12,7 +12,7 @@ import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
-import { mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
+import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -1000,6 +1000,10 @@ elements.updateProjectButton.addEventListener('click', async () => {
     return
   }
 
+  if (state.workingTreeSnapshot?.mergeInProgress) {
+    setLastActionState('Finish or cancel the current merge first.', 'error')
+    return
+  }
   await runWorkflowCommand('update', { projectPath }, elements.updateProjectButton)
 })
 
@@ -1166,6 +1170,11 @@ elements.mergeBranchButton.addEventListener('click', async () => {
   }
   const branchName = elements.mergeBranchSelect.value.trim()
   const snapshot = await refreshWorkingTreeStatus(projectPath)
+  if (!snapshot) {
+    setBranchStatus('Could not read the project status. Try again.', 'error')
+    setLastActionState('Could not read the project status. Try again.', 'error')
+    return
+  }
   const blocked = mergeBlockReason({ branchName, currentBranch: state.currentBranch, detachedHead: state.detachedHead, snapshot })
   if (blocked) {
     setBranchStatus(blocked, 'error')
@@ -1178,6 +1187,7 @@ elements.mergeBranchButton.addEventListener('click', async () => {
   }
   if (result.conflicts) {
     setBranchStatus('Merge stopped: some files changed on both branches. Decide each one in the list above Files To Save.', 'error')
+    setLastActionState('Merge stopped: decide each file in the Merge banner.', 'warning')
   } else if (/already up to date/i.test(result.stdout ?? '')) {
     setBranchStatus(`Nothing to merge: this branch already has everything from ${branchName}.`, 'idle')
   } else {
@@ -1196,8 +1206,9 @@ elements.mergeConflictList.addEventListener('click', async (event) => {
   try {
     await api.resolveConflict(projectPath, button.dataset.path, button.dataset.side)
   } catch (error) {
-    elements.commandOutput.textContent = String(error.message)
-    setLastActionState('Could not resolve that file.', 'error')
+    const message = friendlyIpcError(error)
+    elements.commandOutput.textContent = message
+    setLastActionState(message, 'error')
   } finally {
     await refreshWorkingTreeStatus(projectPath)
   }
@@ -2244,6 +2255,7 @@ async function refreshBranchList(projectPath) {
     }
 
     elements.switchBranchButton.disabled = false
+    renderMergeBanner()
   } catch (error) {
     if (!isLatestRequestToken('branches', requestToken)) {
       return

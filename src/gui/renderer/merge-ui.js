@@ -27,7 +27,7 @@ export function mergeBannerModel(snapshot, currentBranch) {
     return { visible: false }
   }
   const other = snapshot.mergeBranch ?? 'the other branch'
-  const conflicted = (snapshot.files ?? []).filter((file) => file.conflicted)
+  const conflicted = snapshot.conflicts ?? []
   return {
     visible: true,
     title: `Merging ${snapshot.mergeBranch ?? 'the other branch'} into ${currentBranch ?? 'this branch'}`,
@@ -42,4 +42,10 @@ export function mergeBannerModel(snapshot, currentBranch) {
       theirsLabel: file.sides?.theirs === false ? 'Keep it deleted' : `Keep ${other}'s version`
     }))
   }
+}
+
+// Electron wraps a main-process error as "Error invoking remote method '<channel>': Error: <message>".
+export function friendlyIpcError(error) {
+  const message = String(error?.message ?? error ?? '').replace(/^Error invoking remote method '[^']*': (Error: )?/, '')
+  return message || 'Could not resolve that file.'
 }

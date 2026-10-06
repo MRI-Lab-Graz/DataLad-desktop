@@ -41,3 +41,16 @@ test('conflict buttons use data attributes and one delegated listener (no inline
   assert.match(app, /mergeConflictList\.addEventListener\('click'/)
   assert.doesNotMatch(app, /onclick=/)
 })
+
+test('the Merge handler reports a stop honestly, refuses on an unreadable status, and Update respects an open merge', () => {
+  const handler = app.slice(app.indexOf("elements.mergeBranchButton.addEventListener('click'"), app.indexOf("elements.mergeConflictList.addEventListener"))
+  assert.match(handler, /Merge stopped: decide each file in the Merge banner\./)
+  assert.match(handler, /Could not read the project status\. Try again\./)
+  assert.match(handler, /if \(!snapshot\)/)
+  const update = app.slice(app.indexOf("elements.updateProjectButton.addEventListener('click'"), app.indexOf("elements.publishProjectButton"))
+  assert.match(update, /workingTreeSnapshot\?\.mergeInProgress/)
+  assert.match(update, /Finish or cancel the current merge first\./)
+  assert.match(app, /friendlyIpcError\(error\)/)
+  const branches = app.slice(app.indexOf('async function refreshBranchList'))
+  assert.match(branches.slice(0, branches.indexOf('} catch (error)')), /switchBranchButton\.disabled = false\n\s*renderMergeBanner\(\)/)
+})
