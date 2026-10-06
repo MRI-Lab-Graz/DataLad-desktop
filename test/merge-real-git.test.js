@@ -233,3 +233,114 @@ test('Cancel Merge puts the project back as it was', async () => {
   assert.equal(await text(r), 'main\n')
   assert.equal((await r.adapter.getWorkingTreeStatus(r.dir)).mergeInProgress, false)
 })
+
+// A parent project with one submodule "sub" whose checkout has its own identity configured.
+async function repoWithSub() {
+  const origin = await makeRepo()
+  await origin.write('s.txt', '1\n')
+  origin.git('add', '--', '.')
+  origin.git('commit', '-qm', 's1')
+  const r = await makeRepo()
+  await r.write('a.txt', 'a\n')
+  r.git('add', '--', '.')
+  r.git('commit', '-qm', 'base')
+  r.git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', origin.dir, 'sub')
+  r.git('commit', '-qm', 'add sub')
+  r.git('-C', 'sub', 'config', 'user.email', 'ana@example.org')
+  r.git('-C', 'sub', 'config', 'user.name', 'Ana')
+  r.git('-C', 'sub', 'config', 'commit.gpgsign', 'false')
+  const subHead = () => r.git('-C', 'sub', 'rev-parse', 'HEAD').trim()
+  return { r, subHead, c1: subHead() }
+}
+
+// The parent records a newer subdataset commit than the one checked out (what a merge leaves behind).
+async function parentRecordsNewerSub({ dirtySub = false } = {}) {
+  const { r, subHead, c1 } = await repoWithSub()
+  await writeFile(join(r.dir, 'sub', 's.txt'), '2\n')
+  r.git('-C', 'sub', 'commit', '-qam', 's2')
+  const c2 = subHead()
+  r.git('add', '--', 'sub')
+  r.git('commit', '-qm', 'record s2')
+  r.git('-C', 'sub', 'checkout', '-q', '--detach', c1)
+  if (dirtySub) {
+    await writeFile(join(r.dir, 'sub', 's.txt'), 'unsaved work\n')
+  }
+  return { r, subHead, c1, c2 }
+}
+
+test('a subdataset checkout is moved to the commit the merge recorded', async () => {
+  const { r, subHead, c2 } = await parentRecordsNewerSub()
+  const warnings = await r.adapter.syncSubdatasets(r.dir)
+  assert.deepEqual(warnings, [])
+  assert.equal(subHead(), c2)
+})
+
+test('a subdataset with unsaved work is left alone and the researcher is told', async () => {
+  const { r, subHead, c1 } = await parentRecordsNewerSub({ dirtySub: true })
+  const warnings = await r.adapter.syncSubdatasets(r.dir)
+  assert.equal(subHead(), c1)
+  assert.equal(await readFile(join(r.dir, 'sub', 's.txt'), 'utf8'), 'unsaved work\n')
+  assert.equal(warnings.length, 1)
+  assert.equal(warnings[0].code, 'SUBDATASET_NOT_MOVED')
+  assert.match(warnings[0].message, /sub/)
+})
+
+test('a subdataset whose recorded commit is not a fast-forward is left alone', async () => {
+  const { r, subHead, c1 } = await repoWithSub()
+  await writeFile(join(r.dir, 'sub', 's.txt'), 'mine\n')
+  r.git('-C', 'sub', 'commit', '-qam', 'my own commit')
+  const mine = subHead()
+  r.git('-C', 'sub', 'checkout', '-q', '--detach', c1)
+  await writeFile(join(r.dir, 'sub', 's.txt'), 'theirs\n')
+  r.git('-C', 'sub', 'commit', '-qam', 'diverging commit')
+  r.git('add', '--', 'sub')
+  r.git('commit', '-qm', 'record diverging commit')
+  r.git('-C', 'sub', 'checkout', '-q', '--detach', mine)
+  const warnings = await r.adapter.syncSubdatasets(r.dir)
+  assert.equal(subHead(), mine)
+  assert.equal(warnings[0]?.code, 'SUBDATASET_NOT_MOVED')
+})
+
+test('finishing a merge that brings a newer subdataset commit moves the checkout', async () => {
+  const { r, subHead, c1 } = await repoWithSub()
+  r.git('checkout', '-qb', 'feature')
+  await writeFile(join(r.dir, 'sub', 's.txt'), '2\n')
+  r.git('-C', 'sub', 'commit', '-qam', 's2')
+  const c2 = subHead()
+  r.git('add', '--', 'sub')
+  r.git('commit', '-qm', 'bump sub')
+  r.git('checkout', '-q', 'main')
+  r.git('-C', 'sub', 'checkout', '-q', '--detach', c1)
+  await r.write('a.txt', 'a2\n')
+  r.git('commit', '-qam', 'main edit')
+
+  const result = await merge(r)
+  assert.equal(result.ok, true, result.stderr)
+  assert.equal(subHead(), c2)
+})
+
+test('a subdataset conflict is resolved by recording the chosen commit', async () => {
+  const { r, subHead, c1 } = await repoWithSub()
+  r.git('checkout', '-qb', 'feature')
+  await writeFile(join(r.dir, 'sub', 's.txt'), 'feature side\n')
+  r.git('-C', 'sub', 'commit', '-qam', 'feature sub')
+  const theirs = subHead()
+  r.git('add', '--', 'sub')
+  r.git('commit', '-qm', 'feature bumps sub')
+  r.git('checkout', '-q', 'main')
+  r.git('-C', 'sub', 'checkout', '-q', '--detach', c1)
+  await writeFile(join(r.dir, 'sub', 's.txt'), 'main side\n')
+  r.git('-C', 'sub', 'commit', '-qam', 'main sub')
+  r.git('add', '--', 'sub')
+  r.git('commit', '-qm', 'main bumps sub')
+
+  const started = await merge(r)
+  assert.equal(started.conflicts, true)
+  const status = await r.adapter.getWorkingTreeStatus(r.dir)
+  assert.deepEqual(status.files.find((f) => f.path === 'sub').sides, { ours: true, theirs: true })
+  await r.adapter.resolveConflict(r.dir, 'sub', 'theirs')
+  const done = await r.adapter.runCommand('finishMerge', { projectPath: r.dir })
+  assert.equal(done.ok, true, done.stderr)
+  assert.equal(r.git('ls-tree', 'HEAD', '--', 'sub').split(/\s+/)[2], theirs)
+  assert.equal(done.warnings[0]?.code, 'SUBDATASET_NOT_MOVED') // the checkout holds this branch's own commit
+})

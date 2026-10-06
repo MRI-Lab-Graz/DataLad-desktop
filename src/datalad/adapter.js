@@ -36,6 +36,7 @@ export const CURATED_COMMANDS = new Set([
 ])
 // What `git init --bare` creates: the only things cleaned up after a failed folder-remote setup.
 const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
+const MAX_SUBDATASET_DEPTH = 8 // symlinked or hostile nesting cannot recurse forever
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
@@ -258,6 +259,45 @@ export class DataLadAdapter {
       .map((entry) => entry.name)
   }
 
+  // A merge records the other branch's subdataset commits but leaves each checkout where it was; a later Save would
+  // record the old checkout again and undo the merge. Move each installed subdataset forward when that is a plain
+  // fast-forward of a clean checkout, and say so when it is not. Local only; nothing is fetched.
+  async syncSubdatasets(projectPath, depth = 0) {
+    const warnings = []
+    if (depth > MAX_SUBDATASET_DEPTH) {
+      return warnings
+    }
+    const status = await this.runner.run('git', ['-C', projectPath, 'submodule', 'status'])
+    if (status.failed) {
+      return warnings
+    }
+    for (const line of (status.stdout ?? '').split(/\r?\n/)) {
+      const match = /^\+([0-9a-f]{40,64}) (.+?)(?: \([^)]*\))?$/.exec(line) // "+": checked out commit differs from the recorded one
+      if (!match || !isSafeRelativeSubdatasetPath(match[2])) {
+        continue
+      }
+      const relative = match[2]
+      const sub = join(projectPath, relative)
+      const recorded = await this.runner.run('git', ['-C', projectPath, 'rev-parse', `HEAD:${relative}`])
+      const dirty = await this.runner.run('git', ['-C', sub, 'status', '--porcelain', '--untracked-files=no'])
+      const moved =
+        !recorded.failed &&
+        !dirty.failed &&
+        !dirty.stdout.trim() &&
+        !(await this.runner.run('git', ['-C', sub, 'merge', '--ff-only', recorded.stdout.trim()])).failed
+      if (moved) {
+        warnings.push(...(await this.syncSubdatasets(sub, depth + 1)))
+      } else {
+        warnings.push({
+          code: 'SUBDATASET_NOT_MOVED',
+          severity: 'warning',
+          message: `Subdataset ${relative} has its own changes; it was not moved to the merged version.`
+        })
+      }
+    }
+    return warnings
+  }
+
   // One file of an open merge: keep this branch's version, the other branch's, or accept what the researcher edited.
   // A path is only acted on when git lists it as unmerged, so it can never point outside the project.
   async resolveConflict(projectPath, path, side) {
@@ -375,6 +415,9 @@ export class DataLadAdapter {
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {
+      if (commandName === 'merge' || commandName === 'finishMerge') {
+        warnings.push(...(await this.syncSubdatasets(request.projectPath)))
+      }
       return buildCommandResult(commandName, result, null, warnings)
     }
 
