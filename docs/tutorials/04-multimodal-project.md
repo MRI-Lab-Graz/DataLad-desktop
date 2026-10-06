@@ -37,7 +37,11 @@ Intermediate to advanced
 
 1. Complete one Save on each feature branch with modality-specific changes.
 2. Switch to `integration/multimodal-v1`.
-3. Merge all three feature branches into integration.
+3. Save all changes first; Merge refuses to start with unsaved changes.
+   - Switch to `integration/multimodal-v1` if you are not already on it.
+   - In **Project Setup → Branch**, choose one feature branch under **Merge Into Current Branch** and click **Merge**.
+   - Repeat for the other two feature branches.
+   - If the same file changed on both branches, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 4. Review status for unexpected cross-modality edits.
 5. Add integration notes explaining alignment assumptions.
 6. Save integration checkpoint with message:

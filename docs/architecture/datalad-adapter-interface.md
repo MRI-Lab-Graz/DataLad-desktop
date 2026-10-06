@@ -1,54 +1,26 @@
-# DataLad Adapter Interface (MVP)
+# DataLad Adapter Interface
 
 This document defines the stable boundary between UI/shell code and DataLad integration logic.
 
-## Version
-
-- Interface version: `0.3.0`
-- Source of truth: `src/datalad/schema.js`
+Source of truth: `src/datalad/schema.js` (`COMMAND_SCHEMAS`): every command's required and optional fields. Requests are validated against it before any process starts.
 
 ## Goals
 
 - Keep one command boundary for all DataLad operations.
 - Ensure requests/results are validated before they reach UI code.
-- Keep command vocabulary limited to curated MVP actions.
+- Keep the command vocabulary small and curated (see `docs/product/researcher-workflow.md`).
 
 ## Command names
 
-- `cloneInstall`
-- `get`
-- `save`
-- `update`
-- `push`
+- Project: `cloneInstall`, `createProject`, `createSubdataset`
+- Data: `get`, `drop`, `verify`, `unlock`
+- History: `save`, `createTag`, `restoreFileFromCommit`, `discardChanges`
+- Remotes: `update`, `push`, `pushTags`, `addRemote`, `disconnectRemote`
+- Branches: `createBranch`, `switchBranch`, `createBranchAt`, `merge`, `finishMerge`, `abortMerge`
 
-No additional command names are allowed for MVP.
+`resolveConflict` and `syncSubdatasets` are adapter methods (several git calls), `resolveConflict` is reached through the `adapter:resolveConflict` IPC handler; `syncSubdatasets` is called from `runCommand` after a successful `merge` or `finishMerge`.
 
-## Request schemas
-
-### cloneInstall
-
-- Required: `source`, `targetPath`
-- Optional: none
-
-### get
-
-- Required: `projectPath`
-- Optional: `paths` (array)
-
-### save
-
-- Required: `projectPath`, `message`
-- Optional: `paths` (array)
-
-### update
-
-- Required: `projectPath`
-- Optional: none
-
-### push
-
-- Required: `projectPath`
-- Optional: none
+A new command needs an entry in `COMMAND_SCHEMAS`; anything that writes to a remote must also be in the trust re-check list (see `SECURITY.md`).
 
 ## Result schema
 

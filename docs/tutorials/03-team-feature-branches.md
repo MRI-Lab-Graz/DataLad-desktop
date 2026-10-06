@@ -38,16 +38,17 @@ Intermediate
 1. Switch to `feature/preprocessing` and Save preprocessing edits.
 2. Switch to `feature/statistics` and Save statistics edits.
 3. Switch to `feature/figures` and Save figure edits.
-4. Merge `feature/preprocessing` into `main`.
-5. Merge `feature/statistics` into `main`.
-6. Merge `feature/figures` into `main`.
-7. Confirm final `main` status is clean and complete.
+4. Save all changes first; Merge refuses to start with unsaved changes.
+   - In **Project Setup → Branch**, switch to `main`.
+   - Choose `feature/preprocessing` under **Merge Into Current Branch** and click **Merge**.
+5. Repeat for `feature/statistics`, then `feature/figures`.
+6. Confirm final `main` status is clean and complete.
 
 ## Failure injection
 
 - On two feature branches, edit the same line in `README.md`.
-- Trigger a merge conflict during integration.
-- Recover by choosing the scientifically correct wording and re-saving.
+- Trigger a merge conflict during integration. If the same file changed on both branches, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back; it asks you to confirm). **Keep it deleted** appears instead of the other branch's version when that branch removed the file. **I fixed it myself** is refused while the `<<<<<<<` / `>>>>>>>` markers are still in the file.
+- Recover by choosing the scientifically correct wording (or editing it yourself), then finishing the merge.
 
 ## Completion criteria
 

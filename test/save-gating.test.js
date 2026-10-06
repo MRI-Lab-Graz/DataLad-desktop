@@ -91,3 +91,10 @@ test('PRISM mode never hides conflicts', () => {
   assert.equal(gating.disabled, true)
   assert.match(gating.guidance.text, /Resolve conflicts/)
 })
+
+test('Save is disabled while a merge is open, whatever else is true', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true, mergeInProgress: true })
+  assert.equal(gating.disabled, true)
+  assert.equal(gating.guidance.text, 'A merge is in progress. Finish or cancel it first.')
+  assert.equal(computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true }).disabled, false)
+})

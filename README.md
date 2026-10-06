@@ -40,6 +40,7 @@ across nested sub-projects? The app shows you exactly what changed and where.
   GitLab repository as a remote in one step.
 - **Branch when you need to**, without it getting in the way when you don't —
   branch management lives in an optional "Project Setup" area.
+- **Bring branches together** — merge a branch into the one you are on; if the same file changed on both, pick a version per file and finish (or cancel) the merge.
 
 ## Download & Install
 
@@ -54,6 +55,7 @@ Most researchers should just download the ready-to-run app:
      [Windows: install with a script](#windows-install-with-a-script)), `DataLad Desktop Setup *.exe`
      (installer, needs admin rights) or `DataLad Desktop *.exe` (portable, no admin rights or install
      step — just run it)
+   - **Linux:** the `.AppImage` file (make it executable, then run it)
 2. Open the downloaded file and follow the install prompts (installer), or just run it (portable).
 3. Launch **DataLad Desktop** like any other app.
 
@@ -68,7 +70,9 @@ Most researchers should just download the ready-to-run app:
 > installation instructions for your platform. The app's diagnostics screen tells you what's
 > missing.
 
-The PRISM validator installs privately from Setup -> PRISM Validator (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically.
+**PRISM projects** (a `project.json` in the project folder) get a PRISM badge, and Save only goes through when
+the PRISM validator reports the whole project valid; the save that adds `project.json` is the exception. The
+validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically.
 
 ### First launch: your name and email
 
@@ -76,6 +80,14 @@ The first time you start the app it asks for your **name and email**. They are
 stored with every checkpoint you save, so teammates can see who made which change.
 You enter them once; you can change them any time under **Setup → Your Name and Email**.
 Until they are set, Save is blocked (choose **Later** to look around first).
+
+### Opening a folder: the trust question
+
+A folder the app did not create itself (one you open, clone or pick as a USB/share remote) can carry settings
+and scripts that git or DataLad would run. So the first time you open one, the app shows what it found and
+asks whether to trust it: **Trust this folder**, **Trust everything inside this folder** (handy for a lab share)
+or **Cancel**. Nothing from the folder runs before you answer. It asks again only if something in the folder
+changes. IT departments can pre-trust locations; see [SECURITY.md](SECURITY.md).
 
 ### macOS: "app can't be opened" warning
 
@@ -172,6 +184,9 @@ No SSH or server setup is involved.
 
 ## Learn more
 
+- [Documentation](https://datalad-desktop.readthedocs.io/) (tutorials, workflow, architecture)
+- [Changelog](CHANGELOG.md)
+- [Security: what is protected and how](SECURITY.md)
 - [Roadmap](docs/roadmap.md)
 - [Researcher workflow & UX rules](docs/product/researcher-workflow.md)
 - [Tutorial pack: progressive research demos](docs/tutorials/README.md)

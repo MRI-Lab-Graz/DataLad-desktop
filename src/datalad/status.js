@@ -128,3 +128,24 @@ export function buildGitStatusMap(output = '') {
   const parsed = parseGitStatusPorcelain(output)
   return new Map(parsed.files.map((entry) => [entry.path, entry.status]))
 }
+// `git ls-files -u -z`: one "<mode> <sha> <stage>\t<path>" entry per stage of every unmerged path.
+// Stage 1 is the common ancestor, 2 this branch, 3 the branch being merged in; a missing stage means that side has no such file.
+export function parseUnmerged(output = '') {
+  const byPath = new Map()
+  for (const entry of output.split('\0')) {
+    const tab = entry.indexOf('\t')
+    if (tab === -1) {
+      continue
+    }
+    const [mode, sha, stage] = entry.slice(0, tab).split(' ')
+    const path = entry.slice(tab + 1)
+    byPath.set(path, { ...byPath.get(path), [stage]: { mode, sha } })
+  }
+  return byPath
+}
+
+// First line of .git/MERGE_MSG: "Merge branch 'x'" (merge) or "Merge remote-tracking branch 'origin/x'" (Update).
+export function parseMergeBranch(message = '') {
+  const match = /^Merge (?:remote-tracking )?branch '([^']+)'/.exec(message.split(/\r?\n/, 1)[0])
+  return match ? match[1] : null
+}

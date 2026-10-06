@@ -36,17 +36,23 @@ Advanced
 ## Walkthrough tasks
 
 1. Process wave 1 on site branches and Save per site.
-2. Merge site branches into `integration/wave-01`.
-3. Validate integration and merge into `main`.
+2. Save all changes first; Merge refuses to start with unsaved changes.
+   - Switch to `integration/wave-01`.
+   - In **Project Setup → Branch**, choose a site branch under **Merge Into Current Branch** and click **Merge**.
+   - Repeat for the other site branch.
+3. Validate integration, switch to `main` and merge `integration/wave-01` the same way.
 4. Repeat for wave 2 with the same discipline.
 5. Use Update before each integration merge to reduce divergence.
+   - If Update leaves conflicts, the **Merge in progress** banner appears above **Files To Save**.
+   - For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 6. Publish only after each wave integration passes review.
 
 ## Failure injection
 
 - Simulate late correction from Site B after wave 1 merged.
-- Apply correction on `site/b-wave-01` and forward-merge into
-  `integration/wave-02` with explicit note.
+- Apply correction on `site/b-wave-01`, Save, switch to `integration/wave-02`
+  and merge `site/b-wave-01` with **Merge Into Current Branch**, with explicit
+  note. If the same file changed on both, decide per file in the **Merge in progress** banner and click **Finish Merge**.
 
 ## Completion criteria
 

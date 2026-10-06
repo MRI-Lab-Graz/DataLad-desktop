@@ -5,7 +5,9 @@ import {
   mapGitStatusCode,
   mergeGitStatusPriority,
   parseGitStatusPorcelain,
-  buildGitStatusMap
+  buildGitStatusMap,
+  parseUnmerged,
+  parseMergeBranch
 } from '../src/datalad/status.js'
 
 test('normalizeGitStatusPath resolves renamed/copied paths to their destination', () => {
@@ -49,4 +51,24 @@ test('buildGitStatusMap exposes a path-to-status lookup', () => {
   const map = buildGitStatusMap('M  a.txt\n?? b.txt\n')
   assert.equal(map.get('a.txt'), 'modified')
   assert.equal(map.get('b.txt'), 'untracked')
+})
+
+test('parseUnmerged groups the stages of each conflicted path', () => {
+  const out =
+    '100644 aaa1 1\tfile.txt\x00100644 aaa2 2\tfile.txt\x00100644 aaa3 3\tfile.txt\x00' +
+    '160000 bbb2 2\tsub\x00160000 bbb3 3\tsub\x00' +
+    '100644 ccc1 1\t-odd name.txt\x00100644 ccc2 2\t-odd name.txt\x00'
+  const map = parseUnmerged(out)
+  assert.deepEqual([...map.keys()], ['file.txt', 'sub', '-odd name.txt'])
+  assert.equal(map.get('file.txt')['3'].sha, 'aaa3')
+  assert.equal(map.get('sub')['2'].mode, '160000')
+  assert.equal(map.get('-odd name.txt')['3'], undefined)
+  assert.equal(parseUnmerged('').size, 0)
+})
+
+test('parseMergeBranch reads the other branch from the merge message', () => {
+  assert.equal(parseMergeBranch("Merge branch 'feature/x'\n\n# Conflicts:\n#\ta.txt\n"), 'feature/x')
+  assert.equal(parseMergeBranch("Merge remote-tracking branch 'origin/main'\n"), 'origin/main')
+  assert.equal(parseMergeBranch('something else'), null)
+  assert.equal(parseMergeBranch(''), null)
 })

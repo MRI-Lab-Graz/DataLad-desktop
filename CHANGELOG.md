@@ -1,8 +1,22 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0.
 
-## Unreleased: Windows install script
+## 0.5.0
+
+Science workflow features, PRISM validation, a Windows install without admin rights, and the results of an independent security review. Releases are still unsigned (see `SECURITY.md`); check downloads against `SHA256SUMS.txt`.
+
+**Upgrade notes**
+- A folder the app did not create now asks once before anything inside it can run (folder trust). Existing trust records are kept.
+- Your own git hooks no longer run in projects opened in the app; only git-annex's stock hooks do.
+- Publish now names its remote explicitly, which fixes Publish on Windows, where marked versions were never sent.
+
+### PRISM projects
+
+- A project with `project.json` in its root is a PRISM project and gets a PRISM badge. Save is allowed only when `prism-validator` reports the whole project valid; the save that adds `project.json` is exempt. If the validator crashes, times out, gives unreadable output or is missing, Save is blocked. The check runs in the main process, and the validated files are exactly what gets committed.
+- Setup → PRISM Validator installs the validator into a private environment made by the bundled uv (pinned, SHA-256 verified). A failed or cancelled install leaves nothing half-built, and errors are shown in plain language.
+
+### Windows install script
 
 A second way to install on Windows that needs no administrator rights and no code-signing certificate. The NSIS installer is unchanged.
 
@@ -10,7 +24,15 @@ A second way to install on Windows that needs no administrator rights and no cod
 - git-annex is pinned to a versioned file on DataLad's mirror, not the author's moving `current/` URL; a CI check reports when a pin no longer matches its file or a newer version exists.
 - CI: `install-script-smoke.yml` (manual and release tags) runs `install.cmd` on a clean Windows runner, drives the installed app and uninstalls.
 
-## Unreleased: science workflow
+### Merge branches
+
+- **Merge Into Current Branch** in Project Setup: pick a local branch and click **Merge**. Save your changes first. It does a fast-forward or a merge commit.
+- When the same file changed on both branches, the merge stops in a **Merge in progress** banner: per file choose **Keep this branch's version**, **Keep X's version** or **I fixed it myself**, then **Finish Merge** (or **Cancel Merge**). Conflicts left by Update use the same banner.
+- Installed subdatasets are moved to the merged version when that is a safe fast-forward of a checkout with no unsaved work; otherwise a notice says they were not moved.
+- Merge, Finish Merge and Update commit without running the PRISM validator, so a merge in a PRISM project is not validated until the next Save.
+- Refusals are in plain language: detached HEAD, a merge already open, unrelated histories, a new file in the way.
+
+### Science workflow
 
 Six additions for the normal cycle of collect, analyse, save, share and publish. The app stays a small, curated tool: anything else is still one terminal command away.
 
@@ -23,7 +45,7 @@ Six additions for the normal cycle of collect, analyse, save, share and publish.
 - **Security** (see `SECURITY.md`): Add a Remote with a local path is trust-checked; remotes and versions are named, never paths or URLs; the `ext::` transport is off; URL passwords and tokens are hidden and refused in Add a Remote; a backup folder cannot be a whole drive or the home folder. A test now derives which commands write to a remote and fails if one escapes the trust re-check.
 - Fixed: a version or remote name ending in a dot, a relative or unreadable backup folder, a half-made backup folder that blocked a retry, and the Stop button not covering the version push.
 
-## Unreleased: security hardening
+### Security hardening
 
 Result of an independent security review (see `SECURITY.md` for what is protected and what is not).
 

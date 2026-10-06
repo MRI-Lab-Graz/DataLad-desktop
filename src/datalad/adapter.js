@@ -1,10 +1,10 @@
 import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
-import { mapCommandError } from './errors.js'
+import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
 import { redactUrlCredentials } from './redact.js'
 import { ProcessRunner } from './process-runner.js'
-import { parseGitStatusPorcelain } from './status.js'
+import { parseGitStatusPorcelain, parseUnmerged, parseMergeBranch } from './status.js'
 import {
   assertCommandRequest,
   buildCommandResult
@@ -22,6 +22,9 @@ export const CURATED_COMMANDS = new Set([
   'createBranch',
   'switchBranch',
   'createBranchAt',
+  'merge',
+  'finishMerge',
+  'abortMerge',
   'restoreFileFromCommit',
   'discardChanges',
   'unlock',
@@ -33,6 +36,7 @@ export const CURATED_COMMANDS = new Set([
 ])
 // What `git init --bare` creates: the only things cleaned up after a failed folder-remote setup.
 const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
+const MAX_SUBDATASET_DEPTH = 8 // symlinked or hostile nesting cannot recurse forever
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
@@ -44,6 +48,18 @@ function assertSafeRemoteName(name) {
     throw new Error(`Invalid remote name: ${name}. Use letters, digits, dot, dash or underscore.`)
   }
 }
+// "I fixed it myself" looks for leftover markers in text files up to this size; a bigger file is taken at its word.
+const MAX_MARKER_SCAN_BYTES = 10 * 1024 * 1024
+async function hasConflictMarkers(file) {
+  const info = await lstat(file).catch(() => null)
+  if (!info?.isFile() || info.size > MAX_MARKER_SCAN_BYTES) {
+    return false
+  }
+  const content = await readFile(file, 'utf8')
+  // Both ends: a lone ======= is an ordinary Markdown heading underline.
+  return /^<{7}( |$)/m.test(content) && /^>{7}( |$)/m.test(content)
+}
+
 const BIDS_MARKER_FILE = 'dataset_description.json'
 // Detection probes must answer promptly; a hung one falls back to the
 // .datalad/config marker instead of stalling project open. Kept below the e2e
@@ -243,6 +259,88 @@ export class DataLadAdapter {
       .map((entry) => entry.name)
   }
 
+  // A merge records the other branch's subdataset commits but leaves each checkout where it was; a later Save would
+  // record the old checkout again and undo the merge. Move each installed subdataset forward when that is a plain
+  // fast-forward of a clean checkout, and say so when it is not. Local only; nothing is fetched.
+  async syncSubdatasets(projectPath, depth = 0) {
+    const warnings = []
+    if (depth > MAX_SUBDATASET_DEPTH) {
+      return warnings
+    }
+    const status = await this.runner.run('git', ['-C', projectPath, 'submodule', 'status'])
+    if (status.failed) {
+      return warnings
+    }
+    for (const line of (status.stdout ?? '').split(/\r?\n/)) {
+      const match = /^\+([0-9a-f]{40,64}) (.+?)(?: \([^)]*\))?$/.exec(line) // "+": checked out commit differs from the recorded one
+      if (!match || !isSafeRelativeSubdatasetPath(match[2])) {
+        continue
+      }
+      const relative = match[2]
+      const sub = join(projectPath, relative)
+      const recorded = await this.runner.run('git', ['-C', projectPath, 'rev-parse', `HEAD:${relative}`])
+      const dirty = await this.runner.run('git', ['-C', sub, 'status', '--porcelain', '--untracked-files=no'])
+      const moved =
+        !recorded.failed &&
+        !dirty.failed &&
+        !dirty.stdout.trim() &&
+        !(await this.runner.run('git', ['-C', sub, 'merge', '--ff-only', recorded.stdout.trim()])).failed
+      if (moved) {
+        warnings.push(...(await this.syncSubdatasets(sub, depth + 1)))
+      } else {
+        warnings.push({
+          code: 'SUBDATASET_NOT_MOVED',
+          severity: 'warning',
+          message: `Subdataset ${relative} was not moved to the merged version (it has unsaved work or commits of its own, or that version is not on this computer yet).`
+        })
+      }
+    }
+    return warnings
+  }
+
+  // One file of an open merge: keep this branch's version, the other branch's, or accept what the researcher edited.
+  // A path is only acted on when git lists it as unmerged, so it can never point outside the project.
+  async resolveConflict(projectPath, path, side) {
+    await this.#ensureGitProject(projectPath)
+    if (!['ours', 'theirs', 'manual'].includes(side)) {
+      throw new Error(`Invalid side: ${side}`)
+    }
+    if (typeof path !== 'string' || !path.trim()) {
+      throw new Error('Choose a file first.')
+    }
+    const git = async (...args) => {
+      const result = await this.runner.run('git', ['-C', projectPath, ...args])
+      if (result.failed) {
+        throw new Error(`Could not resolve ${path}: ${(result.stderr || result.stdout || 'unknown error').trim()}`)
+      }
+      return result
+    }
+
+    const stages = parseUnmerged((await git('ls-files', '-u', '-z')).stdout ?? '').get(path)
+    if (!stages) {
+      throw new Error(`${path} is not in conflict.`)
+    }
+
+    if (side === 'manual') {
+      if (await hasConflictMarkers(join(projectPath, path))) {
+        throw new Error(`${path} still contains conflict markers (<<<<<<< and >>>>>>>). Edit the file, then try again.`)
+      }
+      await git('add', '-A', '--', path)
+      return { ok: true, path, side }
+    }
+
+    const chosen = stages[side === 'ours' ? '2' : '3']
+    if (!chosen) {
+      await git('rm', '-q', '-f', '--', path) // that side deleted the file
+    } else if (chosen.mode === '160000') {
+      await git('update-index', '--cacheinfo', `160000,${chosen.sha},${path}`) // a subdataset: record that side's commit
+    } else {
+      await git('checkout', `--${side}`, '--', path)
+      await git('add', '--', path)
+    }
+    return { ok: true, path, side }
+  }
+
   // Idempotent pre-step for nesting a folder that may already be tracked in
   // the parent's history (a flat remote clone, or a pre-existing project
   // opened from disk) — as opposed to the loose-untracked-files case, where
@@ -295,6 +393,13 @@ export class DataLadAdapter {
 
     assertCommandRequest(commandName, request)
 
+    if (commandName === 'merge') {
+      const refused = await this.#mergePreflight(request.projectPath, runOptions)
+      if (refused) {
+        return refused
+      }
+    }
+
     const commandSpec = this.#buildCommand(commandName, request)
     const raw = await this.runner.run(commandSpec.command, commandSpec.args, {
       ...commandSpec.options,
@@ -310,10 +415,61 @@ export class DataLadAdapter {
     const warnings = this.#extractCommandWarnings(commandName, result)
 
     if (!result.failed) {
+      if (commandName === 'merge' || commandName === 'finishMerge') {
+        warnings.push(...(await this.syncSubdatasets(request.projectPath)))
+      }
       return buildCommandResult(commandName, result, null, warnings)
     }
 
+    // git exits 1 when a merge stops on conflicts. That is a state to resolve, not a failure; MERGE_HEAD (not git's
+    // text, which is translated) says which it is.
+    if (commandName === 'merge' && (await this.#mergeInProgress(request.projectPath, runOptions))) {
+      return { ...buildCommandResult(commandName, { ...result, failed: false }, null, warnings), conflicts: true }
+    }
+
     return buildCommandResult(commandName, result, mapCommandError(commandName, result), warnings)
+  }
+
+  async #mergeInProgress(projectPath, runOptions) {
+    const head = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '-q', '--verify', 'MERGE_HEAD'], runOptions)
+    return !head.failed
+  }
+
+  // One extra `rev-parse` per refresh tells whether a merge is open; the rest is read only when it matters.
+  async #readMergeState(projectPath, conflictCount) {
+    const mergeInProgress = await this.#mergeInProgress(projectPath)
+    let mergeBranch = null
+    let unmerged = new Map()
+    if (mergeInProgress) {
+      const where = await this.runner.run('git', ['-C', projectPath, 'rev-parse', '--git-path', 'MERGE_MSG'])
+      if (!where.failed) {
+        const messagePath = where.stdout.trim()
+        const message = await readFile(isAbsolute(messagePath) ? messagePath : join(projectPath, messagePath), 'utf8').catch(() => '')
+        mergeBranch = parseMergeBranch(message)
+      }
+    }
+    if (mergeInProgress || conflictCount > 0) {
+      const listed = await this.runner.run('git', ['-C', projectPath, 'ls-files', '-u', '-z'])
+      if (!listed.failed) {
+        unmerged = parseUnmerged(listed.stdout ?? '')
+      }
+    }
+    return { mergeInProgress, mergeBranch, unmerged }
+  }
+
+  // A merge needs a branch to merge into and no other merge open. Returns a finished refusal, or null to go ahead.
+  async #mergePreflight(projectPath, runOptions) {
+    const head = await this.runner.run('git', ['-C', projectPath, 'symbolic-ref', '-q', 'HEAD'], runOptions)
+    if (head.cancelled) {
+      return buildCommandResult('merge', head, mapCommandError('merge', head))
+    }
+    if (head.failed) {
+      return buildCommandResult('merge', head, MERGE_PREFLIGHT_ERRORS.DETACHED_HEAD)
+    }
+    if (await this.#mergeInProgress(projectPath, runOptions)) {
+      return buildCommandResult('merge', { ...head, failed: true }, MERGE_PREFLIGHT_ERRORS.MERGE_IN_PROGRESS)
+    }
+    return null
   }
 
   // Recovery action offered alongside the REPO_LOCKED error (errors.js):
@@ -672,10 +828,22 @@ export class DataLadAdapter {
       })
     )
 
+    const merge = await this.#readMergeState(projectPath, parsed.conflictCount)
+    const withSides = files.map((file) => {
+      const stages = merge.unmerged.get(file.path)
+      return file.conflicted && stages ? { ...file, sides: { ours: Boolean(stages['2']), theirs: Boolean(stages['3']) } } : file
+    })
+
     return {
       projectPath,
       ...parsed,
-      files
+      files: withSides,
+      conflicts: [...merge.unmerged].map(([path, stages]) => ({
+        path,
+        sides: { ours: Boolean(stages['2']), theirs: Boolean(stages['3']) }
+      })),
+      mergeInProgress: merge.mergeInProgress,
+      mergeBranch: merge.mergeBranch
     }
   }
 
@@ -1291,6 +1459,27 @@ export class DataLadAdapter {
           command: 'git',
           args: ['-C', projectPath, 'checkout', '-b', branchName, startPoint],
           options: { cwd: projectPath }
+        }
+      }
+      case 'merge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'merge', '--no-edit', '--', request.branchName],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'finishMerge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'commit', '--no-edit'],
+          options: { cwd: request.projectPath }
+        }
+      }
+      case 'abortMerge': {
+        return {
+          command: 'git',
+          args: ['-C', request.projectPath, 'merge', '--abort'],
+          options: { cwd: request.projectPath }
         }
       }
       case 'restoreFileFromCommit': {
