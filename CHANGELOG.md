@@ -11,6 +11,10 @@ Science workflow features, PRISM validation, a Windows install without admin rig
 - Your own git hooks no longer run in projects opened in the app; only git-annex's stock hooks do.
 - Publish now names its remote explicitly, which fixes Publish on Windows, where marked versions were never sent.
 
+### Documentation
+
+- **Read the Docs:** the install and first-launch material now lives in an Install guide at <https://datalad-desktop.readthedocs.io/> (Windows script install, macOS and Windows first-run warnings, your name and email, the folder trust question, PRISM projects, running from source, network shares); the README links to it. Tutorials 03–06 describe the real Merge buttons.
+
 ### PRISM projects
 
 - A project with `project.json` in its root is a PRISM project and gets a PRISM badge. Save is allowed only when `prism-validator` reports the whole project valid; the save that adds `project.json` is exempt. If the validator crashes, times out, gives unreadable output or is missing, Save is blocked. The check runs in the main process, and the validated files are exactly what gets committed.
