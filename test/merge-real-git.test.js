@@ -141,3 +141,95 @@ test('the status of an ordinary project says no merge is open', async () => {
   assert.equal(status.mergeInProgress, false)
   assert.equal(status.mergeBranch, null)
 })
+
+const resolve = (r, path, side) => r.adapter.resolveConflict(r.dir, path, side)
+const finish = (r) => r.adapter.runCommand('finishMerge', { projectPath: r.dir })
+
+test('keeping this branch\'s version, then finishing, saves the merge with that text', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  await resolve(r, 'file.txt', 'ours')
+  const done = await finish(r)
+  assert.equal(done.ok, true, done.stderr)
+  assert.equal(await text(r), 'main\n')
+  assert.equal((await r.adapter.getWorkingTreeStatus(r.dir)).mergeInProgress, false)
+})
+
+test('keeping the other branch\'s version', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  await resolve(r, 'file.txt', 'theirs')
+  assert.equal((await finish(r)).ok, true)
+  assert.equal(await text(r), 'feature\n')
+})
+
+test('a file with spaces and a leading dash resolves like any other', async () => {
+  const r = await conflictingRepo('-odd name.txt')
+  await merge(r)
+  await resolve(r, '-odd name.txt', 'theirs')
+  assert.equal((await finish(r)).ok, true)
+  assert.equal(await text(r, '-odd name.txt'), 'feature\n')
+})
+
+test('finishing with a file still undecided is refused in plain language', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  const done = await finish(r)
+  assert.equal(done.ok, false)
+  assert.equal(done.userError.code, 'MERGE_UNRESOLVED')
+})
+
+test('when the other branch deleted the file, keeping its version removes it; keeping ours keeps it', async () => {
+  for (const [side, expectFile] of [['theirs', false], ['ours', true]]) {
+    const r = await makeRepo()
+    await r.write('file.txt', 'base\n')
+    await r.write('other.txt', 'o\n')
+    r.git('add', '--', '.')
+    r.git('commit', '-qm', 'base')
+    r.git('checkout', '-qb', 'feature')
+    r.git('rm', '-q', '--', 'file.txt')
+    r.git('commit', '-qm', 'delete')
+    r.git('checkout', '-q', 'main')
+    await r.write('file.txt', 'edited on main\n')
+    r.git('commit', '-qam', 'edit')
+    await merge(r)
+    const status = await r.adapter.getWorkingTreeStatus(r.dir)
+    assert.deepEqual(status.files.find((f) => f.path === 'file.txt').sides, { ours: true, theirs: false })
+    await resolve(r, 'file.txt', side)
+    assert.equal((await finish(r)).ok, true)
+    assert.equal(r.git('ls-files', '--', 'file.txt').trim() === 'file.txt', expectFile)
+  }
+})
+
+test('"I fixed it myself" is refused while conflict markers remain, accepted once they are gone', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  await assert.rejects(resolve(r, 'file.txt', 'manual'), /conflict markers/)
+  await r.write('file.txt', 'combined by hand\n')
+  await resolve(r, 'file.txt', 'manual')
+  assert.equal((await finish(r)).ok, true)
+  assert.equal(await text(r), 'combined by hand\n')
+})
+
+test('a Markdown file with a ======= underline is not mistaken for a conflict', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  await r.write('file.txt', 'Title\n=======\nbody\n')
+  await resolve(r, 'file.txt', 'manual')
+})
+
+test('only a file that is in conflict can be resolved, and only with a known side', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  await assert.rejects(resolve(r, 'nope.txt', 'ours'), /not in conflict/)
+  await assert.rejects(resolve(r, 'file.txt', 'both'), /Invalid side/)
+})
+
+test('Cancel Merge puts the project back as it was', async () => {
+  const r = await conflictingRepo()
+  await merge(r)
+  const aborted = await r.adapter.runCommand('abortMerge', { projectPath: r.dir })
+  assert.equal(aborted.ok, true, aborted.stderr)
+  assert.equal(await text(r), 'main\n')
+  assert.equal((await r.adapter.getWorkingTreeStatus(r.dir)).mergeInProgress, false)
+})

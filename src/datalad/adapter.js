@@ -47,6 +47,18 @@ function assertSafeRemoteName(name) {
     throw new Error(`Invalid remote name: ${name}. Use letters, digits, dot, dash or underscore.`)
   }
 }
+// "I fixed it myself" looks for leftover markers in text files up to this size; a bigger file is taken at its word.
+const MAX_MARKER_SCAN_BYTES = 10 * 1024 * 1024
+async function hasConflictMarkers(file) {
+  const info = await lstat(file).catch(() => null)
+  if (!info?.isFile() || info.size > MAX_MARKER_SCAN_BYTES) {
+    return false
+  }
+  const content = await readFile(file, 'utf8')
+  // Both ends: a lone ======= is an ordinary Markdown heading underline.
+  return /^<{7}( |$)/m.test(content) && /^>{7}( |$)/m.test(content)
+}
+
 const BIDS_MARKER_FILE = 'dataset_description.json'
 // Detection probes must answer promptly; a hung one falls back to the
 // .datalad/config marker instead of stalling project open. Kept below the e2e
@@ -244,6 +256,49 @@ export class DataLadAdapter {
       .filter((entry) => entry.isDirectory() && !registered.has(entry.name))
       .filter((entry) => BIDS_SUBJECT_DIR_PATTERN.test(entry.name) || BIDS_TOP_LEVEL_DIR_NAMES.includes(entry.name))
       .map((entry) => entry.name)
+  }
+
+  // One file of an open merge: keep this branch's version, the other branch's, or accept what the researcher edited.
+  // A path is only acted on when git lists it as unmerged, so it can never point outside the project.
+  async resolveConflict(projectPath, path, side) {
+    await this.#ensureGitProject(projectPath)
+    if (!['ours', 'theirs', 'manual'].includes(side)) {
+      throw new Error(`Invalid side: ${side}`)
+    }
+    if (typeof path !== 'string' || !path.trim()) {
+      throw new Error('Choose a file first.')
+    }
+    const git = async (...args) => {
+      const result = await this.runner.run('git', ['-C', projectPath, ...args])
+      if (result.failed) {
+        throw new Error(`Could not resolve ${path}: ${(result.stderr || result.stdout || 'unknown error').trim()}`)
+      }
+      return result
+    }
+
+    const stages = parseUnmerged((await git('ls-files', '-u', '-z')).stdout ?? '').get(path)
+    if (!stages) {
+      throw new Error(`${path} is not in conflict.`)
+    }
+
+    if (side === 'manual') {
+      if (await hasConflictMarkers(join(projectPath, path))) {
+        throw new Error(`${path} still contains conflict markers (<<<<<<< and >>>>>>>). Edit the file, then try again.`)
+      }
+      await git('add', '-A', '--', path)
+      return { ok: true, path, side }
+    }
+
+    const chosen = stages[side === 'ours' ? '2' : '3']
+    if (!chosen) {
+      await git('rm', '-q', '-f', '--', path) // that side deleted the file
+    } else if (chosen.mode === '160000') {
+      await git('update-index', '--cacheinfo', `160000,${chosen.sha},${path}`) // a subdataset: record that side's commit
+    } else {
+      await git('checkout', `--${side}`, '--', path)
+      await git('add', '--', path)
+    }
+    return { ok: true, path, side }
   }
 
   // Idempotent pre-step for nesting a folder that may already be tracked in

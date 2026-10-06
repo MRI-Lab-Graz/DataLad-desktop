@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   findUnnestedBidsCandidates: (projectPath) => ipcRenderer.invoke('adapter:findUnnestedBidsCandidates', projectPath),
   untrackPath: (projectPath, relativePath) =>
     ipcRenderer.invoke('adapter:untrackPath', { projectPath, relativePath }),
+  resolveConflict: (projectPath, path, side) =>
+    ipcRenderer.invoke('adapter:resolveConflict', { projectPath, path, side }),
   runCommand: (commandName, request, runId) =>
     ipcRenderer.invoke('adapter:runCommand', {
       commandName,

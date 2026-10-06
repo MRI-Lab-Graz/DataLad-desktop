@@ -262,6 +262,11 @@ handle('adapter:untrackPath', async (_event, payload = {}) => {
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
 })
 
+handle('adapter:resolveConflict', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.resolveConflict(payload.projectPath, payload.path, payload.side)
+})
+
 // create/clone targets do not exist yet (or are empty); see the trust rules in the handler below.
 const COMMANDS_CREATING_A_NEW_PROJECT = new Set(['cloneInstall', 'createProject'])
 // Everything that writes to a remote: a local-path remote runs its own hooks, so trust is re-checked first.
