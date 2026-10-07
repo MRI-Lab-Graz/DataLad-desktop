@@ -11,3 +11,8 @@ test('install guide leads with the macOS one-liner and also documents download-t
   assert.match(doc, /rm -rf "\$HOME\/Applications\/DataLad Desktop\.app"/)
   assert.match(doc, /Apple silicon/)
 })
+
+test('README download section names the macOS install.sh', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
+  assert.match(readme, /\*\*macOS\*\* `install\.sh`/)
+})
