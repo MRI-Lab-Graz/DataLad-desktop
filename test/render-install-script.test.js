@@ -56,3 +56,15 @@ test('the CLI hashes the zip and writes the rendered script', async () => {
   assert.ok(rendered.includes(`$AppZipSha256 = '${expected}'`))
   assert.ok(rendered.includes("$AppVersion = '4.5.6'"))
 })
+
+test('the CLI renders a template given as the 4th argument', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dlad-render-'))
+  const zip = join(dir, 'app.zip')
+  const tpl = join(dir, 'tpl.sh')
+  const out = join(dir, 'install.sh')
+  await writeFile(zip, 'zip bytes')
+  await writeFile(tpl, "V='__VERSION__'\nH='__ZIP_SHA256__'\n")
+  execFileSync(process.execPath, ['scripts/render-install-script.mjs', '1.0.0', zip, out, tpl], { cwd: new URL('..', import.meta.url) })
+  const expected = createHash('sha256').update('zip bytes').digest('hex').toUpperCase()
+  assert.equal(await readFile(out, 'utf8'), `V='1.0.0'\nH='${expected}'\n`)
+})
