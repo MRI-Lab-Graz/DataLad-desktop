@@ -12,7 +12,8 @@ Most researchers should just download the ready-to-run app:
      (installer, needs admin rights) or `DataLad Desktop *.exe` (portable, no admin rights or install
      step — just run it)
    - **Linux:** the `.AppImage` file (make it executable, then run it)
-2. Open the downloaded file and follow the install prompts (installer), or just run it (portable).
+2. Follow your platform's steps: run the script (macOS `install.sh`, Windows `install.cmd`), open the installer, or just
+   run the portable build or AppImage.
 3. Launch **DataLad Desktop** like any other app.
 
 > **Windows installer:** also checks for Git, Python 3, DataLad, and git-annex and installs any
@@ -20,7 +21,10 @@ Most researchers should just download the ready-to-run app:
 > checksum is verified before it runs). If a download is blocked by your network, install the
 > missing piece manually — the app's diagnostics screen will tell you exactly what's still missing.
 >
-> **Windows portable, macOS, and Linux:** these builds don't install anything for you. To use
+> **macOS:** the `install.sh` script installs git-annex and DataLad with Homebrew; the .dmg doesn't install them, so
+> use the script or install them yourself (see below).
+>
+> **Windows portable and Linux:** these builds don't install anything for you. To use
 > DataLad-specific actions (Get Data, Update, Publish) on a project, Git, DataLad, and git-annex
 > need to be installed on your system first. See [datalad.org](https://www.datalad.org/) for
 > installation instructions for your platform. The app's diagnostics screen tells you what's
@@ -48,7 +52,7 @@ changes. IT departments can pre-trust locations; see [SECURITY.md](https://githu
 ## macOS: install with a script
 
 For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper warning (a file fetched with `curl`
-is not quarantined). Open **Terminal** and paste (replace `0.5.1` with the version you want):
+is not quarantined). Open **Terminal** and paste (this is the 0.5.1 link; for another version, change the `v0.5.1` in the address):
 
 ```bash
 curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.1/install.sh | bash
@@ -59,14 +63,16 @@ Prefer to read it first? Download `install.sh` from the release page, then run `
 The script checks the app's SHA-256 against the value baked into it, installs the app to `~/Applications`, and
 installs git-annex and DataLad with Homebrew when they are missing. If Homebrew itself is missing it asks before
 running Homebrew's own installer (which asks for your password). Run the script again any time to update or repair.
-The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs: use the `.dmg`.
+The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs: use the `.dmg` and install git-annex and DataLad
+yourself (for example with `brew install git-annex datalad`).
 
 To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's packages stay).
 
 ## macOS: "app can't be opened" warning
 
-Release builds aren't signed with an Apple Developer certificate yet, so
-Gatekeeper blocks the first launch. **Right-click** (or Control-click)
+This appears for the `.dmg` (and any browser download), not for the
+[script install above](#macos-install-with-a-script). Release builds aren't signed with an Apple Developer
+certificate yet, so Gatekeeper blocks the first launch. **Right-click** (or Control-click)
 **DataLad Desktop.app** → **Open** → **Open** in the dialog (if the dialog only
 offers "Done", use **System Settings → Privacy & Security → Open Anyway**
 instead). Only needed once. Or from a terminal:
