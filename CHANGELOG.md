@@ -4,6 +4,8 @@ Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0.
 
 ## Unreleased
 
+- BIDS projects are now checked before every save, like PRISM projects: a folder with a `dataset_description.json` and no `project.json` is validated with the BIDS validator, which comes with the PRISM validator install (prism-validator 1.20.0). A BIDS check that cannot run blocks the save instead of passing it.
+- Fix: the Save check for PRISM projects could not read the validator's report and stopped every save with "could not run"; it now reads the real report.
 - macOS install script for Apple silicon: one Terminal command downloads the release zip, checks its SHA-256, installs the app to `~/Applications` (no Gatekeeper warning) and installs git-annex and DataLad with Homebrew when missing. See the Install guide.
 - The app now also looks for git-annex and DataLad in `/opt/homebrew/bin`, `/usr/local/bin` and `/opt/local/bin`, so a launch from Finder or the Dock finds Homebrew-installed tools.
 

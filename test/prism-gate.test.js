@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gateSave, interpretReport, isBidsProject, isConversionSave, isPrismProject } from '../src/datalad/prism-gate.js'
+import { gateSave, inspectProject, interpretReport, isBidsProject, isConversionSave, isPrismProject } from '../src/datalad/prism-gate.js'
 
 test('isPrismProject is true only when project.json is in the root', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'prism '))
@@ -264,4 +264,34 @@ test('a missing validator blocks a BIDS project with the install hint too', asyn
   const runner = fakeRunner({ validator: () => assert.fail('must not run') })
   const out = await gate(runner, await bidsDir(), { checkValidator: async () => false })
   assert.equal(out.result.userError.code, 'PRISM_VALIDATOR_MISSING')
+})
+
+// ---- what the UI is told about a project (display only; the gate itself decides in the main process) ----
+test('inspectProject: PRISM, BIDS-only and plain projects', async () => {
+  const runner = fakeRunner({ gitExit: 128 })
+  const checkValidator = async () => true
+  assert.deepEqual(
+    await inspectProject({ runner, projectPath: await prismDir(), checkValidator }),
+    { kind: 'prism', validatorReady: true, introducesPrism: true }
+  )
+  assert.deepEqual(
+    await inspectProject({ runner, projectPath: await bidsDir(), checkValidator }),
+    { kind: 'bids', validatorReady: true, introducesPrism: false }
+  )
+  const plain = await mkdtemp(join(tmpdir(), 'plain '))
+  assert.deepEqual(
+    await inspectProject({ runner, projectPath: plain, checkValidator }),
+    { kind: null, validatorReady: false, introducesPrism: false }
+  )
+})
+
+test('inspectProject reports a missing validator', async () => {
+  const out = await inspectProject({ runner: fakeRunner(), projectPath: await bidsDir(), checkValidator: async () => false })
+  assert.equal(out.validatorReady, false)
+})
+
+test('interpretReport: an error entry without a message or path still blocks and does not throw', () => {
+  const out = interpretReport(JSON.stringify({ valid: false, issues: [{ severity: 'ERROR', code: 'X1' }], summary: { errors: 1 } }))
+  assert.equal(out.verdict, 'invalid')
+  assert.equal(out.errors.length, 1)
 })

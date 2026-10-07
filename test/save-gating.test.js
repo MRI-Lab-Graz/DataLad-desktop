@@ -98,3 +98,9 @@ test('Save is disabled while a merge is open, whatever else is true', () => {
   assert.equal(gating.guidance.text, 'A merge is in progress. Finish or cancel it first.')
   assert.equal(computeSaveGating({ hasMessage: true, hasSelection: true, hasConflicts: false, hasChanges: true }).disabled, false)
 })
+
+test('a BIDS project saves everything after a check, with BIDS wording and no selection needed', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true, prismMode: 'bids' })
+  assert.equal(gating.disabled, false)
+  assert.match(gating.guidance.text, /BIDS project: your data is checked before every save/)
+})

@@ -27,7 +27,9 @@ Most researchers should just download the ready-to-run app:
 > missing.
 
 **PRISM projects** (a `project.json` in the project folder) get a PRISM badge, and Save only goes through when
-the PRISM validator reports the whole project valid; the save that adds `project.json` is the exception. The
+the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
+`project.json` is the exception. **BIDS projects** (a `dataset_description.json` and no `project.json`) are checked
+the same way before every save, with the BIDS validator. Both come with the one validator install, so there is no extra install. Files that are annexed but not downloaded do not count as errors. The
 validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically.
 
 ## First launch: your name and email

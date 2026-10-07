@@ -2,7 +2,7 @@ import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const PRISM_MARKER = 'project.json'
-export const BIDS_MARKER = 'dataset_description.json'
+const BIDS_MARKER = 'dataset_description.json'
 const MAX_LISTED_ERRORS = 10
 const DEFAULT_TIMEOUT_MS = 300000
 
@@ -30,13 +30,7 @@ export async function isConversionSave({ runner, projectPath }) {
   throw new Error(`git could not check ${PRISM_MARKER}: ${result.stderr || `exit ${result.exitCode}`}`)
 }
 
-const oneLine = (entry) => {
-  if (typeof entry === 'string') return entry
-  const where = entry?.file_path ?? entry?.path ?? entry?.file
-  const what = (entry?.message ?? entry?.description)?.replace(/\s+/g, ' ').trim()
-  if (where && what) return `${where}: ${what}`
-  return what ?? JSON.stringify(entry)
-}
+const oneLine = (issue) => `${issue.file_path ?? issue.code ?? 'problem'}: ${String(issue.message ?? '').replace(/\s+/g, ' ').trim()}`
 
 // prism-validator >= 1.20 `--format json`: { valid, issues: [{ code, severity, message, file_path }], summary: { errors } }.
 // Warnings never block. PRISM902 means the BIDS check could not run: the data was never judged.
@@ -80,11 +74,13 @@ const unchecked = (technicalDetails, label = 'PRISM') =>
 export async function gateSave({ runner, projectPath, validatorBin, checkValidator, signal, onOutput, timeoutMs = DEFAULT_TIMEOUT_MS }) {
   let root
   let prism
+  let label = 'PRISM'
   try {
     root = await repoRoot({ runner, projectPath })
     if (!root) return { allow: true, saveAll: false }
     prism = await isPrismProject(root)
     if (!prism && !(await isBidsProject(root))) return { allow: true, saveAll: false }
+    if (!prism) label = 'BIDS'
 
     // The save that introduces project.json is exempt, but it must really commit it: save everything,
     // and refuse while git ignores the file (it could then never enter HEAD and the exemption would never end).
@@ -95,9 +91,8 @@ export async function gateSave({ runner, projectPath, validatorBin, checkValidat
       return { allow: true, saveAll: true }
     }
   } catch (error) {
-    return unchecked(String(error.message), prism === false ? 'BIDS' : 'PRISM')
+    return unchecked(String(error.message), label)
   }
-  const label = prism ? 'PRISM' : 'BIDS'
 
   if (!(await checkValidator())) {
     return blocked(
@@ -126,4 +121,15 @@ export async function gateSave({ runner, projectPath, validatorBin, checkValidat
     )
   }
   return unchecked([report.reason, run.stderr].filter(Boolean).join('\n'), label)
+}
+
+// For the UI badge and Save hints only: the gate above decides on its own and never trusts this.
+export async function inspectProject({ runner, projectPath, checkValidator }) {
+  const prism = await isPrismProject(projectPath)
+  if (!prism && !(await isBidsProject(projectPath))) {
+    return { kind: null, validatorReady: false, introducesPrism: false }
+  }
+  const validatorReady = await checkValidator()
+  const introducesPrism = prism ? await isConversionSave({ runner, projectPath }).catch(() => false) : false
+  return { kind: prism ? 'prism' : 'bids', validatorReady, introducesPrism }
 }
