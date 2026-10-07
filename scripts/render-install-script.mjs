@@ -26,11 +26,11 @@ const sha256OfFile = (path) =>
     createReadStream(path).on('data', (chunk) => hash.update(chunk)).on('error', reject).on('end', () => resolve(hash.digest('hex')))
   })
 
-async function main([version, zipPath, outPath]) {
+async function main([version, zipPath, outPath, templatePath]) {
   if (!version || !zipPath || !outPath) {
-    throw new Error('Usage: node scripts/render-install-script.mjs <version> <zip> <out>')
+    throw new Error('Usage: node scripts/render-install-script.mjs <version> <zip> <out> [template]')
   }
-  const template = await readFile(new URL('./windows/install.ps1', import.meta.url), 'utf8')
+  const template = await readFile(templatePath ?? new URL('./windows/install.ps1', import.meta.url), 'utf8')
   await writeFile(outPath, renderInstallScript(template, { version, zipSha256: await sha256OfFile(zipPath) }))
 }
 

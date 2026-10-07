@@ -6,7 +6,7 @@ Most researchers should just download the ready-to-run app:
 
 1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases)
    and download the build for your system:
-   - **macOS:** the `.dmg` file
+   - **macOS (Apple silicon):** `install.sh` (see [macOS: install with a script](#macos-install-with-a-script)) or the `.dmg` file
    - **Windows:** `install.cmd` + `install.ps1` (script install, no admin rights; see
      [Windows: install with a script](#windows-install-with-a-script)), `DataLad Desktop Setup *.exe`
      (installer, needs admin rights) or `DataLad Desktop *.exe` (portable, no admin rights or install
@@ -44,6 +44,24 @@ and scripts that git or DataLad would run. So the first time you open one, the a
 asks whether to trust it: **Trust this folder**, **Trust everything inside this folder** (handy for a lab share)
 or **Cancel**. Nothing from the folder runs before you answer. It asks again only if something in the folder
 changes. IT departments can pre-trust locations; see [SECURITY.md](https://github.com/MRI-Lab-Graz/DataLad-desktop/blob/main/SECURITY.md).
+
+## macOS: install with a script
+
+For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper warning (a file fetched with `curl`
+is not quarantined). Open **Terminal** and paste (replace `0.5.1` with the version you want):
+
+```bash
+curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.1/install.sh | bash
+```
+
+Prefer to read it first? Download `install.sh` from the release page, then run `bash install.sh`.
+
+The script checks the app's SHA-256 against the value baked into it, installs the app to `~/Applications`, and
+installs git-annex and DataLad with Homebrew when they are missing. If Homebrew itself is missing it asks before
+running Homebrew's own installer (which asks for your password). Run the script again any time to update or repair.
+The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs: use the `.dmg`.
+
+To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's packages stay).
 
 ## macOS: "app can't be opened" warning
 
