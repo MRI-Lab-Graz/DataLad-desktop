@@ -1,0 +1,36 @@
+{
+  "valid": false,
+  "issues": [
+    {
+      "code": "BIDS_README_FILE_SMALL",
+      "severity": "WARNING",
+      "message": "[BIDS] README_FILE_SMALL\n    Location: /README.md",
+      "file_path": "/dataset/README.md",
+      "fix_hint": null,
+      "details": null
+    },
+    {
+      "code": "BIDS_SIDECAR_WITHOUT_DATAFILE",
+      "severity": "ERROR",
+      "message": "[BIDS] SIDECAR_WITHOUT_DATAFILE\n    Location: /sub-01/anat/sub-01_T2w.json",
+      "file_path": "/dataset/sub-01/anat/sub-01_T2w.json",
+      "fix_hint": null,
+      "details": null
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "errors": 1,
+    "warnings": 1,
+    "info": 0,
+    "by_code": {
+      "BIDS_README_FILE_SMALL": 1,
+      "BIDS_SIDECAR_WITHOUT_DATAFILE": 1
+    }
+  },
+  "bids_validator": {
+    "engine": "bids-validator-deno",
+    "version": "3.0.2",
+    "spec": "bids-validator-deno@3.0.2"
+  }
+}

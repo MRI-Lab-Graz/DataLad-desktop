@@ -1,0 +1,27 @@
+{
+  "valid": true,
+  "issues": [
+    {
+      "code": "BIDS_README_FILE_SMALL",
+      "severity": "WARNING",
+      "message": "[BIDS] README_FILE_SMALL\n    Location: /README.md",
+      "file_path": "/dataset/README.md",
+      "fix_hint": null,
+      "details": null
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "errors": 0,
+    "warnings": 1,
+    "info": 0,
+    "by_code": {
+      "BIDS_README_FILE_SMALL": 1
+    }
+  },
+  "bids_validator": {
+    "engine": "bids-validator-deno",
+    "version": "3.0.2",
+    "spec": "bids-validator-deno@3.0.2"
+  }
+}

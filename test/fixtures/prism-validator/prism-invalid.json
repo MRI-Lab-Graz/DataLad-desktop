@@ -1,0 +1,63 @@
+{
+  "valid": false,
+  "issues": [
+    {
+      "code": "PRISM301",
+      "severity": "ERROR",
+      "message": "dataset_description.json schema error: 'Keywords' is a required property",
+      "file_path": "/dataset/dataset_description.json",
+      "fix_hint": null,
+      "details": null
+    },
+    {
+      "code": "PRISM002",
+      "severity": "ERROR",
+      "message": "No subjects found in dataset (no sub-* folders). participants.tsv lists 1 participant(s), but no subject data has been imported yet - import it with the Converter (e.g. Survey) to create the sub-* folders.",
+      "file_path": "/dataset",
+      "fix_hint": null,
+      "details": null
+    },
+    {
+      "code": "BIDS_NOT_INCLUDED",
+      "severity": "ERROR",
+      "message": "[BIDS] NOT_INCLUDED\n    Location: /project.json",
+      "file_path": "/dataset/project.json",
+      "fix_hint": null,
+      "details": null
+    },
+    {
+      "code": "BIDS_README_FILE_SMALL",
+      "severity": "WARNING",
+      "message": "[BIDS] README_FILE_SMALL\n    Location: /README.md",
+      "file_path": "/dataset/README.md",
+      "fix_hint": null,
+      "details": null
+    },
+    {
+      "code": "BIDS_SIDECAR_WITHOUT_DATAFILE",
+      "severity": "ERROR",
+      "message": "[BIDS] SIDECAR_WITHOUT_DATAFILE\n    Location: /project.json",
+      "file_path": "/dataset/project.json",
+      "fix_hint": null,
+      "details": null
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "errors": 4,
+    "warnings": 1,
+    "info": 0,
+    "by_code": {
+      "PRISM301": 1,
+      "PRISM002": 1,
+      "BIDS_NOT_INCLUDED": 1,
+      "BIDS_README_FILE_SMALL": 1,
+      "BIDS_SIDECAR_WITHOUT_DATAFILE": 1
+    }
+  },
+  "bids_validator": {
+    "engine": "bids-validator-deno",
+    "version": "3.0.2",
+    "spec": "bids-validator-deno@3.0.2"
+  }
+}

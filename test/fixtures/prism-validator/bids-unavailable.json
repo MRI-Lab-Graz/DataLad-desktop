@@ -1,0 +1,22 @@
+{
+  "valid": false,
+  "issues": [
+    {
+      "code": "PRISM902",
+      "severity": "ERROR",
+      "message": "PRISM902 BIDS validator requested but not available: the bids-validator-deno program was not found next to Python or on PATH. Reinstall prism-validator (it depends on bids-validator-deno) or run with --no-bids",
+      "file_path": "/dataset",
+      "fix_hint": null,
+      "details": null
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "errors": 1,
+    "warnings": 0,
+    "info": 0,
+    "by_code": {
+      "PRISM902": 1
+    }
+  }
+}

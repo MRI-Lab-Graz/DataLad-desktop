@@ -41,6 +41,15 @@ test('the shipped PRISM requirements file pins the validator and hashes every re
   assert.ok(pkg.build.extraResources.some((r) => r.to === 'prism-requirements.txt'))
 })
 
+// 1.20.0 bundles the BIDS validator (bids-validator-deno, on its own Deno wheel), so BIDS needs no second install.
+test('the shipped PRISM requirements pin prism-validator 1.20 or later with the bundled BIDS validator', async () => {
+  const text = await readFile(new URL('../build/prism-requirements.txt', import.meta.url), 'utf8')
+  const [, minor] = text.match(/^prism-validator==1\.(\d+)\./m) ?? []
+  assert.ok(Number(minor) >= 20, 'prism-validator must be 1.20.0 or later')
+  assert.match(text, /^bids-validator-deno==\d/m)
+  assert.match(text, /^deno==\d/m)
+})
+
 function fakeRunner({ failStep, cancelStep } = {}) {
   const calls = []
   return {
