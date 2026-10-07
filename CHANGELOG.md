@@ -2,6 +2,11 @@
 
 Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0.
 
+## Unreleased
+
+- macOS install script for Apple silicon: one Terminal command downloads the release zip, checks its SHA-256, installs the app to `~/Applications` (no Gatekeeper warning) and installs git-annex and DataLad with Homebrew when missing. See the Install guide.
+- The app now also looks for git-annex and DataLad in `/opt/homebrew/bin`, `/usr/local/bin` and `/opt/local/bin`, so a launch from Finder or the Dock finds Homebrew-installed tools.
+
 ## 0.5.0
 
 Science workflow features, PRISM validation, a Windows install without admin rights, and the results of an independent security review. Releases are still unsigned (see `SECURITY.md`); check downloads against `SHA256SUMS.txt`.
