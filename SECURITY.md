@@ -77,6 +77,7 @@ Each control below has a test; the file names are where to verify it.
 - On Windows the line is handed to `cmd.exe` so `.cmd` shims work; shell operators therefore work there. On macOS and Linux it is tokenized and run without a shell.
 
 **Managed Python environment (PRISM validator)**
+- The BIDS validator ships inside the same hash-locked environment (`bids-validator-deno`, on the `deno` PyPI wheel, wheels only), so it needs no separate download and runs offline.
 - Installed from `build/prism-requirements.txt` with `--require-hashes --only-binary :all:`, an explicit index, and uv's config discovery turned off. The bundled `uv` is pinned and SHA-256 verified at build time (`scripts/fetch-uv.mjs`).
 
 **Windows installer** (`build/installer.nsh`, runs elevated)

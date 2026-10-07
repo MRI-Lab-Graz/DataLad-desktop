@@ -2890,7 +2890,7 @@ function updateSaveButtonState() {
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
     messageLabel: getMessageTermLabel(),
-    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
+    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
   })
 
   elements.saveProjectButton.disabled = gating.disabled
@@ -3318,11 +3318,11 @@ async function refreshPrismInspect(projectPath) {
   try {
     const info = await api.inspectPrism(projectPath)
     if (projectPath !== state.rootProjectPath) return
-    state.rootProjectPrism = info.isPrism ? info : null
+    state.rootProjectPrism = info.kind ? info : null
   } catch {
     state.rootProjectPrism = null
   }
-  elements.currentProjectPrismBadge.hidden = !state.rootProjectPrism
+  elements.currentProjectPrismBadge.hidden = state.rootProjectPrism?.kind !== 'prism'
   updateSaveButtonState()
 }
 

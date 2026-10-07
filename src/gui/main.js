@@ -7,7 +7,7 @@ import { buildConsoleCommand } from '../datalad/console-command.js'
 import { createConsoleConsent } from './console-consent.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
-import { gateSave, isConversionSave, isPrismProject } from '../datalad/prism-gate.js'
+import { gateSave, inspectProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
@@ -352,12 +352,11 @@ handle('adapter:runCommand', async (event, payload) => {
 
 handle('prism:inspect', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
-  if (!(await isPrismProject(projectPath))) {
-    return { isPrism: false, validatorReady: false, introducesPrism: false }
-  }
-  const validatorReady = (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready
-  const introducesPrism = await isConversionSave({ runner: consoleRunner, projectPath }).catch(() => false)
-  return { isPrism: true, validatorReady, introducesPrism }
+  return inspectProject({
+    runner: consoleRunner,
+    projectPath,
+    checkValidator: async () => (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready
+  })
 })
 
 handle('adapter:cancelCommand', (_event, runId) => {
