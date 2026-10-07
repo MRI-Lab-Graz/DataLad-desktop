@@ -4,11 +4,14 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, writeFile, chmod, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { renderInstallScript } from '../scripts/render-install-script.mjs'
 
-const path = new URL('../scripts/macos/install.sh', import.meta.url).pathname
+const path = fileURLToPath(new URL('../scripts/macos/install.sh', import.meta.url))
 const sh = await readFile(path, 'utf8').catch(() => '')
 const HASH = '0'.repeat(64)
+// The script targets macOS; the tests that execute it need a POSIX bash and fake executables on PATH.
+const posix = { skip: process.platform === 'win32' && 'runs the script with bash' }
 
 // A PATH folder whose uname answers like an Apple-silicon Mac (or whatever the test says).
 async function fakeUname(system, machine) {
@@ -32,7 +35,7 @@ async function run(script, args, { system = 'Darwin', machine = 'arm64' } = {}) 
   return { ...r, home, out: `${r.stdout}${r.stderr}` }
 }
 
-test('install.sh is valid bash', () => {
+test('install.sh is valid bash', posix, () => {
   execFileSync('bash', ['-n', path])
 })
 
@@ -42,13 +45,13 @@ test('the template has each placeholder exactly once', () => {
 })
 
 // A repo checkout is a template: it must not try to download v__VERSION__.
-test('an unrendered template refuses to run', async () => {
+test('an unrendered template refuses to run', posix, async () => {
   const r = await run(sh, [])
   assert.notEqual(r.status, 0)
   assert.match(r.out, /template/i)
 })
 
-test('exits before doing anything on an Intel Mac or on Linux', async () => {
+test('exits before doing anything on an Intel Mac or on Linux', posix, async () => {
   const script = renderInstallScript(sh, { version: '9.9.9', zipSha256: HASH })
   for (const [system, machine] of [['Darwin', 'x86_64'], ['Linux', 'arm64']]) {
     const r = await run(script, [], { system, machine })
@@ -58,7 +61,7 @@ test('exits before doing anything on an Intel Mac or on Linux', async () => {
   }
 })
 
-test('a zip whose SHA-256 does not match is refused and nothing is installed', async () => {
+test('a zip whose SHA-256 does not match is refused and nothing is installed', posix, async () => {
   const from = await mkdtemp(join(tmpdir(), 'dlad-from-'))
   await writeFile(join(from, 'DataLad-Desktop-9.9.9-mac-arm64.zip'), 'not the real app')
   const r = await run(renderInstallScript(sh, { version: '9.9.9', zipSha256: HASH }), ['--from-dir', from])
@@ -67,7 +70,7 @@ test('a zip whose SHA-256 does not match is refused and nothing is installed', a
   assert.deepEqual(await readdir(join(r.home, 'Applications')).catch(() => []), [], 'no app, no temp folder left behind')
 })
 
-test('an unknown option is an error', async () => {
+test('an unknown option is an error', posix, async () => {
   const r = await run(renderInstallScript(sh, { version: '9.9.9', zipSha256: HASH }), ['--bogus'])
   assert.notEqual(r.status, 0)
   assert.match(r.out, /--bogus/)

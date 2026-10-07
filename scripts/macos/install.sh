@@ -55,9 +55,6 @@ main() {
 
     install_app() {
         local target="$APP_DIR/$APP_NAME" old="$APP_DIR/$APP_NAME.old" work zip
-        if pgrep -f "$APP_NAME/Contents/MacOS" >/dev/null 2>&1; then
-            die 'DataLad Desktop is running. Quit it and run this installer again.'
-        fi
         mkdir -p "$APP_DIR"
         work=$(mktemp -d "$APP_DIR/.install.XXXXXX")
         trap "rm -rf '$work'" EXIT   # expanded now: $work is local and gone when the trap fires
@@ -72,6 +69,9 @@ main() {
         check_hash "$zip"
         ditto -x -k "$zip" "$work/x"
         [ -d "$work/x/$APP_NAME" ] || die "The zip has no $APP_NAME at its root."
+        if pgrep -f "$APP_NAME/Contents/MacOS" >/dev/null 2>&1; then
+            die 'DataLad Desktop is running. Quit it and run this installer again.'
+        fi
         if [ -e "$target" ]; then
             rm -rf "$old"
             mv "$target" "$old"

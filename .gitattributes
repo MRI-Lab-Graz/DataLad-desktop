@@ -1,2 +1,4 @@
 # The git-annex hooks are run by git's shell: a CRLF checkout on Windows would break them.
 build/git-hooks/* text eol=lf
+# CRLF would break the install script under bash and the text checks in its tests.
+scripts/macos/*.sh text eol=lf
