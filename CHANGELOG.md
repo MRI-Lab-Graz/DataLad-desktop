@@ -1,8 +1,10 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1.
 
-## Unreleased
+## 0.5.1
+
+A macOS install script, and a fix so the app finds Homebrew-installed tools when started from Finder or the Dock.
 
 - macOS install script for Apple silicon: one Terminal command downloads the release zip, checks its SHA-256, installs the app to `~/Applications` (no Gatekeeper warning) and installs git-annex and DataLad with Homebrew when missing. See the Install guide.
 - The app now also looks for git-annex and DataLad in `/opt/homebrew/bin`, `/usr/local/bin` and `/opt/local/bin`, so a launch from Finder or the Dock finds Homebrew-installed tools.
