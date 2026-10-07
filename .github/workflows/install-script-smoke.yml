@@ -1,6 +1,6 @@
-name: Install Script Smoke (Windows)
+name: Install Script Smoke
 
-# Manual + release tags only: scripts/windows/install.ps1 downloads git-annex from a third-party mirror (and
+# Manual + release tags only: scripts/windows/install.ps1 (and scripts/macos/install.sh) download git-annex from a third-party mirror (and
 # Git when missing), so this must not gate every push.
 on:
   workflow_dispatch:
@@ -107,3 +107,62 @@ jobs:
           $ErrorActionPreference = 'Continue'
           Get-Content (Join-Path $env:LOCALAPPDATA 'DataLad Desktop install.log')
           Get-Command git, git-annex, datalad -ErrorAction SilentlyContinue | Format-Table Name, Source
+
+  install-script-macos:
+    name: install.sh (macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch bundled uv
+        run: node scripts/fetch-uv.mjs aarch64-apple-darwin
+
+      # Deliberately NOT installing DataLad or git-annex here: the script has to provide them.
+      - name: Build the unpacked app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dir --arm64 --publish never
+
+      # The same zip and rendering as the release job, into a folder the script reads with --from-dir.
+      - name: Zip the app and render the install script
+        run: |
+          version=$(node -p "require('./package.json').version")
+          out="$RUNNER_TEMP/release"
+          mkdir -p "$out"
+          zip="$out/DataLad-Desktop-$version-mac-arm64.zip"
+          ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
+          node scripts/render-install-script.mjs "$version" "$zip" "$out/install.sh" scripts/macos/install.sh
+
+      # No terminal on the runner: Homebrew is already there, so the prompt is never reached.
+      - name: Install with install.sh
+        timeout-minutes: 25
+        run: bash "$RUNNER_TEMP/release/install.sh" --from-dir "$RUNNER_TEMP/release" < /dev/null
+
+      - name: Script left a verified app and working tools
+        run: |
+          codesign --verify --deep --strict "$HOME/Applications/DataLad Desktop.app"
+          if xattr "$HOME/Applications/DataLad Desktop.app" | grep -q com.apple.quarantine; then echo 'quarantine flag present'; exit 1; fi
+          git --version
+          datalad --version
+          git annex version
+
+      - name: Drive the installed app
+        run: |
+          export DLAD_APP_EXECUTABLE="$HOME/Applications/DataLad Desktop.app/Contents/MacOS/DataLad Desktop"
+          node --test e2e/packaged.e2e.mjs
+
+      - name: Install log (on failure)
+        if: failure()
+        run: cat "$HOME/Library/Logs/DataLad Desktop/install.log"

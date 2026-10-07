@@ -71,3 +71,30 @@ test('prints the install log when a step fails', () => {
 test('keeps read-only permissions', () => {
   assert.match(workflow, /permissions:\s*\n\s*contents: read/)
 })
+
+const macJob = workflow.slice(workflow.indexOf('  install-script-macos:'))
+
+test('the macOS job starts from a runner with no DataLad or git-annex pre-installed and runs install.sh --from-dir', () => {
+  assert.ok(macJob.length > 0, 'no install-script-macos job')
+  assert.match(macJob, /runs-on: macos-latest/)
+  assert.doesNotMatch(macJob, /brew install/)
+  const order = [
+    'node scripts/fetch-uv.mjs aarch64-apple-darwin',
+    'electron-builder --mac dir --arm64',
+    'ditto -c -k --keepParent',
+    'node scripts/render-install-script.mjs',
+    'bash "$RUNNER_TEMP/release/install.sh" --from-dir'
+  ]
+  let at = -1
+  for (const step of order) {
+    const next = macJob.indexOf(step, at + 1)
+    assert.ok(next > at, `expected "${step}" after the previous step`)
+    at = next
+  }
+})
+
+test('the macOS job checks the installed app, the tools and the packaged app', () => {
+  assert.match(macJob, /codesign --verify/)
+  assert.match(macJob, /datalad --version/)
+  assert.match(macJob, /DLAD_APP_EXECUTABLE/)
+})
