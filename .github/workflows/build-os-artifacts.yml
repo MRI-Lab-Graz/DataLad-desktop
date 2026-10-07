@@ -57,6 +57,20 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run package:mac:arm64 -- --publish=never
 
+      # The script install (scripts/macos/install.sh) downloads this zip from the tag's release and checks it
+      # against the SHA-256 rendered into its own copy of the script, so the tag has to match the package version.
+      # ditto keeps the code signature and symlinks intact, which a plain zip would not.
+      - name: Zip the app and render the install script
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF" == refs/tags/v* && "$GITHUB_REF" != "refs/tags/v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF does not match the package.json version $version"
+            exit 1
+          fi
+          zip="dist/DataLad-Desktop-$version-mac-arm64.zip"
+          ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
+          node scripts/render-install-script.mjs "$version" "$zip" dist/install.sh scripts/macos/install.sh
+
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -64,6 +78,8 @@ jobs:
           path: |
             dist/*.dmg
             dist/*-mac.zip
+            dist/DataLad-Desktop-*-mac-arm64.zip
+            dist/install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -211,7 +227,7 @@ jobs:
         working-directory: release-assets
         run: |
           shopt -s nullglob
-          sha256sum *.dmg *.zip *.exe *.AppImage *.cmd *.ps1 > SHA256SUMS.txt
+          sha256sum *.dmg *.zip *.exe *.AppImage *.cmd *.ps1 *.sh > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
@@ -224,6 +240,7 @@ jobs:
             release-assets/*.AppImage
             release-assets/*.cmd
             release-assets/*.ps1
+            release-assets/*.sh
 
       # Be explicit about what users are getting: unsigned builds trigger OS warnings, so
       # tell them how to check the download against what CI built instead.
@@ -264,4 +281,5 @@ jobs:
             release-assets/*.AppImage
             release-assets/*.cmd
             release-assets/*.ps1
+            release-assets/*.sh
             release-assets/SHA256SUMS.txt
