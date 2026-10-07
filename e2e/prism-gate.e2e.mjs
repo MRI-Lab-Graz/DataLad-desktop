@@ -17,10 +17,10 @@ const commitCount = () => Number(git('rev-list', '--count', 'HEAD'))
 
 const FAKE = `#!/bin/sh
 if [ -e "$1/INVALID" ]; then
-  echo '{"summary":{"total_errors":1},"results":{"valid":false,"errors":[{"path":"sub-01","message":"missing sidecar"}]}}'
+  echo '{"valid":false,"issues":[{"code":"PRISM301","severity":"ERROR","file_path":"sub-01","message":"missing sidecar"}],"summary":{"errors":1}}'
   exit 1
 fi
-echo '{"summary":{"total_errors":0},"results":{"valid":true,"errors":[]}}'
+echo '{"valid":true,"issues":[],"summary":{"errors":0}}'
 `
 
 test.before(async () => {
