@@ -47,11 +47,11 @@ across nested sub-projects? The app shows you exactly what changed and where.
 ## Download & Install
 
 Download the app for your OS from the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases):
-**macOS** `.dmg`, **Windows** `install.cmd` + `install.ps1` (no admin rights), the installer or the portable
+**macOS** `install.sh` (Apple silicon, one Terminal command, no Gatekeeper warning) or the `.dmg`, **Windows** `install.cmd` + `install.ps1` (no admin rights), the installer or the portable
 `.exe`, **Linux** `.AppImage`. Release builds aren't code-signed yet, so macOS and Windows show a one-time
 warning on first launch.
 
-Everything else — Windows script install, the macOS/Windows warnings, first launch (name and email), the
+Everything else — macOS and Windows script installs, the macOS/Windows warnings, first launch (name and email), the
 folder trust question, PRISM projects, running from source, network shares — is in the
 **[Install guide](https://datalad-desktop.readthedocs.io/en/latest/install.html)**.
 
