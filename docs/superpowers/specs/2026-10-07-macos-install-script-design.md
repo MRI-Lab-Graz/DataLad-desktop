@@ -19,7 +19,7 @@ no quarantine flag, so nothing prompts.
   deliberate trade for a smoother install, recorded in the log.
 - Two ways to run the same file: `curl -fsSL <release url>/install.sh | bash`, or download then `bash install.sh`.
 - No `uninstall.sh`: the script installs only the app folder and Homebrew packages (documented `rm -rf`).
-- Companion app fix (already merged to this work's base): `src/datalad/resolve-tool.js` also searches
+- Companion app fix (already committed on this branch, 1ca1c05): `src/datalad/resolve-tool.js` also searches
   `/opt/homebrew/bin`, `/usr/local/bin`, `/opt/local/bin` after PATH, because a Finder/Dock launch has a minimal
   PATH. Without it a brew install would not be found by the app.
 
