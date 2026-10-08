@@ -38,3 +38,20 @@ test('the toolbar buttons are gated with the existing rules', () => {
   assert.match(gating, /filesGetAllButton\.disabled = gating\.disabled/)
   assert.match(gating, /filesFreeAllButton\.disabled = dropGating\.disabled/)
 })
+
+test('the old Get Data / Free Up Space / Unlock buttons are gone from the page and the script', () => {
+  for (const id of ['get-data', 'drop-data', 'unlock-files', 'unlock-info']) {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`), id)
+  }
+  for (const name of ['getDataButton', 'dropDataButton', 'unlockFilesButton']) {
+    assert.doesNotMatch(app, new RegExp(name), name)
+  }
+})
+
+test('the tab is called Sync and no longer mentions file content', () => {
+  const tile = between(html, 'id="project-nav-tile-sync"', '</button>')
+  assert.match(tile, /<span class="onboarding-tile-label">Sync<\/span>/)
+  const section = between(html, 'id="sync-data-section"', 'id="files-panel"')
+  assert.match(section, /<h2 id="sync-data-title">Sync<\/h2>/)
+  assert.doesNotMatch(section, /Get Data|Manual File Paths|Unlock/)
+})

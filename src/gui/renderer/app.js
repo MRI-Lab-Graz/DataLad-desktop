@@ -1,6 +1,5 @@
 import {
   computeDatasetGating,
-  computeUnlockGating,
   computeAnnexToolGating,
   computeRemoteGating,
   remoteNameForProject,
@@ -178,11 +177,8 @@ const elements = {
   syncDataSummaryHint: document.getElementById('sync-data-summary-hint'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
-  getDataButton: document.getElementById('get-data'),
-  dropDataButton: document.getElementById('drop-data'),
   verifyDataButton: document.getElementById('verify-data'),
   verifyOutput: document.getElementById('verify-output'),
-  unlockFilesButton: document.getElementById('unlock-files'),
   updateProjectButton: document.getElementById('update-project'),
   publishProjectButton: document.getElementById('publish-project'),
   disconnectRemoteButton: document.getElementById('disconnect-remote'),
@@ -902,73 +898,6 @@ elements.saveProjectButton.addEventListener('click', async () => {
     setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
   }
-})
-
-elements.getDataButton.addEventListener('click', async () => {
-  const projectPath = readProjectPath()
-  if (!projectPath) {
-    return
-  }
-
-  const paths = parsePaths(elements.paths.value)
-  // ponytail: total known only for "get everything" in the root dataset (health counts the root only).
-  const progressTotal =
-    paths.length === 0 && projectPath === state.rootProjectPath ? state.projectHealthSnapshot?.missingContentCount ?? null : null
-  await runWorkflowCommand('get', { projectPath, paths }, elements.getDataButton, undefined, { progressTotal })
-
-  await refreshFileBrowser(projectPath)
-})
-
-elements.unlockFilesButton.addEventListener('click', async () => {
-  const projectPath = readProjectPath()
-  if (!projectPath) {
-    return
-  }
-
-  const paths = parsePaths(elements.paths.value)
-  if (paths.length === 0) {
-    elements.commandOutput.textContent =
-      'Enter the file(s) to unlock in Manual File Paths above first.'
-    setLastActionState('Select files to unlock first.', 'error')
-    return
-  }
-
-  const confirmed = window.confirm(
-    'Unlock replaces the link to this file with a real, editable copy.\n\n' +
-    '- The file\'s content must already be downloaded (Get Data) or this will fail.\n' +
-    '- This roughly doubles disk usage for the file until you Save again.\n' +
-    '- Run Save afterward to put it back under normal DataLad tracking.\n\n' +
-    'Continue?'
-  )
-  if (!confirmed) {
-    return
-  }
-
-  await runWorkflowCommand('unlock', { projectPath, paths }, elements.unlockFilesButton)
-
-  await refreshFileBrowser(projectPath)
-})
-
-elements.dropDataButton.addEventListener('click', async () => {
-  const projectPath = readProjectPath()
-  if (!projectPath) {
-    return
-  }
-
-  const paths = parsePaths(elements.paths.value)
-  const scope = paths.length > 0 ? `${paths.length} selected item(s)` : 'all downloaded data in this folder'
-  const confirmed = window.confirm(
-    `Free up space by removing the local copy of ${scope}?\n\n` +
-      '- Only removed when another copy (your remote or backup) is confirmed. Otherwise nothing happens.\n' +
-      '- Files stay listed; use Get Data to download them again.\n\n' +
-      'Continue?'
-  )
-  if (!confirmed) {
-    return
-  }
-
-  await runWorkflowCommand('drop', { projectPath, paths }, elements.dropDataButton)
-  await refreshFileBrowser(projectPath)
 })
 
 elements.verifyDataButton.addEventListener('click', async () => {
@@ -3397,21 +3326,13 @@ function applyDatasetGatedButtons(classification) {
 function updateGetDataGating() {
   const gating = computeDatasetGating(state.currentProjectClassification, state.projectHealthSnapshot)
 
-  elements.getDataButton.disabled = gating.disabled
-  elements.getDataButton.title = gating.title
   elements.filesGetAllButton.disabled = gating.disabled
   elements.filesGetAllButton.title = gating.title
 
-  const unlockGating = computeUnlockGating(state.currentProjectClassification)
-  elements.unlockFilesButton.disabled = unlockGating.disabled
-  elements.unlockFilesButton.title = unlockGating.title
-
   const dropGating = computeAnnexToolGating(
     state.currentProjectClassification,
-    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get Data brings it back.'
+    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get brings it back.'
   )
-  elements.dropDataButton.disabled = dropGating.disabled
-  elements.dropDataButton.title = dropGating.title
   elements.filesFreeAllButton.disabled = dropGating.disabled
   elements.filesFreeAllButton.title = dropGating.title
 
@@ -3433,7 +3354,7 @@ function updateSyncSectionVisibility() {
     selectProjectTile('save-checkpoint-panel')
   }
 
-  const quietMessage = computeSyncActionsQuietMessage(classification, health)
+  const quietMessage = computeSyncActionsQuietMessage(health)
   elements.syncActionsStrip.hidden = Boolean(quietMessage)
   elements.syncActionsQuiet.hidden = !quietMessage
   elements.syncActionsQuiet.textContent = quietMessage ?? ''

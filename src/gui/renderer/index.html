@@ -264,7 +264,7 @@
           </button>
           <button type="button" class="onboarding-tile" id="project-nav-tile-sync" data-nav-target="sync-data-section" role="tab" aria-selected="false" aria-controls="sync-data-section" hidden>
             <span class="onboarding-tile-icon" aria-hidden="true">🔄</span>
-            <span class="onboarding-tile-label">Get Data &amp; Sync</span>
+            <span class="onboarding-tile-label">Sync</span>
             <span id="sync-data-summary-hint" class="onboarding-tile-hint"></span>
           </button>
           <button type="button" class="onboarding-tile" data-nav-target="files-panel" role="tab" aria-selected="false" aria-controls="files-panel">
@@ -429,28 +429,13 @@
         <section id="sync-data-section" class="card reveal" aria-labelledby="sync-data-title" role="tabpanel" hidden>
           <span class="card-icon-badge" aria-hidden="true">🔄</span>
           <div class="section-head">
-            <h2 id="sync-data-title">Get Data &amp; Remote Sync</h2>
+            <h2 id="sync-data-title">Sync</h2>
           </div>
           <p class="lede-small">
-            Optional, secondary actions — download real file content, or sync with a remote/sibling copy of
-            this project.
+            Optional actions that sync this project with a remote or sibling copy, for example a server or another computer.
           </p>
 
           <div id="sync-actions-strip" class="action-strip">
-            <button id="get-data" class="button button-ghost" type="button">Get Data</button>
-            <button id="drop-data" class="button button-ghost" type="button">Free Up Space</button>
-            <span class="sibling-action-group">
-              <button id="unlock-files" class="button button-ghost" type="button">⚠️ Unlock for Editing</button>
-              <button
-                id="unlock-info"
-                class="info-hint"
-                type="button"
-                aria-label="What does Unlock for Editing do?"
-                title="Use with caution. Some other software can't open DataLad-managed files because they are links to the underlying data, not normal files. Unlock replaces the link with a real, editable copy of the selected file(s) — content must already be downloaded via Get Data first. This roughly doubles disk usage for that file until you run Save again, which puts it back under DataLad's tracking."
-              >
-                ⓘ
-              </button>
-            </span>
             <span class="sibling-action-group">
               <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
               <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
@@ -460,16 +445,12 @@
                 class="info-hint"
                 type="button"
                 aria-label="What are remote/sibling actions?"
-                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save and Get Data already cover fully offline work. Disconnect from Source removes the remote link entirely — useful for read-only sources (e.g. OpenNeuro) you'll never push to or pull further updates from."
+                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save already covers fully offline work. Disconnect from Source removes the remote link entirely — useful for read-only sources (e.g. OpenNeuro) you'll never push to or pull further updates from."
               >
                 ⓘ
               </button>
             </span>
           </div>
-          <p class="hint-inline">
-            If a file won't open in another program (it may show up as a link/alias instead of a normal
-            file), select it in Manual File Paths above, then try Unlock for Editing.
-          </p>
           <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>
 
