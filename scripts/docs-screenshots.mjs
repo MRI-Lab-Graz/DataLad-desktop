@@ -13,8 +13,7 @@ const wipe = async () => {
   execFileSync('chmod', ['-R', 'u+w', root], { stdio: 'ignore' }) // annex objects are read-only
   await rm(root, { recursive: true, force: true })
 }
-await wipe().catch(() => {})
-await mkdir(root, { recursive: true })
+await mkdir(root) // throws if it exists: never delete a folder this script did not create
 const gitconfig = join(await mkdtemp(join(tmpdir(), 'dlad-docs-cfg-')), 'gitconfig')
 await writeFile(gitconfig, '[user]\n\tname = Alex Researcher\n\temail = alex@university.example\n')
 const sh = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: gitconfig } })
