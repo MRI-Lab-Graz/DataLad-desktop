@@ -5,13 +5,7 @@
 You are a single researcher continuing from Tutorial 00. You now inspect local
 changes in the newly created project and save a clean first checkpoint.
 
-## Level
-
-Beginner
-
-## Estimated time
-
-20 to 30 minutes
+**Level:** Beginner · **Time:** 20 to 30 minutes
 
 ## Skills trained
 
@@ -38,16 +32,18 @@ Beginner
 1. Open the project in DataLad Desktop.
 2. Confirm project classification badge (Git, Dataset, or Superdataset).
 3. Review changed and untracked files in the working-tree list.
+
+   ![The Files view, with changed items badged](../_static/screenshots/05-files.png)
+
 4. Select only research-relevant files for Save.
 5. Leave scratch notes unselected.
 6. Write a Save message in this format:
    - `pilot: update participant table and project summary`
+
+   ![The Save a Checkpoint panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
+
 7. Execute Save.
 8. Re-check status to confirm a clean state for selected files.
-
-![The Files view, with changed items badged](../_static/screenshots/05-files.png)
-
-![The Save a Checkpoint panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
 
 ## Failure injection
 

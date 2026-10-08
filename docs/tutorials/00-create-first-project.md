@@ -5,13 +5,7 @@
 You are starting a brand-new scientific project and want a safe, reproducible
 foundation before any data cleaning or analysis.
 
-## Level
-
-Beginner
-
-## Estimated time
-
-15 to 25 minutes
+**Level:** Beginner · **Time:** 15 to 25 minutes
 
 ## Skills trained
 
@@ -46,14 +40,16 @@ keeps the first checkpoint scientifically auditable.
 2. Confirm Python 3, DataLad, and git-annex report `OK`.
 3. In **Create Project**, choose the new folder path.
 4. Click **Create Project**.
+
+   ![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
+
 5. Verify the project opens and classification is Dataset or Superdataset.
+
+   ![The new project open, with its classification badge and the project navigation tiles](../_static/screenshots/03-project-open.png)
+
 6. Add an initial `README.md` line in the project folder.
 7. Return to the app, review the changed-file list, and Save with message:
    - `init: create project skeleton and first note`
-
-![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
-
-![The new project open, with its classification badge and the project navigation tiles](../_static/screenshots/03-project-open.png)
 
 ## Failure injection
 

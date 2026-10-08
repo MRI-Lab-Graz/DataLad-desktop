@@ -5,13 +5,7 @@
 A researcher is cleaning incoming tabular data and updating metadata. The goal
 is to separate data cleaning from analysis edits and preserve traceability.
 
-## Level
-
-Beginner to intermediate
-
-## Estimated time
-
-30 to 40 minutes
+**Level:** Beginner to intermediate · **Time:** 30 to 40 minutes
 
 ## Skills trained
 

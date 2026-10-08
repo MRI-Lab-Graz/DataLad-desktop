@@ -5,13 +5,7 @@
 A longitudinal study receives monthly updates from multiple sites. The team
 must ingest new waves while preserving site-level traceability.
 
-## Level
-
-Advanced
-
-## Estimated time
-
-75 to 90 minutes
+**Level:** Advanced · **Time:** 75 to 90 minutes
 
 ## Skills trained
 

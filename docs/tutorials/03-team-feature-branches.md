@@ -5,13 +5,7 @@
 Three team members work in parallel on preprocessing, statistics, and figures.
 The team must avoid conflicts on main while integrating safely.
 
-## Level
-
-Intermediate
-
-## Estimated time
-
-45 to 60 minutes
+**Level:** Intermediate · **Time:** 45 to 60 minutes
 
 ## Skills trained
 

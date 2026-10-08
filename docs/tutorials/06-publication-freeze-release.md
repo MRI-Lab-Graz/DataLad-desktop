@@ -5,13 +5,7 @@
 The project is ready for manuscript submission. You need a frozen release,
 clear provenance, and a controlled path for urgent corrections.
 
-## Level
-
-Advanced
-
-## Estimated time
-
-60 to 80 minutes
+**Level:** Advanced · **Time:** 60 to 80 minutes
 
 ## Skills trained
 
@@ -47,9 +41,10 @@ Advanced
    - Then switch to `main` and merge the release branch the same way.
    - If the same file changed on both branches in either merge, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 9. On the release branch, open Time Machine and use **Mark As Version** on the submitted state (for example `paper-v1`).
-10. Publish updated branches.
 
-![Time Machine: the save history, newest first](../_static/screenshots/06-time-machine.png)
+   ![Time Machine: the save history, newest first](../_static/screenshots/06-time-machine.png)
+
+10. Publish updated branches.
 
 ## Failure injection
 

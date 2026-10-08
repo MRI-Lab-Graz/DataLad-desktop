@@ -5,13 +5,7 @@
 A study combines imaging, clinical, and survey data. Work is split by modality
 and then integrated for a unified analysis checkpoint.
 
-## Level
-
-Intermediate to advanced
-
-## Estimated time
-
-60 to 75 minutes
+**Level:** Intermediate to advanced · **Time:** 60 to 75 minutes
 
 ## Skills trained
 
