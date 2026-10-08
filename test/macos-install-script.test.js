@@ -22,14 +22,14 @@ async function fakeUname(system, machine) {
   return dir
 }
 
-async function run(script, args, { system = 'Darwin', machine = 'arm64' } = {}) {
+async function run(script, args, { system = 'Darwin', machine = 'arm64', bin = '' } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dlad-run-'))
   const file = join(dir, 'install.sh')
   await writeFile(file, script)
   const home = join(dir, 'home')
   await mkdir(home)
   const r = spawnSync('/bin/bash', [file, ...args], {
-    env: { HOME: home, PATH: `${await fakeUname(system, machine)}:${process.env.PATH}` },
+    env: { HOME: home, PATH: `${bin}${await fakeUname(system, machine)}:${process.env.PATH}` },
     encoding: 'utf8'
   })
   return { ...r, home, out: `${r.stdout}${r.stderr}` }
@@ -44,11 +44,27 @@ test('the template has each placeholder exactly once', () => {
   assert.equal(sh.split('__ZIP_SHA256__').length - 1, 1)
 })
 
-// A repo checkout is a template: it must not try to download v__VERSION__.
-test('an unrendered template refuses to run', posix, async () => {
-  const r = await run(sh, [])
+// A PATH folder whose curl records its arguments and answers with a canned script (or fails).
+async function fakeCurl(body, status = 0) {
+  const dir = await mkdtemp(join(tmpdir(), 'dlad-curl-'))
+  const f = join(dir, 'curl')
+  await writeFile(f, `#!/bin/sh\necho "$@" >&2\n[ ${status} -eq 0 ] || exit ${status}\ncat <<'EOF'\n${body}\nEOF\n`)
+  await chmod(f, 0o755)
+  return `${dir}:`
+}
+
+// A repo checkout is a template: it must not try to download v__VERSION__, it hands over to the latest release's copy.
+test('an unrendered template runs the latest release install.sh, passing its arguments on', posix, async () => {
+  const r = await run(sh, ['--from-dir', '/x'], { bin: await fakeCurl('echo "release copy got: $*"') })
+  assert.equal(r.status, 0, r.out)
+  assert.match(r.out, /releases\/latest\/download\/install\.sh/)
+  assert.match(r.out, /release copy got: --from-dir \/x/)
+})
+
+test('an unrendered template fails clearly when the latest release cannot be fetched', posix, async () => {
+  const r = await run(sh, [], { bin: await fakeCurl('', 22) })
   assert.notEqual(r.status, 0)
-  assert.match(r.out, /template/i)
+  assert.match(r.out, /latest release/i)
 })
 
 test('exits before doing anything on an Intel Mac or on Linux', posix, async () => {
@@ -83,9 +99,9 @@ test('never uses sudo and installs only under $HOME', () => {
   assert.doesNotMatch(sh, /["\s]\/Applications\b/)
 })
 
-test('downloads a versioned tag URL, never latest', () => {
+test('downloads the app from a versioned tag URL; latest is only used to fetch install.sh itself', () => {
   assert.match(sh, /releases\/download\/v\$\{APP_VERSION\}\//)
-  assert.doesNotMatch(sh, /releases\/latest/)
+  assert.deepEqual(sh.match(/releases\/latest\/[^"\s]*/g), ['releases/latest/download/install.sh'])
 })
 
 test('checks the zip hash before extracting it', () => {

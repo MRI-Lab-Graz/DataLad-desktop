@@ -252,6 +252,9 @@ await seedWorkspacePath()
 elements.commandProjectPath.value = ''
 setCurrentProjectHeader('', 'unknown')
 updateSaveButtonState()
+api.getAppVersion().then((version) => {
+  document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = version })
+})
 initPowerUserConsole()
 initBidsAutoNestToggle()
 
