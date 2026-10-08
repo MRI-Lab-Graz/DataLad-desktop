@@ -8,6 +8,7 @@ import {
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
 import { rowDataActions } from './row-data-actions.js'
+import { joinProjectPath } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
@@ -101,7 +102,6 @@ const elements = {
   createSourceNewRadio: document.getElementById('create-source-new'),
   createSourceRemoteRadio: document.getElementById('create-source-remote'),
   createRemoteSourcePanel: document.getElementById('create-remote-source-panel'),
-  createProjectPathLabel: document.getElementById('create-project-path-label'),
   createProjectPathHint: document.getElementById('create-project-path-hint'),
   getRemoteModeUrlRadio: document.getElementById('get-remote-mode-url'),
   getRemoteModeNetworkRadio: document.getElementById('get-remote-mode-network'),
@@ -138,6 +138,8 @@ const elements = {
   lastActionState: document.getElementById('last-action-state'),
   lastCommitMeta: document.getElementById('last-commit-meta'),
   createProjectPath: document.getElementById('create-project-path'),
+  createProjectName: document.getElementById('create-project-name'),
+  createProjectTarget: document.getElementById('create-project-target'),
   pickCreateProjectPathButton: document.getElementById('pick-create-project-path'),
   createProjectButton: document.getElementById('create-project'),
   createProjectOutput: document.getElementById('create-project-output'),
@@ -273,14 +275,28 @@ wireFolderPicker(elements.pickGetRemoteNetworkPathButton, elements.getRemoteSour
   purpose: 'source' // read from, never opened as a project: no trust prompt
 })
 
+// The project lives at location/name: show where, and look for an existing BIDS dataset at that path.
+function updateCreateProjectTarget() {
+  const { path } = joinProjectPath(elements.createProjectPath.value, elements.createProjectName.value)
+  state.createProjectBidsCandidate = null
+  elements.createProjectTarget.textContent = path ? `Will be created at: ${path}` : ''
+  return path
+}
+
+function onCreateProjectTargetChanged() {
+  const path = updateCreateProjectTarget()
+  if (path) void checkCreateProjectBidsCandidate(path)
+}
+
 wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
-  title: 'Select or create a new project folder',
-  onSelected: checkCreateProjectBidsCandidate
+  title: 'Select the folder the new project goes in',
+  onSelected: onCreateProjectTargetChanged
 })
 
-elements.createProjectPath.addEventListener('blur', () => {
-  void checkCreateProjectBidsCandidate(elements.createProjectPath.value.trim())
-})
+elements.createProjectPath.addEventListener('input', updateCreateProjectTarget)
+elements.createProjectPath.addEventListener('blur', onCreateProjectTargetChanged)
+elements.createProjectName.addEventListener('input', updateCreateProjectTarget)
+elements.createProjectName.addEventListener('blur', onCreateProjectTargetChanged)
 
 elements.recentProjectsOutput.addEventListener('click', async (event) => {
   const target = event.target.closest('[data-recent-project-path]')
@@ -511,12 +527,10 @@ elements.getRemoteModeNetworkRadio.addEventListener('change', updateGetRemoteMod
 function updateCreateProjectSourceMode() {
   const isRemote = elements.createSourceRemoteRadio.checked
   elements.createRemoteSourcePanel.hidden = !isRemote
-  elements.createProjectPathLabel.textContent = isRemote ? 'Save Into Folder' : 'New Project Folder'
-  elements.createProjectPath.placeholder = isRemote ? '/path/to/save/project' : '/path/to/new-project'
   elements.createProjectPathHint.textContent = isRemote
-    ? 'Choose an empty or brand-new folder to clone into.'
-    : 'Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset, ' +
-      'subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.'
+    ? 'The dataset is copied into a new folder with this name inside the location.'
+    : 'The project is created as a new folder with this name inside the location. If it looks like a BIDS ' +
+      'dataset, subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.'
 }
 
 elements.createSourceNewRadio.addEventListener('change', updateCreateProjectSourceMode)
@@ -577,12 +591,12 @@ elements.closeSettingsButton.addEventListener('click', () => {
 })
 
 elements.createProjectButton.addEventListener('click', async () => {
-  const targetPath = elements.createProjectPath.value.trim()
+  const { path: targetPath, error } = joinProjectPath(elements.createProjectPath.value, elements.createProjectName.value)
 
-  if (!targetPath) {
+  if (error) {
     elements.createProjectOutput.hidden = false
-    elements.createProjectOutput.textContent = 'Choose a folder first.'
-    setLastActionState('Add a target folder first.', 'error')
+    elements.createProjectOutput.textContent = error
+    setLastActionState(error, 'error')
     return
   }
 
