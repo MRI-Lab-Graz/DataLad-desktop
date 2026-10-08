@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { parsePins } from '../scripts/check-install-pins.mjs'
 
 const nsh = await readFile(new URL('../build/installer.nsh', import.meta.url), 'utf8')
 
@@ -141,4 +142,12 @@ test('the DataLad env is built by the bundled uv with its own managed Python ins
 
 test('the machine PATH entry needs the install folder inside Program Files, not just a matching prefix', () => {
   assert.match(nsh, /StartsWith\(\$\$env:ProgramW6432 \+ '\\'/)
+})
+
+test('installer pins the same versioned git-annex file as install.ps1, never the moving current/ URL', async () => {
+  const ps1 = await readFile(new URL('../scripts/windows/install.ps1', import.meta.url), 'utf8')
+  const { gitAnnex } = parsePins(ps1)
+  assert.doesNotMatch(nsh, /git-annex\/windows\/current/)
+  assert.ok(nsh.includes(`-Uri '${gitAnnex.url}'`), 'installer.nsh must download the install.ps1 git-annex URL')
+  assert.ok(nsh.toUpperCase().includes(gitAnnex.sha256), 'installer.nsh must pin the install.ps1 git-annex hash')
 })

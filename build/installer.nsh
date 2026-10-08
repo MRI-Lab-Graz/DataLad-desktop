@@ -116,12 +116,12 @@
   Pop $0
   ${If} $0 != 0
     DetailPrint "git-annex not found - downloading installer..."
-    nsExec::ExecToStack `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://downloads.kitenet.net/git-annex/windows/current/git-annex-installer.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
+    nsExec::ExecToStack `${PS} -NoProfile -ExecutionPolicy Bypass -Command "${MACHINE_PATH} [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://datasets.datalad.org/datalad/packages/windows/git-annex-installer_10.20260901_x64.exe' -OutFile '$PLUGINSDIR\git-annex-installer.exe'"`
     Pop $0
     Pop $1
     !insertmacro Log "git-annex download exit $0 into $PLUGINSDIR: $1"
     ${If} $0 == 0
-      nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes('$PLUGINSDIR\git-annex-installer.exe'))) -replace '-') -ne '4D4CA04DFB7A2FAF8C1A43BE7BFDDA98219833974BBF2678384A1DBAA1FEB1F9') { exit 1 } else { exit 0 }"`
+      nsExec::ExecToStack `${PS} -NoProfile -Command "${MACHINE_PATH} if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes('$PLUGINSDIR\git-annex-installer.exe'))) -replace '-') -ne '582F0EF30AC9BE560285D9510F27EBDD95EBDF01719DEC42543B591F6BEF0095') { exit 1 } else { exit 0 }"`
       Pop $0
       Pop $1
       !insertmacro Log "git-annex hash check exit $0: $1"
