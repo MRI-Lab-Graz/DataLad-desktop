@@ -45,6 +45,10 @@ Beginner
 7. Execute Save.
 8. Re-check status to confirm a clean state for selected files.
 
+![The Files view, with changed items badged](../_static/screenshots/05-files.png)
+
+![The Save a Checkpoint panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
+
 ## Failure injection
 
 - Intentionally include `notes/todo.txt` in Save once.

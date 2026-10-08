@@ -49,6 +49,8 @@ Advanced
 9. On the release branch, open Time Machine and use **Mark As Version** on the submitted state (for example `paper-v1`).
 10. Publish updated branches.
 
+![Time Machine: the save history, newest first](../_static/screenshots/06-time-machine.png)
+
 ## Failure injection
 
 - Intentionally apply the hotfix on `main` first.
