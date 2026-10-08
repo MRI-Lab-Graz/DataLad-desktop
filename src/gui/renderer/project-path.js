@@ -11,3 +11,10 @@ export function joinProjectPath(location, name) {
   const sep = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
   return { path: parent.endsWith(sep) ? parent + leaf : parent + sep + leaf }
 }
+
+// candidate is inspectBidsCandidate's answer for the target path. DataLad refuses a non-empty folder; a new project may
+// still adopt one that looks like BIDS in place, a clone may not.
+export function existingFolderProblem(candidate, { remote }) {
+  if (!candidate?.exists || candidate.isEmpty || (candidate.bidsLikely && !remote)) return ''
+  return 'A folder with this name already exists in the location and is not empty. Choose a different name.'
+}

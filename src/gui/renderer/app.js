@@ -8,7 +8,7 @@ import {
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
 import { rowDataActions } from './row-data-actions.js'
-import { joinProjectPath } from './project-path.js'
+import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
@@ -283,9 +283,13 @@ function updateCreateProjectTarget() {
   return path
 }
 
-function onCreateProjectTargetChanged() {
+async function onCreateProjectTargetChanged() {
   const path = updateCreateProjectTarget()
-  if (path) void checkCreateProjectBidsCandidate(path)
+  if (!path) return
+  await checkCreateProjectBidsCandidate(path)
+  const problem = existingFolderProblem(state.createProjectBidsCandidate, { remote: elements.createSourceRemoteRadio.checked })
+  // a later keystroke may have moved on while the folder was being inspected
+  if (problem && elements.createProjectTarget.textContent.endsWith(path)) elements.createProjectTarget.textContent += ` — ${problem}`
 }
 
 wireFolderPicker(elements.pickCreateProjectPathButton, elements.createProjectPath, {
@@ -597,6 +601,15 @@ elements.createProjectButton.addEventListener('click', async () => {
     elements.createProjectOutput.hidden = false
     elements.createProjectOutput.textContent = error
     setLastActionState(error, 'error')
+    return
+  }
+
+  await checkCreateProjectBidsCandidate(targetPath)
+  const problem = existingFolderProblem(state.createProjectBidsCandidate, { remote: elements.createSourceRemoteRadio.checked })
+  if (problem) {
+    elements.createProjectOutput.hidden = false
+    elements.createProjectOutput.textContent = problem
+    setLastActionState(problem, 'error')
     return
   }
 
