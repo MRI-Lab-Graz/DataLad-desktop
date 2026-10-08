@@ -363,6 +363,8 @@ handle('adapter:cancelCommand', (_event, runId) => {
   return typeof runId === 'string' ? runRegistry.cancel(runId) : false
 })
 
+handle('app:version', () => app.getVersion())
+
 handle('env:status', () => envStatus({ runner: consoleRunner, envDir: managedEnvDir() }))
 
 handle('env:ensure', (event, runId) =>

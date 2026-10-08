@@ -4,7 +4,7 @@
 # Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v<version>/install.sh | bash
 # or download it and run:   bash install.sh
 # The copy attached to a GitHub release has the version and the SHA-256 of that release's app zip filled in by CI.
-# The copy in the repository is a template and refuses to run.
+# The copy in the repository is a template: it runs the install.sh of the latest release instead.
 #
 # Options:
 #   --from-dir <folder>   take the zip from that folder (named as on the release page) instead of downloading it;
@@ -30,6 +30,13 @@ main() {
     die() { echo "ERROR: $*" >&2; exit 1; }
     log() { echo "==> $*"; }
 
+    case "$APP_VERSION" in
+        __*) # repository template: hand over to the latest release's copy, which has the version and hash filled in
+            log 'Repository template: running the install.sh of the latest release'
+            curl -fsSL "https://github.com/${REPO}/releases/latest/download/install.sh" | bash -s -- "$@" ||
+                die 'Could not run the install.sh of the latest release.'
+            exit 0 ;;
+    esac
     while [ $# -gt 0 ]; do
         case "$1" in
             --from-dir) [ $# -ge 2 ] || die '--from-dir needs a folder'; from_dir="$2"; shift 2 ;;
@@ -37,9 +44,6 @@ main() {
         esac
     done
 
-    case "$APP_VERSION" in
-        __*) die 'This is the repository template, not a release copy. Use the install.sh attached to a release.' ;;
-    esac
     [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ] ||
         die 'This installer supports Macs with Apple silicon only. Intel Macs: use the .dmg from the release page.'
 
