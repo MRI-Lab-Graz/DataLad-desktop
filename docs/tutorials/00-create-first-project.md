@@ -51,6 +51,10 @@ keeps the first checkpoint scientifically auditable.
 7. Return to the app, review the changed-file list, and Save with message:
    - `init: create project skeleton and first note`
 
+![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
+
+![The new project open, with its classification badge and the project navigation tiles](../_static/screenshots/03-project-open.png)
+
 ## Failure injection
 
 - Try creating into a non-empty folder once.

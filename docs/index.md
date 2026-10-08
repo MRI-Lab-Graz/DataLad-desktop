@@ -7,6 +7,8 @@ DataLad Desktop puts a simple, visual workflow on top of [DataLad](https://www.d
 (and plain Git projects too): open a project, see what changed, write a short
 note, and save a checkpoint. Need data that isn't downloaded yet? One click.
 
+![DataLad Desktop start screen with Open Project and Create Project](_static/screenshots/02-welcome.png)
+
 ```{toctree}
 :maxdepth: 2
 :hidden:

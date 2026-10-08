@@ -43,6 +43,8 @@ stored with every checkpoint you save, so teammates can see who made which chang
 You enter them once; you can change them any time under **Setup → Your Name and Email**.
 Until they are set, Save is blocked (choose **Later** to look around first).
 
+![The Setup panel showing your name and email, the local environment check and the PRISM validator](_static/screenshots/01-setup.png)
+
 ## Opening a folder: the trust question
 
 A folder the app did not create itself (one you open, clone or pick as a USB/share remote) can carry settings
