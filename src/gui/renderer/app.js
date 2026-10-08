@@ -8,6 +8,7 @@ import {
   computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
+import { rowDataActions } from './row-data-actions.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
@@ -216,6 +217,8 @@ const elements = {
   classificationOutput: document.getElementById('classification-output'),
   commandOutput: document.getElementById('command-output'),
   filesOutput: document.getElementById('files-output'),
+  filesGetAllButton: document.getElementById('files-get-all'),
+  filesFreeAllButton: document.getElementById('files-free-all'),
   remoteInfo: document.getElementById('remote-info'),
   addRemote: document.getElementById('add-remote'),
   addRemoteModeFolder: document.getElementById('add-remote-mode-folder'),
@@ -1483,6 +1486,62 @@ elements.filesOutput.addEventListener('click', async (event) => {
 
   await revealPath(targetPath)
 })
+
+// Get / Free up space / Unlock from a Files row (relativePath, relative to the folder being browsed) or, from the
+// toolbar, on everything (relativePath null).
+async function runDataAction(action, button, relativePath) {
+  const projectPath = state.fileBrowserProject ?? readProjectPath()
+  if (!projectPath) {
+    return
+  }
+  const paths = relativePath ? [relativePath] : []
+
+  if (action === 'drop') {
+    const scope = relativePath ? `"${relativePath}"` : 'all downloaded data in this folder'
+    const confirmed = window.confirm(
+      `Free up space by removing the local copy of ${scope}?\n\n` +
+        '- Only removed when another copy (your remote or backup) is confirmed. Otherwise nothing happens.\n' +
+        '- Files stay listed; use Get to download them again.\n\n' +
+        'Continue?'
+    )
+    if (!confirmed) {
+      return
+    }
+  }
+
+  if (action === 'unlock') {
+    const confirmed = window.confirm(
+      'Unlock replaces the link to this file with a real, editable copy.\n\n' +
+        '- This roughly doubles disk usage for the file until you Save again.\n' +
+        '- Run Save afterward to put it back under normal DataLad tracking.\n\n' +
+        'Continue?'
+    )
+    if (!confirmed) {
+      return
+    }
+  }
+
+  // ponytail: total known only for "get everything" in the root dataset (health counts the root only).
+  const progressTotal =
+    action === 'get' && paths.length === 0 && projectPath === state.rootProjectPath
+      ? state.projectHealthSnapshot?.missingContentCount ?? null
+      : null
+  await runWorkflowCommand(action, { projectPath, paths }, button, undefined, { progressTotal })
+  await refreshFileBrowser(projectPath)
+}
+
+elements.filesOutput.addEventListener('click', async (event) => {
+  const target = event.target.closest('[data-data-action]')
+  if (!target) {
+    return
+  }
+
+  event.preventDefault() // the buttons sit inside a folder's <summary>; don't also expand or collapse it
+  await runDataAction(target.getAttribute('data-data-action'), target, target.getAttribute('data-data-path'))
+})
+
+elements.filesGetAllButton.addEventListener('click', () => runDataAction('get', elements.filesGetAllButton, null))
+elements.filesFreeAllButton.addEventListener('click', () => runDataAction('drop', elements.filesFreeAllButton, null))
 
 // Generic, non-BIDS-specific action: promotes any untracked top-level folder
 // into its own nested dataset. Defaults text2git only when the open project
@@ -3340,6 +3399,8 @@ function updateGetDataGating() {
 
   elements.getDataButton.disabled = gating.disabled
   elements.getDataButton.title = gating.title
+  elements.filesGetAllButton.disabled = gating.disabled
+  elements.filesGetAllButton.title = gating.title
 
   const unlockGating = computeUnlockGating(state.currentProjectClassification)
   elements.unlockFilesButton.disabled = unlockGating.disabled
@@ -3351,6 +3412,8 @@ function updateGetDataGating() {
   )
   elements.dropDataButton.disabled = dropGating.disabled
   elements.dropDataButton.title = dropGating.title
+  elements.filesFreeAllButton.disabled = dropGating.disabled
+  elements.filesFreeAllButton.title = dropGating.title
 
   const verifyGating = computeAnnexToolGating(
     state.currentProjectClassification,
@@ -4223,6 +4286,12 @@ function renderFileTreeNodes(children, expandAll, depth) {
       const openButton = node.absolutePath
         ? `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>`
         : ''
+      const dataButtons = rowDataActions(node)
+        .map(
+          ({ action, label, title }) =>
+            `<button type="button" class="button button-ghost button-mini" data-data-action="${action}" data-data-path="${escapeHtml(node.relativePath)}" title="${escapeHtml(title)}">${label}</button>`
+        )
+        .join('')
       const iconClass = node.type === 'directory' ? 'file-icon file-icon-folder' : 'file-icon file-icon-file'
       const statusBadge = renderGitStatusBadge(node.gitStatus)
       const annexBadge = renderAnnexBadge(node.annexPresent)
@@ -4247,7 +4316,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
           `<details data-dir-path="${escapeHtml(node.relativePath)}"${openAttribute}>` +
           '<summary class="finder-row finder-row-folder">' +
           label +
-          `<span class="finder-action-cell">${convertButton}${openButton}</span>` +
+          `<span class="finder-action-cell">${convertButton}${dataButtons}${openButton}</span>` +
           '</summary>' +
           renderFileTreeNodes(node.children, expandAll, depth + 1) +
           '</details>' +
@@ -4258,7 +4327,7 @@ function renderFileTreeNodes(children, expandAll, depth) {
       return (
         '<li class="file-node file-row finder-row">' +
         label +
-        `<span class="finder-action-cell">${openButton}</span>` +
+        `<span class="finder-action-cell">${dataButtons}${openButton}</span>` +
         '</li>'
       )
     })
