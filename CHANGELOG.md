@@ -1,6 +1,13 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2.
+
+## 0.5.2
+
+A fix for the Windows installer, plus screenshots in the documentation.
+
+- Fix: the Windows installer no longer skips git-annex when its author publishes a new release. It checked a hash pinned for a download address that always serves the newest version; it now downloads git-annex 10.20260901 from the DataLad mirror, the same pinned file the Windows install script uses.
+- Documentation: the start screen, Setup, Files, Save Checkpoint and Time Machine are now shown with screenshots in the Install guide and tutorials 00, 01 and 06. `node scripts/docs-screenshots.mjs` regenerates them.
 
 ## 0.5.1
 
