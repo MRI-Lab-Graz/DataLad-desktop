@@ -1,5 +1,5 @@
 // Real-Electron smoke tests for the workflow button gating fixed in this
-// session: Update/Publish need a remote, Get Data needs a DataLad dataset,
+// session: Update/Publish need a remote, Get all needs a DataLad dataset,
 // long-running actions must show a busy state instead of sitting silently.
 // Not picked up by `npm test` (node's default test-file pattern requires
 // ".test." in the name) — run explicitly via `npm run test:e2e`.
@@ -26,14 +26,13 @@ test.after(async () => {
   await app?.close()
 })
 
-test('plain git project with no remote: Update, Publish, Get Data all disabled', async () => {
+test('plain git project with no remote: Update, Publish and Get all disabled', async () => {
   const projectPath = await createPlainGitRepo(root)
   await app.openProject(projectPath)
 
   const update = await app.buttonState('update-project')
   const publish = await app.buttonState('publish-project')
-  const getData = await app.buttonState('get-data')
-  const unlock = await app.buttonState('unlock-files')
+  const getData = await app.buttonState('files-get-all')
 
   assert.equal(update.disabled, true)
   assert.match(update.title, /No remote is configured/)
@@ -41,17 +40,15 @@ test('plain git project with no remote: Update, Publish, Get Data all disabled',
   assert.match(publish.title, /No remote is configured/)
   assert.equal(getData.disabled, true)
   assert.match(getData.title, /not a DataLad dataset/)
-  assert.equal(unlock.disabled, true)
-  assert.match(unlock.title, /not a DataLad dataset/)
 })
 
-test('plain git project with a remote: Update/Publish enabled, Get Data still disabled', async () => {
+test('plain git project with a remote: Update/Publish enabled, Get all still disabled', async () => {
   const projectPath = await createGitRepoWithRemote(root)
   await app.openProject(projectPath)
 
   const update = await app.buttonState('update-project')
   const publish = await app.buttonState('publish-project')
-  const getData = await app.buttonState('get-data')
+  const getData = await app.buttonState('files-get-all')
 
   assert.equal(update.disabled, false)
   assert.match(update.title, /origin\/main/)
@@ -67,13 +64,12 @@ test('plain git project with a remote: Update/Publish enabled, Get Data still di
   assert.match(remoteInfo.text, /Remote: origin\/main/)
 })
 
-test('DataLad dataset with no remote: nothing to fetch so Get Data is disabled, Update/Publish still disabled', async () => {
+test('DataLad dataset with no remote: nothing to fetch so Get all is disabled, Update/Publish still disabled', async () => {
   const projectPath = await createDatasetFixture(root)
   await app.openProject(projectPath)
 
-  const getData = await app.buttonState('get-data')
+  const getData = await app.buttonState('files-get-all')
   const update = await app.buttonState('update-project')
-  const unlock = await app.buttonState('unlock-files')
 
   // The fixture never had any annexed content, so once a real git-annex
   // resolves health (it's not installed on most CI runners, but is on a
@@ -83,18 +79,15 @@ test('DataLad dataset with no remote: nothing to fetch so Get Data is disabled, 
   assert.equal(getData.disabled, true)
   assert.match(getData.title, /nothing to get/)
   assert.equal(update.disabled, true)
-  assert.equal(unlock.disabled, false)
 })
 
-test('DataLad superdataset: nothing to fetch so Get Data is disabled', async () => {
+test('DataLad superdataset: nothing to fetch so Get all is disabled', async () => {
   const projectPath = await createSuperdatasetFixture(root)
   await app.openProject(projectPath)
 
-  const getData = await app.buttonState('get-data')
-  const unlock = await app.buttonState('unlock-files')
+  const getData = await app.buttonState('files-get-all')
   assert.equal(getData.disabled, true)
   assert.match(getData.title, /nothing to get/)
-  assert.equal(unlock.disabled, false)
 })
 
 test('Check Setup shows a busy state while running, then recovers', async () => {
