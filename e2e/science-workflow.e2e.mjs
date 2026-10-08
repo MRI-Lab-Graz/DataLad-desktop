@@ -70,13 +70,17 @@ test('Check Data Integrity reports all files intact', async () => {
   assert.match(text, /intact/, await commandOutput())
 })
 
-test('Free Up Space removes the local copy now that the backup has one', async () => {
+test('Free up space on the file row removes the local copy now that the backup has one', async () => {
+  const dropButton = '[data-data-action="drop"][data-data-path="data.bin"]'
   await app.page.evaluate(() => {
     window.confirm = () => true
-    document.getElementById('paths').value = 'data.bin'
-    document.getElementById('drop-data').click()
+    document.querySelector('[data-nav-target="files-panel"]').click()
   })
-  await idle('drop-data', 'Free Up Space')
+  await app.page.waitForSelector(dropButton)
+  await app.page.evaluate((selector) => document.querySelector(selector).click(), dropButton)
+  for (let i = 0; i < 100 && sh('git', ['annex', 'find', '--in', 'here', 'data.bin'], projectPath).trim() !== ''; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
   assert.equal(sh('git', ['annex', 'find', '--in', 'here', 'data.bin'], projectPath).trim(), '', await commandOutput())
 })
 

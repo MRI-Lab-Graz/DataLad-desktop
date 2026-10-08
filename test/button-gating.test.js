@@ -2,7 +2,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   computeDatasetGating,
-  computeUnlockGating,
   computeAnnexToolGating,
   computeRemoteGating,
   computeSyncSectionVisible,
@@ -57,28 +56,6 @@ test('computeDatasetGating enables Get Data for a dataset before health has reso
 test('computeDatasetGating enables Get Data for a dataset when annex support is unknown', () => {
   const gating = computeDatasetGating('dataset', { annexSupported: false, missingContentCount: null })
   assert.equal(gating.disabled, false)
-})
-
-test('computeUnlockGating disables Unlock for a plain git project', () => {
-  const gating = computeUnlockGating('git')
-  assert.equal(gating.disabled, true)
-  assert.match(gating.title, /not a DataLad dataset/)
-})
-
-test('computeUnlockGating disables Unlock for null/undefined/unknown classification', () => {
-  assert.equal(computeUnlockGating(null).disabled, true)
-  assert.equal(computeUnlockGating(undefined).disabled, true)
-  assert.equal(computeUnlockGating('unknown').disabled, true)
-})
-
-test('computeUnlockGating enables Unlock for a dataset', () => {
-  const gating = computeUnlockGating('dataset')
-  assert.equal(gating.disabled, false)
-  assert.match(gating.title, /Use with caution/)
-})
-
-test('computeUnlockGating enables Unlock for a superdataset', () => {
-  assert.equal(computeUnlockGating('superdataset').disabled, false)
 })
 
 test('computeRemoteGating disables Update/Publish/Disconnect when there is no health snapshot', () => {
@@ -159,46 +136,27 @@ test('computeSyncSectionVisible shows the section for a plain git project that h
   assert.equal(computeSyncSectionVisible('git', { hasUpstream: true }), true)
 })
 
-test('computeSyncActionsQuietMessage returns a message when a dataset has no remote and nothing to get', () => {
-  const message = computeSyncActionsQuietMessage('dataset', {
-    hasUpstream: false,
-    annexSupported: true,
-    missingContentCount: 0
-  })
-  assert.match(message, /Nothing to sync right now/)
-  assert.match(message, /Get Data once files have missing content/)
+test('computeSyncActionsQuietMessage explains a project with no remote, for datasets and plain Git alike', () => {
+  for (const health of [
+    { hasUpstream: false, annexSupported: true, missingContentCount: 0 },
+    { hasUpstream: false, annexSupported: true, missingContentCount: 2 },
+    { hasUpstream: false }
+  ]) {
+    const message = computeSyncActionsQuietMessage(health)
+    assert.match(message, /Nothing to sync right now/)
+    assert.match(message, /Add a Remote/)
+    assert.doesNotMatch(message, /Get Data/)
+  }
 })
 
-test('computeSyncActionsQuietMessage returns null once any action is usable', () => {
-  assert.equal(
-    computeSyncActionsQuietMessage('dataset', {
-      hasUpstream: false,
-      annexSupported: true,
-      missingContentCount: 2
-    }),
-    null
-  )
-  assert.equal(
-    computeSyncActionsQuietMessage('dataset', {
-      hasUpstream: true,
-      upstream: 'origin/main',
-      annexSupported: true,
-      missingContentCount: 0
-    }),
-    null
-  )
+test('computeSyncActionsQuietMessage returns null once there is a remote to sync with', () => {
+  assert.equal(computeSyncActionsQuietMessage({ hasUpstream: true, upstream: 'origin/main' }), null)
 })
 
 test('computeSyncActionsQuietMessage returns null before health has resolved (avoids a premature flash)', () => {
-  assert.equal(computeSyncActionsQuietMessage('dataset', null), null)
+  assert.equal(computeSyncActionsQuietMessage(null), null)
+  assert.equal(computeSyncActionsQuietMessage(undefined), null)
 })
-
-test('computeSyncActionsQuietMessage uses git-only wording for a plain git project with a dead remote', () => {
-  const message = computeSyncActionsQuietMessage('git', { hasUpstream: false })
-  assert.match(message, /Nothing to sync right now/)
-  assert.doesNotMatch(message, /Get Data/)
-})
-
 
 test('computeAnnexToolGating disables annex-only actions for a plain git project', () => {
   const gating = computeAnnexToolGating('git', 'Ready.')

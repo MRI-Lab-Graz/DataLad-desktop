@@ -5,7 +5,7 @@
 
 const NO_REMOTE_TITLE =
   'No remote is configured for this project, so there is nothing to sync with. ' +
-  'This project can still be used fully offline with Save and Get Data.'
+  'This project can still be used fully offline with Save.'
 
 const NOT_A_DATASET_TITLE =
   'This is a plain Git project, not a DataLad dataset, so there is no annexed data to fetch.'
@@ -15,13 +15,6 @@ const GET_DATA_READY_TITLE =
 
 const NOTHING_TO_GET_TITLE =
   'All tracked file content is already downloaded here, so there is nothing to get.'
-
-const NOT_A_DATASET_UNLOCK_TITLE =
-  'This is a plain Git project, not a DataLad dataset, so there is nothing to unlock.'
-
-const UNLOCK_READY_TITLE =
-  'Use with caution: replaces the link to selected file(s) with a real, editable copy. ' +
-  'Content must already be downloaded (Get Data), and this roughly doubles disk usage until you Save again.'
 
 /**
  * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
@@ -43,20 +36,6 @@ export function computeDatasetGating(classification, health) {
   }
 
   return { disabled: false, title: GET_DATA_READY_TITLE }
-}
-
-/**
- * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
- * @returns {{ disabled: boolean, title: string }}
- */
-export function computeUnlockGating(classification) {
-  const isDataLadDataset = classification === 'dataset' || classification === 'superdataset'
-
-  if (!isDataLadDataset) {
-    return { disabled: true, title: NOT_A_DATASET_UNLOCK_TITLE }
-  }
-
-  return { disabled: false, title: UNLOCK_READY_TITLE }
 }
 
 const NOT_A_DATASET_ANNEX_TITLE =
@@ -126,10 +105,10 @@ export function computeRemoteGating(health) {
 }
 
 /**
- * The "Get Data & Remote Sync" section only makes sense when there's
- * something to sync with: a configured remote, or a DataLad dataset whose
- * annexed files might have real content to fetch. A plain local Git
- * project has neither, so the whole section stays hidden for it.
+ * The Sync section only makes sense when there's something to sync with:
+ * a configured remote, or a DataLad dataset that could be given one (Add a
+ * Remote lives there). A plain local Git project has neither, so the whole
+ * section stays hidden for it.
  *
  * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
  * @param {{ hasUpstream?: boolean } | null | undefined} health
@@ -143,32 +122,19 @@ export function computeSyncSectionVisible(classification, health) {
 }
 
 /**
- * The section stays visible (per computeSyncSectionVisible) for as long as
- * it *could* become useful, but a dataset with no remote and nothing
- * missing to fetch has all three actions disabled at once — three greyed
- * buttons plus an info icon reads as broken rather than "not needed yet".
- * In that case, swap the button strip for one quiet explanatory line
- * instead of hiding the section outright, so the feature stays
- * discoverable for when a remote gets added or content goes missing.
+ * Without a remote, Update and Publish are both disabled — two greyed buttons plus an info icon read as broken rather
+ * than "not needed yet". Swap the strip for one quiet line instead of hiding the section, so Add a Remote stays
+ * discoverable. Null before health has resolved, to avoid a premature flash.
  *
- * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
- * @param {{
- *   hasUpstream?: boolean, annexSupported?: boolean, missingContentCount?: number|null
- * } | null | undefined} health
+ * @param {{ hasUpstream?: boolean } | null | undefined} health
  * @returns {string|null} the quiet message to show, or null to show the normal button strip
  */
-export function computeSyncActionsQuietMessage(classification, health) {
-  const datasetGating = computeDatasetGating(classification, health)
-  const remoteGating = computeRemoteGating(health)
-  const allDisabled = datasetGating.disabled && remoteGating.update.disabled && remoteGating.publish.disabled
-
-  if (!allDisabled) {
+export function computeSyncActionsQuietMessage(health) {
+  if (!health) {
     return null
   }
-
-  const isDataLadDataset = classification === 'dataset' || classification === 'superdataset'
-
-  return isDataLadDataset
-    ? 'Nothing to sync right now — use Add a Remote below to enable Update/Publish, or Get Data once files have missing content.'
-    : 'Nothing to sync right now — use Add a Remote below to enable Update and Publish.'
+  const { update, publish } = computeRemoteGating(health)
+  return update.disabled && publish.disabled
+    ? 'Nothing to sync right now — use Add a Remote below to enable Update and Publish.'
+    : null
 }
