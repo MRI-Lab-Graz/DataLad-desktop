@@ -195,8 +195,10 @@ export class DataLadAdapter {
     let entries
     try {
       entries = await readdir(folderPath, { withFileTypes: true })
-    } catch {
-      return { folderPath, bidsLikely: false, confidence: 'none', signals: [], candidateSubpaths: [] }
+    } catch (error) {
+      // ENOENT: nothing there yet. Anything else (a file, no permission): something is there, so not free to create into.
+      const missing = error.code === 'ENOENT'
+      return { folderPath, exists: !missing, isEmpty: missing, bidsLikely: false, confidence: 'none', signals: [], candidateSubpaths: [] }
     }
 
     const names = new Set(entries.map((entry) => entry.name))
@@ -215,7 +217,7 @@ export class DataLadAdapter {
     const confidence = names.has(BIDS_MARKER_FILE) ? 'high' : signals.length > 0 ? 'medium' : 'none'
     const candidateSubpaths = [...subjectDirs, ...presentTopLevelDirs]
 
-    return { folderPath, bidsLikely: confidence !== 'none', confidence, signals, candidateSubpaths }
+    return { folderPath, exists: true, isEmpty: entries.length === 0, bidsLikely: confidence !== 'none', confidence, signals, candidateSubpaths }
   }
 
   // Writes the BIDS root marker file if one isn't already present — needed

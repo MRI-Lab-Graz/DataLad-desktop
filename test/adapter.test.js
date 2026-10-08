@@ -1461,6 +1461,20 @@ test('inspectBidsCandidate returns bidsLikely=false for a nonexistent folder wit
   assert.deepEqual(result.candidateSubpaths, [])
 })
 
+test('inspectBidsCandidate says whether the folder exists and is empty', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  const root = await mkdtemp(join(tmpdir(), 'dlad-exists-'))
+
+  assert.deepEqual(
+    (({ exists, isEmpty }) => ({ exists, isEmpty }))(await adapter.inspectBidsCandidate(root)),
+    { exists: true, isEmpty: true }
+  )
+  await writeFile(join(root, 'notes.txt'), 'x')
+  assert.equal((await adapter.inspectBidsCandidate(root)).isEmpty, false)
+  const missing = await adapter.inspectBidsCandidate(join(root, 'nope'))
+  assert.deepEqual({ exists: missing.exists, isEmpty: missing.isEmpty }, { exists: false, isEmpty: true })
+})
+
 test('ensureBidsMarker writes a placeholder dataset_description.json when none exists', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dlad-bids-marker-'))
   const adapter = new DataLadAdapter({ runner: new FakeRunner() })

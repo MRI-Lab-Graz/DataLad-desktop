@@ -194,18 +194,25 @@
 
 
             <label class="field">
-              <span id="create-project-path-label">New Project Folder</span>
+              <span id="create-project-path-label">Location</span>
               <div class="field-row">
-                <input id="create-project-path" type="text" placeholder="/path/to/new-project" />
+                <input id="create-project-path" type="text" placeholder="/path/to/parent-folder" />
                 <button id="pick-create-project-path" class="button button-ghost button-inline" type="button">
                   Browse
                 </button>
               </div>
             </label>
 
+            <label class="field">
+              <span>Project name</span>
+              <input id="create-project-name" type="text" placeholder="my-study" />
+            </label>
+
+            <p class="hint-inline" id="create-project-target" aria-live="polite"></p>
+
             <p class="hint-inline" id="create-project-path-hint">
-              Pick an empty folder, or type a new folder name to create it. If it looks like a BIDS dataset,
-              subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.
+              The project is created as a new folder with this name inside the location. If it looks like a BIDS
+              dataset, subject/rawdata/derivatives/sourcedata folders are automatically nested into subdatasets.
             </p>
 
             <div class="row-actions">
