@@ -43,9 +43,13 @@ test('files with spaces and umlauts are listed by their real names and really sa
     { timeout: 60_000 }
   )
 
-  const saved = execFileSync('git', ['-C', projectPath, '-c', 'core.quotePath=false', 'log', '-1', '--name-only', '--format=%s'], {
-    encoding: 'utf8'
-  })
+  // Not `log -1`: on Windows DataLad puts the project in git-annex's adjusted-branch mode, where HEAD's newest
+  // commit is git-annex's own synthetic "git-annex adjusted branch" commit, not the save. Find the save by message.
+  const saved = execFileSync(
+    'git',
+    ['-C', projectPath, '-c', 'core.quotePath=false', 'log', '--all', '--grep=add files with odd names', '--name-only', '--format=%s'],
+    { encoding: 'utf8' }
+  )
   assert.match(saved, /add files with odd names/)
   assert.match(saved, /my file\.csv/)
   assert.match(saved, /Größe ä\.txt/)
