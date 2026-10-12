@@ -72,3 +72,32 @@ test('parseMergeBranch reads the other branch from the merge message', () => {
   assert.equal(parseMergeBranch('something else'), null)
   assert.equal(parseMergeBranch(''), null)
 })
+
+// git quotes a name with a space, tab, quote or backslash in `status --porcelain`, e.g. ?? "my file.csv".
+// The quotes are not part of the file name, and Save passes the name on to datalad.
+test('normalizeGitStatusPath unquotes names that git quoted', () => {
+  assert.equal(normalizeGitStatusPath('"my file.csv"', '??'), 'my file.csv')
+  assert.equal(normalizeGitStatusPath('"sub dir/my file.csv"', '??'), 'sub dir/my file.csv')
+  assert.equal(normalizeGitStatusPath('"tab\\there.txt"', '??'), 'tab\there.txt')
+  assert.equal(normalizeGitStatusPath('"quote\\"d.txt"', '??'), 'quote"d.txt')
+  assert.equal(normalizeGitStatusPath('"back\\\\slash.txt"', '??'), 'back\\slash.txt')
+})
+
+test('normalizeGitStatusPath decodes octal-escaped UTF-8 bytes', () => {
+  assert.equal(normalizeGitStatusPath('"caf\\303\\251 notes.txt"', '??'), 'café notes.txt')
+})
+
+test('normalizeGitStatusPath unquotes both sides of a rename and keeps the destination', () => {
+  assert.equal(normalizeGitStatusPath('"old name.txt" -> "new name.txt"', 'R '), 'new name.txt')
+  assert.equal(normalizeGitStatusPath('old.txt -> "new name.txt"', 'R '), 'new name.txt')
+})
+
+test('normalizeGitStatusPath leaves unquoted names and stray quote characters alone', () => {
+  assert.equal(normalizeGitStatusPath('plain.txt', 'M '), 'plain.txt')
+  assert.equal(normalizeGitStatusPath('"unterminated.txt', '??'), '"unterminated.txt')
+})
+
+test('parseGitStatusPorcelain lists a file with a space under its real name', () => {
+  const { files } = parseGitStatusPorcelain('?? "my file.csv"\n M plain.txt\n')
+  assert.deepEqual(files.map((file) => file.path).sort(), ['my file.csv', 'plain.txt'])
+})
