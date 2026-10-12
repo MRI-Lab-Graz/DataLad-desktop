@@ -2012,3 +2012,55 @@ select:disabled {
   font-size: 1.15rem;
   margin-bottom: 12px;
 }
+
+.file-diff {
+  flex-basis: 100%;
+  margin-top: 6px;
+}
+
+.diff {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  tab-size: 8;
+}
+
+.diff-line {
+  white-space: pre;
+  padding: 0 8px;
+}
+
+.diff-mark {
+  display: inline-block;
+  width: 1.2em;
+  color: #8a7e66;
+  user-select: none;
+}
+
+.diff-add {
+  background: rgba(46, 160, 67, 0.14);
+}
+
+.diff-del {
+  background: rgba(207, 34, 46, 0.12);
+}
+
+.diff-hunk {
+  color: #716145;
+  background: rgba(245, 239, 228, 0.84);
+}
+
+.diff-cell-changed {
+  background: rgba(240, 180, 40, 0.55);
+  border-radius: 3px;
+  font-weight: 700;
+}
+
+/* An open diff needs room; a very long one still scrolls inside the list. */
+.changed-files-list:has(.file-diff:not([hidden])) {
+  max-height: 70vh;
+}

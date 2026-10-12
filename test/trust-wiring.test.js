@@ -57,7 +57,7 @@ test('a clone is never trusted or authorized by the app: its first open asks', (
 test('a push re-checks the project and every local-path remote right before the command', () => {
   const body = block("handle('adapter:runCommand'")
   const project = body.search(/PUSHES\.has\(payload\.commandName\)[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
-  const remotes = body.search(/localRemotePaths\(consoleRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
+  const remotes = body.search(/localRemotePaths\(toolRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
   assert.ok(project !== -1 && remotes !== -1)
   assert.ok(remotes < body.indexOf('adapter.runCommand('))
 })
@@ -97,7 +97,7 @@ test('createProject into an empty target ignores force, so a folder filled in be
 // folder, or a documented read-only exception. Otherwise this test fails until someone decides.
 test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
-  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'adapter:resolveConflict', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'adapter:resolveConflict', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getFileDiff', 'adapter:listChangesSince', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
   const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'app:version', 'env:ensure', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
