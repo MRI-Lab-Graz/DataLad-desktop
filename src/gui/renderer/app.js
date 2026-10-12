@@ -130,6 +130,10 @@ const elements = {
   projectStrip: document.getElementById('project-strip'),
   projectHealthCard: document.getElementById('project-health-card'),
   projectNavGroup: document.getElementById('project-nav-group'),
+  projectHome: document.getElementById('project-home'),
+  projectTools: document.getElementById('project-tools'),
+  openToolsButton: document.getElementById('open-tools'),
+  closeToolsButton: document.getElementById('close-tools'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
   projectNavTileConsole: document.getElementById('project-nav-tile-console'),
@@ -491,7 +495,7 @@ elements.detectProjectButton.addEventListener('click', async () => {
 // -open tile again closes it, returning to just the tile row. Shared between
 // the landing-page picker (Open/Create Project) and the running-project nav
 // (Save/Sync/Files/...) so both stay on one interaction model.
-function wireTileGroup(tiles, datasetKey) {
+function wireTileGroup(tiles, datasetKey, { required = false } = {}) {
   function select(targetId) {
     for (const tile of tiles) {
       const isSelected = tile.dataset[datasetKey] === targetId
@@ -509,6 +513,9 @@ function wireTileGroup(tiles, datasetKey) {
         return
       }
       const alreadySelected = tile.getAttribute('aria-selected') === 'true'
+      if (alreadySelected && required) {
+        return
+      }
       select(alreadySelected ? null : tile.dataset[datasetKey])
     })
   }
@@ -517,7 +524,25 @@ function wireTileGroup(tiles, datasetKey) {
 }
 
 const selectOnboardingTile = wireTileGroup(elements.onboardingTiles, 'onboardingTarget')
-const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget')
+const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget', { required: true })
+const DEFAULT_TOOL = 'files-panel'
+
+function showHome() {
+  elements.projectTools.hidden = true
+  elements.projectHome.hidden = false
+}
+
+function showTools(target = DEFAULT_TOOL) {
+  elements.projectHome.hidden = true
+  elements.projectTools.hidden = false
+  selectProjectTile(target)
+  if (target === 'time-machine-zone') {
+    loadTimeMachineIfEmpty()
+  }
+}
+
+elements.openToolsButton.addEventListener('click', () => showTools())
+elements.closeToolsButton.addEventListener('click', showHome)
 
 function updateGetRemoteMode() {
   const isUrl = elements.getRemoteModeUrlRadio.checked
@@ -1219,15 +1244,17 @@ elements.createBranchButton.addEventListener('click', async () => {
   await refreshBranchList(projectPath)
 })
 
+async function loadTimeMachineIfEmpty() {
+  const projectPath = readProjectPath()
+  if (!projectPath || state.timeMachineCommits.length > 0) {
+    return
+  }
+  await refreshTimeMachineHistory(projectPath)
+}
+
 elements.projectNavTiles
   .find((tile) => tile.dataset.navTarget === 'time-machine-zone')
-  ?.addEventListener('click', async () => {
-    const projectPath = readProjectPath()
-    if (!projectPath || state.timeMachineCommits.length > 0) {
-      return
-    }
-    await refreshTimeMachineHistory(projectPath)
-  })
+  ?.addEventListener('click', loadTimeMachineIfEmpty)
 
 elements.timeMachineLoadMoreButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
@@ -3378,7 +3405,7 @@ function updateSyncSectionVisibility() {
   const nowVisible = computeSyncSectionVisible(classification, health)
   elements.projectNavTileSync.hidden = !nowVisible
   if (!nowVisible && elements.projectNavTileSync.getAttribute('aria-selected') === 'true') {
-    selectProjectTile('save-checkpoint-panel')
+    selectProjectTile(DEFAULT_TOOL)
   }
 
   const quietMessage = computeSyncActionsQuietMessage(health)
@@ -3396,15 +3423,15 @@ function setOnboardingExpanded(expanded) {
 // Until a project is actually opened, only "Latest Projects" / "Open Project"
 // (the onboarding group) should be visible — every other card reads as
 // confusing noise for a project nobody has chosen yet. Once a project opens,
-// its sections live behind click-to-reveal tiles (see wireTileGroup) rather
-// than all showing at once, and default back to the Save Checkpoint tile —
-// the action used most — each time a project is opened or switched.
+// the Home view (Save, status, recent history) shows, and every other section
+// lives behind the Tools button (see showTools); each time a project is opened
+// or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
   elements.projectHealthCard.hidden = !visible
   elements.projectNavGroup.hidden = !visible
   if (visible) {
-    selectProjectTile('save-checkpoint-panel')
+    showHome()
   } else {
     clearTimeMachine()
   }
@@ -4042,7 +4069,7 @@ function updatePowerUserConsoleVisibility() {
   const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
   elements.projectNavTileConsole.hidden = !visible
   if (!visible && elements.projectNavTileConsole.getAttribute('aria-selected') === 'true') {
-    selectProjectTile('save-checkpoint-panel')
+    selectProjectTile(DEFAULT_TOOL)
   }
 }
 
