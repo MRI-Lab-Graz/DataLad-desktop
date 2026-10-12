@@ -87,11 +87,11 @@ test('status line: neutral when tree or health has not resolved yet', () => {
 test('status line: urgent for unsaved changes, singular vs plural', () => {
   assert.deepEqual(computeStatusLine({ clean: false, totalChanged: 1 }, { hasUpstream: false }), {
     tone: 'urgent',
-    label: '⚠️ 1 unsaved change — save a checkpoint when ready.'
+    label: '⚠️ 1 unsaved change — save when ready.'
   })
   assert.deepEqual(computeStatusLine({ clean: false, totalChanged: 3 }, { hasUpstream: false }), {
     tone: 'urgent',
-    label: '⚠️ 3 unsaved changes — save a checkpoint when ready.'
+    label: '⚠️ 3 unsaved changes — save when ready.'
   })
 })
 

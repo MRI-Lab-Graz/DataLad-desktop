@@ -40,3 +40,20 @@ test('ProcessRunner never runs a shell line (that option existed only for the co
   assert.doesNotMatch(runner, /options\.shell/)
   assert.match(runner, /shell: false/)
 })
+
+test('the UI text says save, never checkpoint or commit', () => {
+  // Ids, classes and other attributes are exempt; visible text, titles and placeholders are not.
+  const visible = html
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\s(?:id|class|for|aria-labelledby|aria-controls|data-[\w-]+|role|type|href|src|alt)="[^"]*"/g, '')
+  assert.doesNotMatch(visible, /checkpoint|\bcommits?\b/i)
+})
+
+test('user-facing strings in app.js and the pure helpers say save', () => {
+  const chips = read('src/gui/renderer/project-health-chips.js')
+  const gating = read('src/gui/renderer/save-gating.js')
+  assert.doesNotMatch(app, /Latest commit|Last commit|No commits yet|recent commits'|`checkpoint |Save a Checkpoint|Checkpoint Message|Save Checkpoint|checkpoint message/)
+  assert.doesNotMatch(chips + gating, /checkpoint|messageLabel/i)
+  assert.match(app, /Last saved \$\{relativeAge\}/)
+  assert.match(app, /return `save \$\{date\} \$\{time\}`/)
+})

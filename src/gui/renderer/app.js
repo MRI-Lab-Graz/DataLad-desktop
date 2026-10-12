@@ -920,8 +920,8 @@ elements.saveProjectButton.addEventListener('click', async () => {
   const message = elements.message.value.trim()
 
   if (!message) {
-    elements.commandOutput.textContent = 'Add a checkpoint message before running Save.'
-    setLastActionState('Add a checkpoint message first.', 'error')
+    elements.commandOutput.textContent = 'Add a message before running Save.'
+    setLastActionState('Add a message first.', 'error')
     updateSaveButtonState()
     return
   }
@@ -2413,7 +2413,7 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
     }
 
     state.recentCommits = []
-    renderRecentCommitList(`Could not load recent commits: ${String(error.message)}`)
+    renderRecentCommitList(`Could not load recent saves: ${String(error.message)}`)
     if (includeCommandOutputOnFailure) {
       elements.commandOutput.textContent = String(error.message)
     }
@@ -2888,7 +2888,7 @@ function renderRecentCommitList(overrideMessage = null) {
   }
 
   if (!state.recentCommits.length) {
-    elements.recentCommitsOutput.textContent = 'No commits yet in this project.'
+    elements.recentCommitsOutput.textContent = 'No saves yet in this project.'
     return
   }
 
@@ -2938,9 +2938,6 @@ function updateSaveButtonState() {
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 }
 
-// Plain-language "checkpoint" terms are the default so non-git users aren't
-// confronted with jargon, but Power User Mode swaps in the git vocabulary
-// (commit) those users already know instead.
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)
   elements.mergeBranchSelect.innerHTML = candidates.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')
@@ -3013,7 +3010,7 @@ async function buildSaveSummary(projectPath, savedPaths) {
 
     const fileSummary = savedPaths.length > 0 ? `${savedPaths.length} selected file(s)` : 'full dataset scope'
     const hashSummary = commitMeta.commitHash ? ` ${commitMeta.commitHash}` : ''
-    return `Saved ${fileSummary}. Latest commit:${hashSummary}.`
+    return `Saved ${fileSummary}. Latest save:${hashSummary}.`
   } catch {
     return null
   }
@@ -3663,7 +3660,7 @@ async function refreshLastCommitMeta(projectPath) {
   state.commitMetaRequestToken = nextToken
 
   if (!projectPath) {
-    setLastCommitMeta('Select a project to see last commit status.', 'idle')
+    setLastCommitMeta('Select a project to see the last save.', 'idle')
     return
   }
 
@@ -3675,7 +3672,7 @@ async function refreshLastCommitMeta(projectPath) {
 
     if (!lastCommit?.hasCommit) {
       if (lastCommit?.reason === 'no-commits') {
-        setLastCommitMeta('No commits yet in this project.', 'alert')
+        setLastCommitMeta('No saves yet in this project.', 'alert')
         return
       }
 
@@ -3684,7 +3681,7 @@ async function refreshLastCommitMeta(projectPath) {
         return
       }
 
-      setLastCommitMeta('Last commit status unavailable.', 'idle')
+      setLastCommitMeta('Last save status unavailable.', 'idle')
       return
     }
 
@@ -3694,13 +3691,13 @@ async function refreshLastCommitMeta(projectPath) {
     const commitMessage = (lastCommit.message ?? '').trim()
     const commitSubject = (lastCommit.subject ?? '').trim()
     const tooltipSource = commitMessage || commitSubject
-    const tooltip = tooltipSource ? `Last commit message:\n${tooltipSource}` : ''
-    setLastCommitMeta(`Last commit ${relativeAge}${suffix}.`, 'reminder', tooltip)
+    const tooltip = tooltipSource ? `Last save message:\n${tooltipSource}` : ''
+    setLastCommitMeta(`Last saved ${relativeAge}${suffix}.`, 'reminder', tooltip)
   } catch {
     if (state.commitMetaRequestToken !== nextToken) {
       return
     }
-    setLastCommitMeta('Last commit status unavailable.', 'idle')
+    setLastCommitMeta('Last save status unavailable.', 'idle')
   }
 }
 
@@ -3743,7 +3740,7 @@ function buildQuickSaveMessage() {
     String(now.getDate()).padStart(2, '0')
   ].join('-')
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  return `checkpoint ${date} ${time}`
+  return `save ${date} ${time}`
 }
 
 function loadRecentProjects() {

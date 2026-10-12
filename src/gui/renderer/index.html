@@ -19,7 +19,7 @@
           <div class="hero-meta-stack">
             <div class="hero-meta-text">
               <p id="last-commit-meta" class="hero-meta hero-meta-idle">
-                Last commit status appears here after selecting a project.
+                Last save status appears here after selecting a project.
               </p>
               <div class="hero-actions">
                 <button
@@ -73,7 +73,7 @@
 
         <div class="setup-section">
           <h3 class="setup-section-title">Your Name and Email</h3>
-          <p class="lede-small">Saved checkpoints are labelled with who made them.</p>
+          <p class="lede-small">Saves are labelled with who made them.</p>
           <p id="identity-summary" class="lede-small"></p>
           <div class="row-actions">
             <button id="identity-open" class="button button-ghost button-inline" type="button">Set…</button>
@@ -287,10 +287,10 @@
 
         <section id="save-checkpoint-panel" class="card save-hero reveal" aria-labelledby="project-actions-title">
           <div class="section-head">
-            <h2 id="project-actions-title">Save a Checkpoint</h2>
+            <h2 id="project-actions-title">Save</h2>
           </div>
           <p class="lede-small">
-            Write down what you've done and record a checkpoint of your files. This is the action you'll
+            Write down what you've done and save your files. This is the action you'll
             use most, and it works fully offline.
           </p>
 
@@ -332,25 +332,25 @@
           </section>
 
           <label class="field">
-            <span id="message-field-label">Checkpoint Message</span>
-            <input id="message" type="text" placeholder="Describe this checkpoint" />
+            <span id="message-field-label">Message</span>
+            <input id="message" type="text" placeholder="Describe what you changed" />
           </label>
 
-          <p id="save-guidance" class="hint-inline">Add a checkpoint message, or Save will ask you for one.</p>
+          <p id="save-guidance" class="hint-inline">Add a message, or Save will ask you for one.</p>
 
 
           <button
             id="save-project"
             class="button button-save-hero"
             type="button"
-            title="Record the current state of your files with a message, like a commit. Works fully offline."
+            title="Save the current state of your files with a message. Works fully offline."
           >
-            Save Checkpoint
+            Save
           </button>
 
           <section class="status-box" aria-labelledby="recent-commits-title">
             <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent Commits</h3>
+              <h3 id="recent-commits-title">Recent saves</h3>
               <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history <span aria-hidden="true">▸</span></button>
             </div>
             <div id="recent-commits-output" class="panel panel-muted panel-compact">
@@ -649,7 +649,7 @@
     <div id="identity-overlay" class="global-busy-overlay" hidden>
       <form id="identity-form" class="global-busy-card identity-card" role="dialog" aria-modal="true" aria-labelledby="identity-title">
         <h2 id="identity-title">Who is saving?</h2>
-        <p class="lede-small">Your name and email are stored with every checkpoint you save. You only need to enter them once, and you can change them any time in Setup.</p>
+        <p class="lede-small">Your name and email are stored with every save. You only need to enter them once, and you can change them any time in Setup.</p>
         <label class="field">
           <span>Name</span>
           <input id="identity-name" type="text" autocomplete="name" placeholder="Jane Doe" />
