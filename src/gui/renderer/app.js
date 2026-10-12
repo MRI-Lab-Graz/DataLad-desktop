@@ -3024,7 +3024,6 @@ function renderChangedFilesSelection() {
 
 // Fills one diff container (Home row or History compare entry). Never throws: errors are shown in the container.
 async function loadDiffInto(container, { projectPath, path, against, maxLines = DIFF_DEFAULT_LINES }) {
-  container.dataset.diffAgainst = against
   container.hidden = false
   container.innerHTML = loadingPanelHtml('Loading changes…')
   try {

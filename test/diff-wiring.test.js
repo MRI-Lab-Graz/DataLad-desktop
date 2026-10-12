@@ -96,3 +96,7 @@ test('the compare list is cleared whenever the selection changes or the detail c
   assert.match(fnBody('async function loadTimeMachineDetail'), /clearCompare\(\)/)
   assert.match(fnBody("elements.timeMachineCloseDetailButton.addEventListener('click'"), /clearCompare\(\)/)
 })
+
+test('no dead bookkeeping on the diff containers', () => {
+  assert.doesNotMatch(app, /diffAgainst/)
+})
