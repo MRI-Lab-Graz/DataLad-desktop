@@ -2647,3 +2647,36 @@ test('listChangesSince returns an empty list when nothing differs and refuses a 
   assert.deepEqual(await adapter.listChangesSince('/tmp/project', 'abc1234'), [])
   await assert.rejects(() => adapter.listChangesSince('/tmp/project', '--output=x'), /invalid commit hash/i)
 })
+
+test('getFileDiff shows an unlocked annexed file (pointer text in git) as a data file with sizes', async () => {
+  const pointer = [
+    'diff --git a/a.tsv b/a.tsv', 'index 111..222 100644', '--- a/a.tsv', '+++ b/a.tsv', '@@ -1 +1 @@',
+    '-/annex/objects/SHA256E-s4--aaaa.tsv', '+/annex/objects/SHA256E-s9--bbbb.tsv', ''
+  ].join('\n')
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: pointer } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.status, 'modified')
+  assert.equal(result.oldSize, 4)
+  assert.equal(result.newSize, 9)
+  assert.equal(result.patch, '')
+})
+
+test('getFileDiff reports a locked file that was unlocked and edited as modified, with both sizes', async () => {
+  const typeChange = [
+    'diff --git a/a.tsv b/a.tsv', 'deleted file mode 120000', 'index 111..000', '--- a/a.tsv', '+++ /dev/null', '@@ -1 +0,0 @@',
+    '-../.git/annex/objects/aa/bb/SHA256E-s2900--abc.tsv/SHA256E-s2900--abc.tsv', '\\ No newline at end of file',
+    'diff --git a/a.tsv b/a.tsv', 'new file mode 100644', 'index 000..222', '--- /dev/null', '+++ b/a.tsv', '@@ -0,0 +1 @@',
+    '+/annex/objects/SHA256E-s3100--def.tsv', ''
+  ].join('\n')
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: typeChange } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.status, 'modified')
+  assert.equal(result.oldSize, 2900)
+  assert.equal(result.newSize, 3100)
+})
+
+test('getFileDiff does not mistake an ordinary text file for annexed data', async () => {
+  const text = 'diff --git a/a.tsv b/a.tsv\nindex 111..222 100644\n--- a/a.tsv\n+++ b/a.tsv\n@@ -1 +1 @@\n-120000\n+/annex/objects/ is a folder\n'
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: text } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+})

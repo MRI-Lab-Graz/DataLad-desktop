@@ -1021,20 +1021,34 @@ export class DataLadAdapter {
     const lines = output.split(/\r?\n/)
     const firstHunk = lines.findIndex((line) => line.startsWith('@@'))
     const header = (firstHunk === -1 ? lines : lines.slice(0, firstHunk)).join('\n')
-    const status = /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
+    // A lock/unlock change (symlink <-> regular file) arrives as a delete plus an add: that is a modification.
+    const typeChange = /^deleted file mode/m.test(output) && /^new file mode/m.test(output)
+    const status = typeChange ? 'modified' : /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
     const body = firstHunk === -1 ? [] : lines.slice(firstHunk)
     while (body.length > 0 && body.at(-1) === '') {
       body.pop()
     }
 
-    // A locked annexed file is a symlink (mode 120000) whose target holds the key, and the key holds the size.
-    if (/\b120000\b/.test(header)) {
-      const sizeOf = (marker) => {
-        const line = body.find((candidate) => candidate.startsWith(marker))
+    // Annexed data is never shown as text: a locked file is a symlink (mode 120000) whose target holds the key, an
+    // unlocked one is a pointer line in git ("/annex/objects/...-s<bytes>--..."); the key holds the size either way.
+    const changed = lines.filter((line) => (line.startsWith('-') && !line.startsWith('---')) || (line.startsWith('+') && !line.startsWith('+++')))
+    const isSymlink = /^(?:(?:new file|deleted file|old|new) mode 120000|index \S+ 120000)$/m.test(output)
+    const isAnnexPointer = changed.length > 0 && changed.every((line) => /annex\/objects\/.*-s\d+--/.test(line))
+    if (isSymlink || isAnnexPointer) {
+      const sizeOf = (sign) => {
+        const line = changed.find((candidate) => candidate.startsWith(sign))
         const match = line ? ANNEX_KEY_SIZE.exec(line) : null
         return match ? Number(match[1]) : null
       }
-      return { kind: 'binary', status, patch: '', totalLines: 0, truncated: false, oldSize: sizeOf('-'), newSize: sizeOf('+') }
+      return {
+        kind: 'binary',
+        status,
+        patch: '',
+        totalLines: 0,
+        truncated: false,
+        oldSize: sizeOf('-'),
+        newSize: sizeOf('+') ?? (status === 'deleted' ? null : await this.#worktreeSize(projectPath, path))
+      }
     }
 
     if (/^Binary files .* differ$/m.test(header) || /^GIT binary patch$/m.test(header) || firstHunk === -1) {

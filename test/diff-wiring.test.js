@@ -100,3 +100,21 @@ test('the compare list is cleared whenever the selection changes or the detail c
 test('no dead bookkeeping on the diff containers', () => {
   assert.doesNotMatch(app, /diffAgainst/)
 })
+
+test('open diffs belong to one project and are never revived or mixed up by a slow response', () => {
+  assert.match(app, /diffRefreshGeneration: 0/)
+  assert.match(app, /openDiffsProject: null/)
+  const refresh = fnBody('async function refreshOpenDiffs')
+  assert.match(refresh, /resetDiffsOnProjectChange\(projectPath\)/)
+  // ... and before the list is rebuilt, so another project's cached diff is never drawn as open
+  assert.match(fnBody('function renderChangedFilesSelection'), /resetDiffsOnProjectChange\(readProjectPath\(\)\)/)
+  const reset = fnBody('function resetDiffsOnProjectChange')
+  assert.match(reset, /state\.openDiffsProject === projectPath/)
+  assert.match(reset, /state\.openDiffs\.clear\(\)/)
+  assert.match(refresh, /const generation = \+\+state\.diffRefreshGeneration/)
+  assert.match(refresh, /generation !== state\.diffRefreshGeneration \|\| readProjectPath\(\) !== projectPath/)
+  assert.match(refresh, /if \(state\.openDiffs\.has\(path\)\) \{\s*state\.openDiffs\.set\(path, html\)/)
+  // the Show/Show-the-rest click records the project and only stores the result if the diff is still open
+  assert.match(app, /state\.openDiffsProject = projectPath/)
+  assert.match(app, /if \(state\.openDiffs\.has\(path\) && readProjectPath\(\) === projectPath\) \{\s*state\.openDiffs\.set\(path, html\)/)
+})

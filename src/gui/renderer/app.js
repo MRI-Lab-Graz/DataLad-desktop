@@ -84,6 +84,8 @@ const state = {
   timeMachineDetails: null,
   timeMachineProjectPath: null,
   openDiffs: new Map(),
+  openDiffsProject: null,
+  diffRefreshGeneration: 0,
   headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
@@ -386,14 +388,15 @@ elements.changedFilesOutput.addEventListener('click', async (event) => {
       return
     }
     if (diffButton) {
+      state.openDiffsProject = projectPath
       state.openDiffs.set(path, '')
       diffButton.textContent = 'Hide changes'
       diffButton.setAttribute('aria-expanded', 'true')
     }
-    state.openDiffs.set(
-      path,
-      await loadDiffInto(container, { projectPath, path, against: 'HEAD', ...(moreButton ? { maxLines: DIFF_MAX_LINES } : {}) })
-    )
+    const html = await loadDiffInto(container, { projectPath, path, against: 'HEAD', ...(moreButton ? { maxLines: DIFF_MAX_LINES } : {}) })
+    if (state.openDiffs.has(path) && readProjectPath() === projectPath) {
+      state.openDiffs.set(path, html) // not if the user hid it, or switched project, while it loaded
+    }
     return
   }
 
@@ -2994,6 +2997,7 @@ const CHANGED_FILES_RENDER_LIMIT = 300
 const TM_RESTORE_FILES_RENDER_LIMIT = 100
 
 function renderChangedFilesSelection() {
+  resetDiffsOnProjectChange(readProjectPath())
   const files = state.workingTreeSnapshot?.files ?? []
   if (files.length === 0) {
     elements.changedFilesOutput.textContent = 'No changed files detected.'
@@ -3039,9 +3043,24 @@ function homeDiffContainer(path) {
   return [...elements.changedFilesOutput.querySelectorAll('[data-diff-container]')].find((node) => node.dataset.diffContainer === path)
 }
 
+// Open diffs belong to the project they were opened in.
+function resetDiffsOnProjectChange(projectPath) {
+  if (state.openDiffsProject === projectPath) {
+    return false
+  }
+  state.openDiffs.clear()
+  state.openDiffsProject = projectPath
+  return true
+}
+
 // The list is rebuilt whenever status refreshes, so remembered diffs are re-attached and then reloaded.
+// A newer refresh, a project switch, or a Hide click while a diff is loading must win over the late response.
 async function refreshOpenDiffs() {
   const projectPath = readProjectPath()
+  if (resetDiffsOnProjectChange(projectPath)) {
+    return
+  }
+  const generation = ++state.diffRefreshGeneration
   const changed = new Set((state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path))
   for (const path of [...state.openDiffs.keys()]) {
     const container = homeDiffContainer(path)
@@ -3049,7 +3068,13 @@ async function refreshOpenDiffs() {
       state.openDiffs.delete(path)
       continue
     }
-    state.openDiffs.set(path, await loadDiffInto(container, { projectPath, path, against: 'HEAD' }))
+    const html = await loadDiffInto(container, { projectPath, path, against: 'HEAD' })
+    if (generation !== state.diffRefreshGeneration || readProjectPath() !== projectPath) {
+      return
+    }
+    if (state.openDiffs.has(path)) {
+      state.openDiffs.set(path, html)
+    }
   }
 }
 
