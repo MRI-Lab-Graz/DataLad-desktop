@@ -1,5 +1,5 @@
-import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join, sep } from 'node:path'
+import { lstat, mkdir, open, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
 import { redactUrlCredentials } from './redact.js'
@@ -39,6 +39,29 @@ const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info
 const MAX_SUBDATASET_DEPTH = 8 // symlinked or hostile nesting cannot recurse forever
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
 const SAVE_PATHS_LIMIT = 200 // more changed entries than this are not listed on the command line (Windows limit)
+export const DIFF_DEFAULT_LINES = 500
+export const DIFF_MAX_LINES = 20_000
+// A diff must never run a program named by repository content (diff.<driver>.command, textconv, GIT_EXTERNAL_DIFF).
+export const DIFF_SAFE_FLAGS = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-renames']
+const UNTRACKED_READ_LIMIT = 1024 * 1024 // an untracked file is shown from its first MiB at most
+const ANNEX_KEY_SIZE = /-s(\d+)--/
+
+// True when `file` is strictly inside `folder`; also right for a filesystem or drive root ("/", "E:\\").
+export function isInsideFolder(folder, file) {
+  const path = relative(folder, file)
+  return path !== '' && path !== '..' && !path.startsWith(`..${'/'}`) && !path.startsWith('..\\') && !isAbsolute(path)
+}
+
+function isSafeRelativePath(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.includes('\0') &&
+    !isAbsolute(value) &&
+    !/^[A-Za-z]:/.test(value) &&
+    !value.split(/[\\/]/).includes('..')
+  )
+}
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 function isSafeName(name) {
@@ -969,6 +992,181 @@ export class DataLadAdapter {
     }
   }
 
+  async getFileDiff(projectPath, request = {}) {
+    // Hostile input is refused before any git process starts.
+    const { path, against } = request
+    if (!isSafeRelativePath(path)) {
+      throw new Error(`Invalid file path: ${String(path)}`)
+    }
+    if (against !== 'HEAD' && !(typeof against === 'string' && COMMIT_HASH_PATTERN.test(against))) {
+      throw new Error(`Invalid commit hash format: ${String(against)}`)
+    }
+    await this.#ensureGitProject(projectPath)
+    const requested = Number.parseInt(request.maxLines, 10)
+    const maxLines = Math.min(Math.max(Number.isFinite(requested) && requested > 0 ? requested : DIFF_DEFAULT_LINES, 1), DIFF_MAX_LINES)
+
+    if (against === 'HEAD') {
+      const others = await this.runner.run('git', ['-C', projectPath, 'ls-files', '--others', '--exclude-standard', '-z', '--', path])
+      if (!others.failed && (others.stdout ?? '').length > 0) {
+        return this.#diffUntrackedFile(projectPath, path, maxLines)
+      }
+    }
+
+    const result = await this.runner.run('git', ['-C', projectPath, 'diff', against, ...DIFF_SAFE_FLAGS, '-U3', '--', path])
+    if (result.failed && !(result.stdout ?? '')) {
+      if (against === 'HEAD' && /bad revision|unknown revision|ambiguous argument/i.test(result.stderr ?? '')) {
+        throw new Error('There is nothing to compare with yet: this project has no saves yet.')
+      }
+      throw new Error(`Could not compare ${path}: ${(result.stderr ?? '').trim() || 'unknown error'}`)
+    }
+    return this.#shapeDiff(projectPath, against, path, result.stdout ?? '', maxLines)
+  }
+
+  async #shapeDiff(projectPath, against, path, output, maxLines) {
+    if (output.trim() === '') {
+      return { kind: 'unchanged', status: 'modified', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
+    }
+    const lines = output.split(/\r?\n/)
+    const firstHunk = lines.findIndex((line) => line.startsWith('@@'))
+    const header = (firstHunk === -1 ? lines : lines.slice(0, firstHunk)).join('\n')
+    // A lock/unlock change (symlink <-> regular file) arrives as a delete plus an add: that is a modification.
+    const typeChange = /^deleted file mode/m.test(output) && /^new file mode/m.test(output)
+    const status = typeChange ? 'modified' : /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
+    // "\ No newline at end of file" markers are noise: dropped, so counts match what is shown.
+    const body = (firstHunk === -1 ? [] : lines.slice(firstHunk)).filter((line) => !line.startsWith('\\'))
+    while (body.length > 0 && body.at(-1) === '') {
+      body.pop()
+    }
+
+    // Annexed data is never shown as text: a locked file is a symlink (mode 120000) whose target holds the key, an
+    // unlocked one is a pointer line in git ("/annex/objects/...-s<bytes>--..."); the key holds the size either way.
+    const changed = lines.filter((line) => (line.startsWith('-') && !line.startsWith('---')) || (line.startsWith('+') && !line.startsWith('+++')))
+    const isSymlink = /^(?:(?:new file|deleted file|old|new) mode 120000|index \S+ 120000)$/m.test(output)
+    const isAnnexPointer = changed.length > 0 && changed.every((line) => /annex\/objects\/.*-s\d+--/.test(line))
+    if (isSymlink || isAnnexPointer) {
+      const sizeOf = (sign) => {
+        const line = changed.find((candidate) => candidate.startsWith(sign))
+        const match = line ? ANNEX_KEY_SIZE.exec(line) : null
+        return match ? Number(match[1]) : null
+      }
+      return {
+        kind: 'binary',
+        status,
+        patch: '',
+        totalLines: 0,
+        truncated: false,
+        oldSize: sizeOf('-'),
+        newSize: sizeOf('+') ?? (status === 'deleted' ? null : await this.#worktreeSize(projectPath, path))
+      }
+    }
+
+    if (firstHunk === -1 && !/^Binary files .* differ$/m.test(header) && !/^GIT binary patch$/m.test(header)) {
+      const note = /^old mode/m.test(header)
+        ? 'Only the file permissions changed.'
+        : status === 'added'
+          ? 'This is an empty file.'
+          : status === 'deleted'
+            ? 'The file was empty and is now deleted.'
+            : 'Nothing to show for this change.'
+      return { kind: 'note', status, note, patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
+    }
+
+    if (/^Binary files .* differ$/m.test(header) || /^GIT binary patch$/m.test(header) || firstHunk === -1) {
+      return {
+        kind: 'binary',
+        status,
+        patch: '',
+        totalLines: 0,
+        truncated: false,
+        oldSize: status === 'added' ? null : await this.#blobSize(projectPath, against, path),
+        newSize: status === 'deleted' ? null : await this.#worktreeSize(projectPath, path)
+      }
+    }
+
+    return {
+      kind: 'text',
+      status,
+      patch: body.slice(0, maxLines).join('\n'),
+      totalLines: body.length,
+      truncated: body.length > maxLines,
+      oldSize: null,
+      newSize: null
+    }
+  }
+
+  async #blobSize(projectPath, rev, path) {
+    const result = await this.runner.run('git', ['-C', projectPath, 'cat-file', '-s', `${rev}:${path}`])
+    const size = Number.parseInt((result.stdout ?? '').trim(), 10)
+    return result.failed || !Number.isFinite(size) ? null : size
+  }
+
+  async #worktreeSize(projectPath, path) {
+    const info = await lstat(join(projectPath, path)).catch(() => null)
+    return info?.isFile() ? info.size : null
+  }
+
+  // An untracked file has no saved version: show its start as all-added lines. Never reads outside the
+  // project (a symlink, or a path through a symlinked folder, is reported as a data file instead).
+  async #diffUntrackedFile(projectPath, path, maxLines) {
+    const data = (size) => ({ kind: 'binary', status: 'added', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: size })
+    const full = join(projectPath, path)
+    const info = await lstat(full).catch(() => null)
+    if (!info) {
+      return { kind: 'unchanged', status: 'added', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
+    }
+    const [realRoot, realFile] = await Promise.all([realpath(projectPath).catch(() => null), realpath(full).catch(() => null)])
+    if (!info.isFile() || !realRoot || !realFile || !isInsideFolder(realRoot, realFile)) {
+      return data(info.isFile() ? info.size : null)
+    }
+
+    const handle = await open(realFile, 'r')
+    let bytes
+    try {
+      const buffer = Buffer.alloc(Math.min(info.size, UNTRACKED_READ_LIMIT))
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      bytes = buffer.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+    if (bytes.subarray(0, 8000).includes(0)) {
+      return data(info.size)
+    }
+
+    const fileLines = bytes.toString('utf8').split(/\r?\n/)
+    if (fileLines.at(-1) === '') {
+      fileLines.pop()
+    }
+    const body = [`@@ -0,0 +1,${fileLines.length} @@`, ...fileLines.map((line) => `+${line}`)]
+    return {
+      kind: 'text',
+      status: 'added',
+      patch: body.slice(0, maxLines).join('\n'),
+      totalLines: body.length,
+      truncated: body.length > maxLines,
+      byteLimited: info.size > UNTRACKED_READ_LIMIT, // only the first MiB was read
+      oldSize: null,
+      newSize: null
+    }
+  }
+
+  async listChangesSince(projectPath, commitHash) {
+    if (!(typeof commitHash === 'string' && COMMIT_HASH_PATTERN.test(commitHash))) {
+      throw new Error(`Invalid commit hash format: ${String(commitHash)}`)
+    }
+    await this.#ensureGitProject(projectPath)
+    const result = await this.runner.run('git', ['-C', projectPath, 'diff', commitHash, '--name-status', '-z', ...DIFF_SAFE_FLAGS, '--'])
+    if (result.failed) {
+      throw new Error(`Could not compare with this save: ${(result.stderr ?? '').trim() || 'unknown error'}`)
+    }
+    const fields = (result.stdout ?? '').split('\0').filter(Boolean)
+    const names = { A: 'added', D: 'deleted' }
+    const changes = []
+    for (let index = 0; index + 1 < fields.length; index += 2) {
+      changes.push({ status: names[fields[index]] ?? 'modified', path: fields[index + 1] })
+    }
+    return changes
+  }
+
   async getCommitDetails(projectPath, commitHash) {
     await this.#ensureGitProject(projectPath)
 
@@ -990,7 +1188,7 @@ export class DataLadAdapter {
       ]),
       this.runner.run('git', [
         '-C', projectPath,
-        'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
+        'diff-tree', '--no-commit-id', '-r', '--name-only', '-z', '--root',
         commitHash
       ])
     ])
@@ -1010,10 +1208,7 @@ export class DataLadAdapter {
       .map((l) => l.trimEnd())
       .filter(Boolean)
 
-    const changedFiles = (nameResult.stdout ?? '')
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
+    const changedFiles = (nameResult.stdout ?? '').split('\0').filter(Boolean)
 
     return {
       commitHash: (longHash ?? commitHash).trim(),

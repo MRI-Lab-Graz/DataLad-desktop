@@ -109,3 +109,11 @@ test('collectChangedPaths includes the files inside nested datasets, at any dept
   assert.deepEqual([...collectChangedPaths(files)].sort(), ['plain', 'sub', 'sub/a.txt', 'sub/deeper', 'sub/deeper/b.txt', 'top.txt'])
   assert.deepEqual([...collectChangedPaths(undefined)], [])
 })
+
+test('unsavedLeftovers lists the selected files that still show as changed after a save', async () => {
+  const { unsavedLeftovers } = await import('../src/gui/renderer/save-gating.js')
+  assert.deepEqual(unsavedLeftovers(['a.txt', 'my file.csv'], [{ path: 'my file.csv' }, { path: 'other.txt' }]), ['my file.csv'])
+  assert.deepEqual(unsavedLeftovers(['a.txt'], [{ path: 'other.txt' }]), [])
+  assert.deepEqual(unsavedLeftovers(['a.txt'], undefined), [])
+  assert.deepEqual(unsavedLeftovers([], [{ path: 'a.txt' }]), [])
+})
