@@ -57,7 +57,7 @@ test('a clone is never trusted or authorized by the app: its first open asks', (
 test('a push re-checks the project and every local-path remote right before the command', () => {
   const body = block("handle('adapter:runCommand'")
   const project = body.search(/PUSHES\.has\(payload\.commandName\)[\s\S]{0,200}await trustGate\(\)\.require\(payload\.request\.projectPath, \{ event \}\)/)
-  const remotes = body.search(/localRemotePaths\(consoleRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
+  const remotes = body.search(/localRemotePaths\(toolRunner, payload\.request\.projectPath\)[\s\S]{0,200}kind: 'remote'/)
   assert.ok(project !== -1 && remotes !== -1)
   assert.ok(remotes < body.indexOf('adapter.runCommand('))
 })
