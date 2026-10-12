@@ -50,7 +50,12 @@ test('files with spaces and umlauts are listed by their real names and really sa
     ['-C', projectPath, '-c', 'core.quotePath=false', 'log', '--all', '--grep=add files with odd names', '--name-only', '--format=%s'],
     { encoding: 'utf8' }
   )
-  assert.match(saved, /add files with odd names/)
-  assert.match(saved, /my file\.csv/)
-  assert.match(saved, /Größe ä\.txt/)
+  // What the app showed and what git still sees, so a failure on another platform explains itself.
+  const status = execFileSync('git', ['-C', projectPath, '-c', 'core.quotePath=false', 'status', '--porcelain'], { encoding: 'utf8' })
+  const output = await app.page.evaluate(() => document.getElementById('command-output')?.textContent)
+  const why = `\n--- listed in the app:\n${listed}\n--- command output:\n${output}\n--- git status after:\n${status}\n--- git log:\n${saved}`
+  assert.match(listed, /Größe ä\.txt/, `the umlaut file is listed by its real name${why}`)
+  assert.match(saved, /add files with odd names/, why)
+  assert.match(saved, /my file\.csv/, why)
+  assert.match(saved, /Größe ä\.txt/, `the umlaut file was saved${why}`)
 })
