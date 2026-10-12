@@ -5,36 +5,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadPolicy, policyFiles } from '../src/gui/policy.js'
 
-test('loadPolicy leaves the console allowed by default', () => {
-  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { consoleDisabled: false, trustedRoots: [] })
+test('loadPolicy has no trusted roots by default', () => {
+  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { trustedRoots: [] })
 })
 
-test('loadPolicy disables the console from the environment', () => {
-  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_CONSOLE: '1' }, files: ['/nonexistent'] }).consoleDisabled, true)
-})
-
-test('loadPolicy disables the console from policy.json', async () => {
+test('loadPolicy ignores keys it does not know, such as the old consoleDisabled', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const file = join(dir, 'policy.json')
-  await writeFile(file, JSON.stringify({ consoleDisabled: true }))
-  assert.equal(loadPolicy({ env: {}, files: [file] }).consoleDisabled, true)
-})
-
-test('loadPolicy fails closed when policy.json exists but is unreadable JSON', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
-  const file = join(dir, 'policy.json')
-  await writeFile(file, '{ not json')
-  assert.equal(loadPolicy({ env: {}, files: [file] }).consoleDisabled, true)
-})
-
-test('loadPolicy: any one of several policy files that disables the console wins', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
-  const off = join(dir, 'a.json')
-  const on = join(dir, 'b.json')
-  await writeFile(off, JSON.stringify({ consoleDisabled: true }))
-  await writeFile(on, JSON.stringify({ consoleDisabled: false }))
-  assert.equal(loadPolicy({ env: {}, files: [on, '/nonexistent', off] }).consoleDisabled, true)
-  assert.equal(loadPolicy({ env: {}, files: [on, '/nonexistent'] }).consoleDisabled, false)
+  await writeFile(file, JSON.stringify({ consoleDisabled: true, trustedRoots: ['/lab/share'] }))
+  assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: ['/lab/share'] })
 })
 
 // An update removes the whole install folder, so an admin's policy must live outside it.
@@ -67,14 +46,12 @@ test('loadPolicy ignores a trustedRoots value that is not a list', async () => {
   assert.deepEqual(loadPolicy({ env: {}, files: [file] }).trustedRoots, [])
 })
 
-test('loadPolicy: an unreadable policy file contributes no trusted roots and still locks the console', async () => {
+test('loadPolicy: an unreadable policy file contributes no trusted roots', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const good = join(dir, 'good.json')
   const bad = join(dir, 'bad.json')
   await writeFile(good, JSON.stringify({ trustedRoots: [join(dir, 'share')] }))
   await writeFile(bad, '{ not json')
-  const policy = loadPolicy({ env: {}, files: [bad, good] })
-  assert.deepEqual(policy.trustedRoots, [join(dir, 'share')])
-  assert.equal(policy.consoleDisabled, true)
+  assert.deepEqual(loadPolicy({ env: {}, files: [bad, good] }), { trustedRoots: [join(dir, 'share')] })
   assert.deepEqual(loadPolicy({ env: {}, files: [bad] }).trustedRoots, [])
 })

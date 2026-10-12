@@ -14,7 +14,7 @@ test('Home holds Save; Tools holds every other panel', () => {
   const tools = at('id="project-tools"')
   assert.ok(at('id="project-home"') < at('id="save-checkpoint-panel"'))
   assert.ok(at('id="save-checkpoint-panel"') < tools, 'Save is on Home, before the Tools view')
-  for (const id of ['power-user-console', 'sync-data-section', 'files-panel', 'project-health-panel', 'project-setup-zone', 'time-machine-zone']) {
+  for (const id of ['sync-data-section', 'files-panel', 'project-health-panel', 'project-setup-zone', 'time-machine-zone']) {
     assert.ok(at(`id="${id}"`) > tools, `${id} is inside Tools`)
   }
 })
@@ -28,7 +28,7 @@ test('Tools is hidden by default and has open and back buttons', () => {
 test('the Save tile is gone and the list items are renamed', () => {
   assert.doesNotMatch(html, /data-nav-target="save-checkpoint-panel"/)
   assert.doesNotMatch(html, /id="save-checkpoint-panel"[^>]*role="tabpanel"/)
-  for (const label of ['Files', 'Sync', 'History', 'Health', 'Branches &amp; Ignore', 'Console']) {
+  for (const label of ['Files', 'Sync', 'History', 'Health', 'Branches &amp; Ignore']) {
     assert.match(html, new RegExp(`<span class="onboarding-tile-label">${label}</span>`), label)
   }
 })

@@ -25,16 +25,15 @@ export async function launchApp({ identity = true, env = {}, trustedPaths = [] }
   // quirk entirely.
   const childEnv = { ...process.env }
   delete childEnv.ELECTRON_RUN_AS_NODE
-  // No human to click the app's native confirmations (console on, new project outside opened folders);
+  // No human to click the app's native confirmations (a new project outside opened folders);
   // an unpackaged app honours this, a packaged one never does.
   childEnv.DATALAD_DESKTOP_E2E_CONFIRM = '1'
 
   // Without this, the app launches against the real per-machine profile
   // (localStorage, settings.json), so anything a developer toggled while
-  // manually poking at the app (e.g. Power User Mode) silently leaks into
-  // every later e2e run on that machine and changes button labels/gating
-  // out from under the tests — see the 'Commit' vs 'Save Checkpoint'
-  // mismatch this caused. A fresh --user-data-dir per launch makes every
+  // manually poking at the app (e.g. the BIDS auto-nest toggle) silently leaks
+  // into every later e2e run on that machine and changes behaviour out from
+  // under the tests. A fresh --user-data-dir per launch makes every
   // run hermetic regardless of what's been clicked around locally before.
   const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
 

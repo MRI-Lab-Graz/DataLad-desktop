@@ -13,12 +13,6 @@ const block = (start) => {
   return main.slice(at, main.indexOf('\n})\n', at))
 }
 
-test('turning the console on goes through the native consent, not just the renderer toggle', () => {
-  const body = block("handle('console:setEnabled'")
-  assert.match(body, /consoleConsent\(\)\.allow\(/)
-  assert.match(main, /dialog\.showMessageBox/)
-})
-
 test('the e2e auto-confirm seam is never active in a packaged app', () => {
   assert.match(main, /!app\.isPackaged && process\.env\.DATALAD_DESKTOP_E2E_CONFIRM === '1'/)
 })
@@ -103,9 +97,9 @@ test('createProject into an empty target ignores force, so a folder filled in be
 // folder, or a documented read-only exception. Otherwise this test fails until someone decides.
 test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
-  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'adapter:resolveConflict', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'console:runCommand', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
+  const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'adapter:resolveConflict', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
-  const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'app:version', 'env:ensure', 'console:setEnabled', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
+  const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'app:version', 'env:ensure', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
   const newEmptyFolder = ['adapter:prepareFolderRemote'] // writes only into an empty folder, confirmed unless picked (own test below)
   assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException, ...newEmptyFolder].sort(), 'classify new handlers here')

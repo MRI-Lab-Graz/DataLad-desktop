@@ -18,8 +18,8 @@ test('the Docs link has an icon and shares a row with Setup', () => {
   assert.match(hero, /class="hero-actions"[^>]*>\s*<button\s+id="open-settings"[\s\S]*?id="open-docs"/)
 })
 
-test('Power user mode and Auto-nest BIDS live in Setup, not the header', () => {
-  for (const id of ['power-user-mode-toggle', 'bids-auto-nest-toggle']) {
+test('Auto-nest BIDS lives in Setup, not the header', () => {
+  for (const id of ['bids-auto-nest-toggle']) {
     assert.ok(settingsCard.includes(`id="${id}"`), `${id} in Setup`)
     assert.ok(!hero.includes(`id="${id}"`), `${id} not in header`)
   }

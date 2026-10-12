@@ -61,10 +61,6 @@
 
         <div class="setup-section">
           <h3 class="setup-section-title">Preferences</h3>
-          <label class="power-toggle-wrap" for="power-user-mode-toggle">
-            <input type="checkbox" id="power-user-mode-toggle" role="switch" />
-            Power user mode
-          </label>
           <label
             class="power-toggle-wrap"
             for="bids-auto-nest-toggle"
@@ -398,46 +394,8 @@
               <span class="onboarding-tile-icon" aria-hidden="true">🌿</span>
               <span class="onboarding-tile-label">Branches &amp; Ignore</span>
             </button>
-            <button type="button" class="onboarding-tile" id="project-nav-tile-console" data-nav-target="power-user-console" role="tab" aria-selected="false" aria-controls="power-user-console" hidden>
-              <span class="onboarding-tile-icon" aria-hidden="true">🖥️</span>
-              <span class="onboarding-tile-label">Console</span>
-            </button>
           </div>
             <div class="tools-panels">
-        <section id="power-user-console" class="card reveal" aria-labelledby="power-user-console-title" role="tabpanel" hidden>
-          <div class="section-head">
-            <h2 id="power-user-console-title">Power User Console — Run Any Command</h2>
-          </div>
-          <p id="console-help-text" class="lede-small">
-            Run any command directly against the active project folder, for anything the buttons above don't
-            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
-            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
-          </p>
-
-          <label class="field">
-            <span>Active Project Folder</span>
-            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
-          </label>
-
-          <label class="field">
-            <span>Command</span>
-            <div class="field-row">
-              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
-              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
-            </div>
-          </label>
-
-          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
-
-          <section class="status-box" aria-labelledby="console-history-title">
-            <div class="section-head branch-head">
-              <h3 id="console-history-title">Recent Commands</h3>
-            </div>
-            <div id="console-history-output" class="panel panel-muted panel-compact">
-              No commands run yet this session.
-            </div>
-          </section>
-        </section>
 
         <section id="sync-data-section" class="card reveal" aria-labelledby="sync-data-title" role="tabpanel" hidden>
           <div class="section-head">

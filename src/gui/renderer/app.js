@@ -75,7 +75,6 @@ const state = {
   datasets: [],
   datasetsRootPath: null,
   selectedIgnoreScopePaths: new Set(),
-  consoleHistory: [],
   watchRefreshPending: false,
   timeMachineCommits: [],
   timeMachineLimit: 50,
@@ -91,11 +90,9 @@ const state = {
 const BIDS_PROCEDURE = 'text2git'
 
 const MAX_RECENT_PROJECTS = 8
-const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
 const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
 const RECENT_PROJECT_TITLES_STORAGE_KEY = 'dataladDesktop.recentProjectTitles'
-const POWER_USER_MODE_STORAGE_KEY = 'dataladDesktop.powerUserMode'
 const BIDS_AUTO_NEST_STORAGE_KEY = 'dataladDesktop.bidsAutoNest'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
@@ -141,7 +138,6 @@ const elements = {
   lastActionDetails: document.getElementById('last-action-details'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
-  projectNavTileConsole: document.getElementById('project-nav-tile-console'),
   projectHealthOutput: document.getElementById('project-health-output'),
   projectStatusLine: document.getElementById('project-status-line'),
   lastActionState: document.getElementById('last-action-state'),
@@ -231,15 +227,8 @@ const elements = {
   addRemoteBrowse: document.getElementById('add-remote-browse'),
   addRemoteName: document.getElementById('add-remote-name'),
   addRemoteConnect: document.getElementById('add-remote-connect'),
-  powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
-  consoleHelpText: document.getElementById('console-help-text'),
-  consoleProjectPath: document.getElementById('console-project-path'),
-  consoleCommand: document.getElementById('console-command'),
-  consoleRunButton: document.getElementById('console-run'),
-  consoleOutput: document.getElementById('console-output'),
   runningCommands: document.getElementById('running-commands'),
-  consoleHistoryOutput: document.getElementById('console-history-output'),
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
   timeMachineDetail: document.getElementById('tm-detail'),
@@ -263,7 +252,6 @@ updateSaveButtonState()
 api.getAppVersion().then((version) => {
   document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = version })
 })
-initPowerUserConsole()
 initBidsAutoNestToggle()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
@@ -932,9 +920,8 @@ elements.saveProjectButton.addEventListener('click', async () => {
   const message = elements.message.value.trim()
 
   if (!message) {
-    const messageLabel = getMessageTermLabel()
-    elements.commandOutput.textContent = `Add a ${messageLabel} before running Save.`
-    setLastActionState(`Add a ${messageLabel} first.`, 'error')
+    elements.commandOutput.textContent = 'Add a checkpoint message before running Save.'
+    setLastActionState('Add a checkpoint message first.', 'error')
     updateSaveButtonState()
     return
   }
@@ -2942,7 +2929,6 @@ function updateSaveButtonState() {
     mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    messageLabel: getMessageTermLabel(),
     prismMode: state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
   })
 
@@ -2955,31 +2941,6 @@ function updateSaveButtonState() {
 // Plain-language "checkpoint" terms are the default so non-git users aren't
 // confronted with jargon, but Power User Mode swaps in the git vocabulary
 // (commit) those users already know instead.
-function getMessageTermLabel() {
-  return elements.powerUserModeToggle.checked ? 'commit message' : 'checkpoint message'
-}
-
-function applyWorkTerminology() {
-  const powerUser = elements.powerUserModeToggle.checked
-
-  elements.projectActionsTitle.textContent = powerUser ? 'Commit Changes' : 'Save a Checkpoint'
-  elements.messageFieldLabel.textContent = powerUser ? 'Commit Message' : 'Checkpoint Message'
-  setIdleButtonLabel(elements.saveProjectButton, powerUser ? 'Commit' : 'Save Checkpoint')
-  updateSaveButtonState()
-}
-
-// setButtonBusy captures the current textContent as the idle label the first
-// time it runs, so terminology changes need to go through the same field
-// (dataset.idleLabel) while a save is in flight, rather than clobbering it.
-function setIdleButtonLabel(button, label) {
-  if (button.classList.contains('is-busy')) {
-    button.dataset.idleLabel = label
-    return
-  }
-
-  button.textContent = label
-}
-
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)
   elements.mergeBranchSelect.innerHTML = candidates.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')
@@ -3444,7 +3405,6 @@ function setProjectDependentSectionsVisible(visible) {
   if (!visible) {
     clearTimeMachine()
   }
-  updatePowerUserConsoleVisibility()
 }
 
 async function refreshProjectHealth(projectPath) {
@@ -4008,66 +3968,7 @@ elements.currentProjectTitleInput.addEventListener('input', () => {
   renderRecentProjects()
 })
 
-function initPowerUserConsole() {
-  let powerUserModeEnabled = false
-  try {
-    powerUserModeEnabled = localStorage.getItem(POWER_USER_MODE_STORAGE_KEY) === '1'
-  } catch {
-    powerUserModeEnabled = false
-  }
-
-  elements.powerUserModeToggle.checked = powerUserModeEnabled
-  void api.setConsoleEnabled(powerUserModeEnabled)
-  updatePowerUserConsoleVisibility()
-  applyWorkTerminology()
-  elements.consoleProjectPath.value = elements.commandProjectPath.value
-  elements.consoleHelpText.innerHTML =
-    api.platform === 'win32'
-      ? 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
-        'cover. This runs through the same shell as a normal Windows terminal, so <code>&amp;</code>, ' +
-        '<code>|</code>, <code>%VAR%</code>, and <code>.cmd</code>/<code>.bat</code> tools (<code>npm</code>, ' +
-        '<code>npx</code>, <code>yarn</code>, ...) all work as expected. There is no allowlist or safety net, ' +
-        'so be as careful as you would be in a real terminal.'
-      : 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
-        'cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your ' +
-        'system. Each run is a single process with no shell (no <code>&amp;&amp;</code>, pipes, or ' +
-        '<code>cd</code>), so shell operators are treated as literal text rather than executed.'
-
-  elements.powerUserModeToggle.addEventListener('change', () => {
-    const enabled = elements.powerUserModeToggle.checked
-    void api.setConsoleEnabled(enabled)
-    updatePowerUserConsoleVisibility()
-    applyWorkTerminology()
-    try {
-      localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')
-    } catch {
-      // Ignore storage errors (for example private mode restrictions).
-    }
-  })
-
-  elements.commandProjectPath.addEventListener('input', () => {
-    elements.consoleProjectPath.value = elements.commandProjectPath.value
-  })
-
-  elements.consoleRunButton.addEventListener('click', runConsoleCommand)
-  elements.consoleHistoryOutput.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-console-history-index]')
-    if (!target) {
-      return
-    }
-
-    const index = Number(target.getAttribute('data-console-history-index'))
-    const entry = state.consoleHistory[index]
-    if (!entry) {
-      return
-    }
-
-    elements.consoleCommand.value = entry.commandText
-  })
-}
-
-// Defaults to true when never set — unlike Power User Mode, this is an
-// opt-out, not opt-in, preference.
+// Defaults to true when never set: an opt-out, not opt-in, preference.
 function isBidsAutoNestEnabled() {
   try {
     const stored = localStorage.getItem(BIDS_AUTO_NEST_STORAGE_KEY)
@@ -4086,85 +3987,6 @@ function initBidsAutoNestToggle() {
       // Ignore storage errors (for example private mode restrictions).
     }
   })
-}
-
-function updatePowerUserConsoleVisibility() {
-  const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
-  elements.projectNavTileConsole.hidden = !visible
-  if (!visible && elements.projectNavTileConsole.getAttribute('aria-selected') === 'true') {
-    selectProjectTile(DEFAULT_TOOL)
-  }
-}
-
-async function runConsoleCommand() {
-  const projectPath = elements.commandProjectPath.value.trim()
-  if (!projectPath) {
-    elements.consoleOutput.textContent = 'Choose a project above before running a console command.'
-    return
-  }
-
-  const commandText = elements.consoleCommand.value.trim()
-  if (!commandText) {
-    elements.consoleOutput.textContent = 'Enter a command to run.'
-    return
-  }
-
-  elements.consoleRunButton.disabled = true
-  elements.consoleOutput.textContent = `$ ${commandText}\n\nRunning...`
-  const runId = createRunId()
-  trackRun(runId, 'Console')
-
-  try {
-    const result = await api.runConsoleCommand({ commandText, projectPath, runId })
-    elements.consoleOutput.textContent = renderConsoleResult(commandText, result)
-    rememberConsoleCommand(commandText)
-  } catch (error) {
-    elements.consoleOutput.textContent = `$ ${commandText}\n\nFailed to run command: ${error?.message ?? String(error)}`
-  } finally {
-    untrackRun(runId)
-    elements.consoleRunButton.disabled = false
-  }
-}
-
-function renderConsoleResult(commandText, result) {
-  const statusLine = result.cancelled
-    ? 'Stopped by you'
-    : result.failed
-      ? `Failed (exit ${result.exitCode})`
-      : `Succeeded (exit ${result.exitCode})`
-  const sections = [`$ ${commandText}`, '', statusLine]
-
-  if (result.stdout) {
-    sections.push('', result.stdout.trimEnd())
-  }
-
-  if (result.stderr) {
-    sections.push('', 'stderr:', result.stderr.trimEnd())
-  }
-
-  return sections.join('\n')
-}
-
-function rememberConsoleCommand(commandText) {
-  state.consoleHistory.unshift({ commandText, ranAt: Date.now() })
-  state.consoleHistory.length = Math.min(state.consoleHistory.length, MAX_CONSOLE_HISTORY)
-  renderConsoleHistory()
-}
-
-function renderConsoleHistory() {
-  if (state.consoleHistory.length === 0) {
-    elements.consoleHistoryOutput.textContent = 'No commands run yet this session.'
-    return
-  }
-
-  elements.consoleHistoryOutput.innerHTML = state.consoleHistory
-    .map(
-      (entry, index) =>
-        `<button type="button" class="button button-ghost button-inline console-history-item" data-console-history-index="${index}">` +
-        `${escapeHtml(entry.commandText)}` +
-        '</button>'
-    )
-    .join('')
 }
 
 function renderFileListing(listing, query) {

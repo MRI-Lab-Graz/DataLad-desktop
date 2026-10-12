@@ -6,11 +6,10 @@ const doc = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8')
 const overview = readFileSync(new URL('../REVIEW-OVERVIEW.md', import.meta.url), 'utf8')
 
 // Every control SECURITY.md names must be real, and nothing it names may be removed.
-test('SECURITY.md names the admin switches and they exist in code', () => {
-  assert.match(doc, /DATALAD_DESKTOP_DISABLE_CONSOLE/)
+test('SECURITY.md names the admin policy and it exists in code', () => {
   assert.match(doc, /policy\.json/)
-  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
-  assert.match(policy, /DATALAD_DESKTOP_DISABLE_CONSOLE/)
+  assert.match(doc, /trustedRoots/)
+  assert.doesNotMatch(doc, /DATALAD_DESKTOP_DISABLE_CONSOLE|consoleDisabled/)
 })
 
 test('every source file SECURITY.md points at exists', () => {
