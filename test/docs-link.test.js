@@ -11,7 +11,7 @@ test('the header links to the Read the Docs tutorials, opened outside the app', 
 })
 
 const settingsCard = /<section id="settings-card"[\s\S]*?<\/section>/.exec(html)?.[0] ?? ''
-const hero = /<header class="hero[\s\S]*?<\/header>/.exec(html)?.[0] ?? ''
+const hero = /<header[^>]*class="hero[\s\S]*?<\/header>/.exec(html)?.[0] ?? ''
 
 test('the Docs link has an icon and shares a row with Setup', () => {
   assert.match(/<a\b[^>]*id="open-docs"[\s\S]*?<\/a>/.exec(html)?.[0] ?? '', /aria-hidden="true"/)

@@ -8,7 +8,7 @@ const app = read('src/gui/renderer/app.js')
 
 test('Save no longer has manual file paths', () => {
   assert.doesNotMatch(html, /id="paths"/)
-  assert.doesNotMatch(html, /manual file paths/i)
+  assert.doesNotMatch(html, /manual (file )?paths/i)
   assert.doesNotMatch(app, /elements\.paths|parsePaths|manual paths/)
 })
 
@@ -56,4 +56,14 @@ test('user-facing strings in app.js and the pure helpers say save', () => {
   assert.doesNotMatch(chips + gating, /checkpoint|messageLabel/i)
   assert.match(app, /Last saved \$\{relativeAge\}/)
   assert.match(app, /return `save \$\{date\} \$\{time\}`/)
+})
+
+test('the header is slim while a project is open and the last-save line sits in the project strip', () => {
+  assert.match(html, /<header id="app-header" class="hero /)
+  const strip = html.slice(html.indexOf('id="project-strip"'), html.indexOf('id="running-commands"'))
+  assert.match(strip, /id="last-commit-meta"/)
+  assert.doesNotMatch(html.slice(0, html.indexOf('id="project-strip"')), /id="last-commit-meta"/)
+  const fn = app.slice(app.indexOf('function setProjectDependentSectionsVisible'))
+  assert.match(fn.slice(0, fn.indexOf('\n}\n')), /appHeader\.classList\.toggle\('hero-slim', visible\)/)
+  assert.match(read('src/gui/renderer/styles.css'), /\.hero-slim h1/)
 })

@@ -129,6 +129,7 @@ const elements = {
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
   projectNavGroup: document.getElementById('project-nav-group'),
+  appHeader: document.getElementById('app-header'),
   projectHome: document.getElementById('project-home'),
   projectTools: document.getElementById('project-tools'),
   openToolsButton: document.getElementById('open-tools'),
@@ -3398,6 +3399,7 @@ function setOnboardingExpanded(expanded) {
 // or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
+  elements.appHeader.classList.toggle('hero-slim', visible)
   elements.projectNavGroup.hidden = !visible
   if (!visible) {
     clearTimeMachine()
