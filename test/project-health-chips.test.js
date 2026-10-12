@@ -4,7 +4,8 @@ import {
   computeSaveStatusChip,
   computeSyncStatusChip,
   computeMissingContentChip,
-  computeStatusLine
+  computeStatusLine,
+  computeAttentionRows
 } from '../src/gui/renderer/project-health-chips.js'
 
 test('save status chip: unknown when there is no working tree snapshot yet', () => {
@@ -129,4 +130,40 @@ test('status line: good when clean and there is no remote/annex to worry about',
     tone: 'good',
     label: '✅ Everything is saved and up to date.'
   })
+})
+
+test('attention rows: none when health is unknown or everything is fine', () => {
+  assert.deepEqual(computeAttentionRows(null), [])
+  assert.deepEqual(computeAttentionRows(undefined), [])
+  assert.deepEqual(
+    computeAttentionRows({ annexSupported: true, missingContentCount: 0, hasUpstream: true, upstream: 'origin/main', ahead: 0, behind: 0 }),
+    []
+  )
+})
+
+test('attention rows: missing data row, singular and plural', () => {
+  assert.deepEqual(computeAttentionRows({ annexSupported: true, missingContentCount: 12 }), [
+    { kind: 'missing', count: 12, label: '12 files not downloaded', action: 'Get all' }
+  ])
+  assert.equal(computeAttentionRows({ annexSupported: true, missingContentCount: 1 })[0].label, '1 file not downloaded')
+})
+
+test('attention rows: ignores a missing count when annex is not supported', () => {
+  assert.deepEqual(computeAttentionRows({ annexSupported: false, missingContentCount: 5 }), [])
+})
+
+test('attention rows: publish and update rows from ahead/behind, in a fixed order', () => {
+  const rows = computeAttentionRows({
+    annexSupported: true, missingContentCount: 2, hasUpstream: true, upstream: 'origin/main', ahead: 2, behind: 1
+  })
+  assert.deepEqual(rows.map((row) => row.kind), ['missing', 'publish', 'update'])
+  assert.equal(rows[1].label, '2 saves not published')
+  assert.equal(rows[1].action, 'Publish')
+  assert.equal(rows[2].label, '1 update available')
+  assert.equal(rows[2].action, 'Update')
+})
+
+test('attention rows: no sync rows without an upstream or with unknown ahead/behind', () => {
+  assert.deepEqual(computeAttentionRows({ hasUpstream: false, ahead: 3, behind: 3 }), [])
+  assert.deepEqual(computeAttentionRows({ hasUpstream: true, upstream: 'origin/main', ahead: null, behind: undefined }), [])
 })

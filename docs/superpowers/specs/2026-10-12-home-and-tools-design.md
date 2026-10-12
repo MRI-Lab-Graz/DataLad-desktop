@@ -68,7 +68,7 @@ panels move in unchanged (ids, content and behaviour stay the same):
 
 - New pure function `computeAttentionRows(health)` in
   `src/gui/renderer/project-health-chips.js`. It returns
-  `[{ kind: 'missing'|'publish'|'update', count, label }]`, using the same inputs
+  `[{ kind: 'missing'|'publish'|'update', count, label, action }]`, using the same inputs
   as `computeMissingContentChip` / `computeSyncStatusChip`, and an empty array
   when nothing is actionable. Written test-first in `test/project-health-chips.test.js`.
 - The Tools "always one selection" rule goes into `wireTileGroup` as an option and
