@@ -1389,11 +1389,13 @@ export class DataLadAdapter {
         const paths = request.paths ?? []
         // `--message=<value>` binds the whole value as one token, so a message that happens to look
         // like a flag (e.g. "--amend") can't be misparsed the way `-m <value>` can.
+        // -r: nested datasets are saved too and the parent records their new state (measured with real
+        // DataLad: without it a root save leaves nested changes behind and a nested path leaves the root dirty).
         return {
           command: 'datalad',
           args: paths.length > 0
-            ? ['-C', projectPath, 'save', `--message=${message}`, '--', ...paths]
-            : ['-C', projectPath, 'save', `--message=${message}`],
+            ? ['-C', projectPath, 'save', '-r', `--message=${message}`, '--', ...paths]
+            : ['-C', projectPath, 'save', '-r', `--message=${message}`],
           options: { cwd: projectPath }
         }
       }
