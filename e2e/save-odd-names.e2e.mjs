@@ -1,0 +1,52 @@
+// Regression: git quotes names with a space (?? "my file.csv"); the quotes once ended up in the path
+// given to datalad save, which matched nothing, and the app still said "Save completed.".
+// Real DataLad + git-annex needed (like science-workflow.e2e.mjs). Run via `npm run test:e2e`.
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { launchApp } from './electron-driver.mjs'
+
+let app
+let projectPath
+
+test.before(async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-e2e-names-'))
+  projectPath = join(root, 'study')
+  execFileSync('datalad', ['create', projectPath])
+  await writeFile(join(projectPath, 'my file.csv'), 'a,b\n1,2\n')
+  await writeFile(join(projectPath, 'Größe ä.txt'), 'x')
+  app = await launchApp({ trustedPaths: [projectPath] })
+  await app.openProject(projectPath)
+})
+
+test.after(async () => {
+  await app?.close()
+})
+
+test('files with spaces and umlauts are listed by their real names and really saved', async () => {
+  await app.page.waitForFunction(
+    () => document.getElementById('changed-files-output').textContent.includes('my file.csv'),
+    null,
+    { timeout: 30_000 }
+  )
+  const listed = await app.page.evaluate(() => document.getElementById('changed-files-output').textContent)
+  assert.doesNotMatch(listed, /"my file\.csv"/, 'the quotes are not part of the name')
+
+  await app.page.fill('#message', 'add files with odd names')
+  await app.page.click('#save-project')
+  await app.page.waitForFunction(
+    () => /Save (completed|failed)/.test(document.getElementById('last-action-state').textContent),
+    null,
+    { timeout: 60_000 }
+  )
+
+  const saved = execFileSync('git', ['-C', projectPath, '-c', 'core.quotePath=false', 'log', '-1', '--name-only', '--format=%s'], {
+    encoding: 'utf8'
+  })
+  assert.match(saved, /add files with odd names/)
+  assert.match(saved, /my file\.csv/)
+  assert.match(saved, /Größe ä\.txt/)
+})
