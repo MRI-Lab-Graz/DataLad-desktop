@@ -48,7 +48,7 @@ export function computeSaveGating({
   if (hasChanges && !selected) {
     return {
       disabled,
-      guidance: { text: 'Select changed files or add manual paths before saving.', warning: true }
+      guidance: { text: 'Select changed files before saving.', warning: true }
     }
   }
 

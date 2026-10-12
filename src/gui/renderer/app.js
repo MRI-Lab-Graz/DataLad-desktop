@@ -199,7 +199,6 @@ const elements = {
   messageFieldLabel: document.getElementById('message-field-label'),
   projectActionsTitle: document.getElementById('project-actions-title'),
   saveGuidance: document.getElementById('save-guidance'),
-  paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
   identityOverlay: document.getElementById('identity-overlay'),
   identityForm: document.getElementById('identity-form'),
@@ -402,10 +401,6 @@ elements.changedFilesOutput.addEventListener('input', (event) => {
 })
 
 elements.message.addEventListener('input', () => {
-  updateSaveButtonState()
-})
-
-elements.paths.addEventListener('input', () => {
   updateSaveButtonState()
 })
 
@@ -964,7 +959,7 @@ elements.saveProjectButton.addEventListener('click', async () => {
     const prismSavesEverything = Boolean(state.rootProjectPrism) && !state.rootProjectPrism.introducesPrism
     if (latestStatus.totalChanged > 0 && selectedPaths.length === 0 && !prismSavesEverything) {
       elements.commandOutput.textContent =
-        'Select at least one changed file or provide manual paths before saving.'
+        'Select at least one changed file before saving.'
       setLastActionState('Select files to save first.', 'error')
       return
     }
@@ -2661,16 +2656,6 @@ function renderCurrentFileBrowser() {
   elements.filesOutput.innerHTML = renderFileListing(state.fileListing, query)
 }
 
-function parsePaths(text) {
-  if (!text.trim()) {
-    return []
-  }
-  return text
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-}
-
 function wireFolderPicker(button, input, options) {
   button.addEventListener('click', async () => {
     let selectedPath = null
@@ -2944,12 +2929,7 @@ function renderRecentCommitList(overrideMessage = null) {
 }
 
 function gatherSavePaths() {
-  const selectedPaths = [...state.selectedChangedPaths]
-  if (selectedPaths.length > 0) {
-    return selectedPaths
-  }
-
-  return parsePaths(elements.paths.value)
+  return [...state.selectedChangedPaths]
 }
 
 function updateSaveButtonState() {

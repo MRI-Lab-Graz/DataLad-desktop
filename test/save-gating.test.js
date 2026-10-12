@@ -104,3 +104,8 @@ test('a BIDS project saves everything after a check, with BIDS wording and no se
   assert.equal(gating.disabled, false)
   assert.match(gating.guidance.text, /BIDS project: your data is checked before every save/)
 })
+
+test('changes without a selection ask to select changed files (there are no manual paths any more)', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true })
+  assert.equal(gating.guidance.text, 'Select changed files before saving.')
+})
