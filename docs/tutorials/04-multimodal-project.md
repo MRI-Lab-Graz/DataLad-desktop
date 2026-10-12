@@ -3,7 +3,7 @@
 ## Scenario
 
 A study combines imaging, clinical, and survey data. Work is split by modality
-and then integrated for a unified analysis checkpoint.
+and then integrated for a unified analysis save.
 
 **Level:** Intermediate to advanced · **Time:** 60 to 75 minutes
 
@@ -38,7 +38,7 @@ and then integrated for a unified analysis checkpoint.
    - If the same file changed on both branches, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 4. Review status for unexpected cross-modality edits.
 5. Add integration notes explaining alignment assumptions.
-6. Save integration checkpoint with message:
+6. Save the integration step with the message:
    - `integration: combine imaging clinical survey v1`
 7. Publish integration branch to shared remote.
 
@@ -52,7 +52,7 @@ and then integrated for a unified analysis checkpoint.
 
 - Integration branch contains all modalities with no unexplained drift.
 - Status is clean before Publish.
-- Team can point to the exact checkpoint where modalities first align.
+- Team can point to the exact save where modalities first align.
 
 ## Debrief
 

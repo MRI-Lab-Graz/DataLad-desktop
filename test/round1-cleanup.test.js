@@ -95,3 +95,20 @@ test('a failed Continue says so under the button, because the status pill is hid
   assert.match(app, /continueProjectError\.textContent = `Could not open \$\{[^}]+\}\. Check that its folder still exists/)
   assert.match(app, /projectStrip\.hidden/)
 })
+
+import { readdirSync } from 'node:fs'
+
+test('user docs no longer mention checkpoints, the console or Power user mode', () => {
+  const files = [
+    'README.md',
+    'docs/product/researcher-workflow.md',
+    ...readdirSync(new URL('../docs/tutorials/', import.meta.url))
+      .filter((name) => name.endsWith('.md'))
+      .map((name) => `docs/tutorials/${name}`)
+  ]
+  for (const file of files) {
+    // Link targets (file names such as 01-first-checkpoint.md) are URLs, not text, and stay stable.
+    const text = read(file).replace(/\]\([^)]*\)/g, '](...)')
+    assert.doesNotMatch(text, /checkpoint|Power user mode|power-user mode|command console/i, file)
+  }
+})

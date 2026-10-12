@@ -33,9 +33,15 @@ const shot = async (name) => {
   await settle()
   await page.screenshot({ path: out + name + '.png', fullPage: true })
 }
+// Save lives on Home; every other panel is a Tool. Switch views first, then (for tools) pick the tile.
 const tab = async (target) => {
-  // Tiles toggle, and Save is already open after a project loads, so only click a tile that is not selected.
   await page.evaluate((t) => {
+    const toolsOpen = !document.getElementById('project-tools').hidden
+    if (t === 'save-checkpoint-panel') {
+      if (toolsOpen) document.getElementById('close-tools').click()
+      return
+    }
+    if (!toolsOpen) document.getElementById('open-tools').click()
     const tile = document.querySelector(`[data-nav-target="${t}"]`)
     if (tile.getAttribute('aria-selected') !== 'true') tile.click()
   }, target)

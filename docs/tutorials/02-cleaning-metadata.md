@@ -9,7 +9,7 @@ is to separate data cleaning from analysis edits and preserve traceability.
 
 ## Skills trained
 
-- Plan focused Save checkpoints
+- Plan focused saves
 - Separate data edits from code edits
 - Use meaningful commit note prefixes
 - Verify status after each Save
@@ -26,20 +26,20 @@ is to separate data cleaning from analysis edits and preserve traceability.
 ## Walkthrough tasks
 
 1. Open project and review all pending changes.
-2. Create Save checkpoint 1 containing only data and metadata edits.
+2. Make save 1 containing only data and metadata edits.
 3. Use Save message:
    - `cleaning: normalize participant table and update dictionary`
 4. Verify notebook changes are still unsaved.
-5. Create Save checkpoint 2 containing only notebook edits.
+5. Make save 2 containing only notebook edits.
 6. Use Save message:
    - `analysis: exploratory cell update after cleaning`
-7. Confirm there are no accidental cross-topic changes in either checkpoint.
+7. Confirm there are no accidental cross-topic changes in either save.
 
 ## Failure injection
 
-- Intentionally mix one notebook file into checkpoint 1.
-- Recover by documenting why mixed checkpoints reduce reproducibility and redo
-  the split using additional Save checkpoints.
+- Intentionally mix one notebook file into save 1.
+- Recover by documenting why mixed saves reduce reproducibility and redo
+  the split using additional saves.
 
 ## Completion criteria
 
@@ -49,5 +49,5 @@ is to separate data cleaning from analysis edits and preserve traceability.
 
 ## Debrief
 
-- How does checkpoint scope affect peer review and replication?
+- How does save scope affect peer review and replication?
 - What naming convention will your lab use for Save messages?

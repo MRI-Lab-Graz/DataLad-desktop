@@ -15,7 +15,7 @@ multi-branch collaboration.
 ## Learning path
 
 1. [Tutorial 00: Create your first project](00-create-first-project.md)
-2. [Tutorial 1: First checkpoint in a small project](01-first-checkpoint.md)
+2. [Tutorial 1: First save in a small project](01-first-checkpoint.md)
 3. [Tutorial 2: Data cleaning and metadata discipline](02-cleaning-metadata.md)
 4. [Tutorial 3: Team collaboration with feature branches](03-team-feature-branches.md)
 5. [Tutorial 4: Multi-modal project integration](04-multimodal-project.md)
@@ -49,4 +49,4 @@ Use these checks after each tutorial:
 - State awareness: user can explain current project status.
 - Safe save behavior: user avoids saving with unresolved conflicts.
 - Branch hygiene: user can keep task work isolated.
-- Reproducibility: user can describe why this checkpoint is traceable.
+- Reproducibility: user can describe why this save is traceable.

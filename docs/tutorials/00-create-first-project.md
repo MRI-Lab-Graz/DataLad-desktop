@@ -12,7 +12,7 @@ foundation before any data cleaning or analysis.
 - Check local tool setup
 - Create a new DataLad project from the app
 - Confirm project classification and readiness
-- Make the first minimal checkpoint
+- Make the first minimal save
 
 ## Setup
 
@@ -23,7 +23,7 @@ foundation before any data cleaning or analysis.
    - owner or team name
 
 3. On first launch the app asks for your **name and email**. Enter them once; they
-   label every checkpoint you save, and you can change them later under
+   label every save, and you can change them later under
    **Setup → Your Name and Email**. Save stays blocked until they are set.
 
 ## Why the empty-folder rule matters
@@ -32,7 +32,7 @@ DataLad project creation initializes version-control structure in the target
 folder. If that folder already contains files, DataLad cannot safely assume
 which existing content belongs to the new project baseline. Starting in an
 empty or brand-new folder prevents accidental mixing of unrelated files and
-keeps the first checkpoint scientifically auditable.
+keeps the first save scientifically auditable.
 
 ## Walkthrough tasks
 
@@ -61,9 +61,9 @@ keeps the first checkpoint scientifically auditable.
 
 - Environment check shows required tools available.
 - Project creation succeeds from the app.
-- First Save checkpoint exists with a clear intent message.
+- A first save exists with a clear intent message.
 
 ## Debrief
 
 - Why is project creation inside the app a better first step for new users?
-- What lab-wide template content should go into the very first checkpoint?
+- What lab-wide template content should go into the very first save?
