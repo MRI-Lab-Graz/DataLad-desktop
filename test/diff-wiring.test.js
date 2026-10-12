@@ -118,3 +118,28 @@ test('open diffs belong to one project and are never revived or mixed up by a sl
   assert.match(app, /state\.openDiffsProject = projectPath/)
   assert.match(app, /if \(state\.openDiffs\.has\(path\) && readProjectPath\(\) === projectPath\) \{\s*state\.openDiffs\.set\(path, html\)/)
 })
+
+test('every Show changes and Show the rest button names its file for screen readers', () => {
+  assert.match(fnBody('function renderChangedFileItem'), /class="button button-ghost button-inline show-diff-button"[^`]*aria-label="Changes in \$\{escapeHtml\(entry\.path\)\}"/)
+  assert.match(app, /show-diff-button" data-diff-path="\$\{escapeHtml\(change\.path\)\}" aria-label="Changes in \$\{escapeHtml\(change\.path\)\}"/)
+  assert.match(read('src/gui/renderer/diff-view.js'), /diff-more-button" aria-label="Show the rest of the changes"/)
+})
+
+test('open diffs reload quietly: old content stays, the chosen length is kept, and a selection change does not reload', () => {
+  assert.match(app, /openDiffLines: new Map\(\)/)
+  assert.match(app, /diffsLoadedForSnapshot: null/)
+  const loader = fnBody('async function loadDiffInto')
+  assert.match(loader, /quiet = false/)
+  assert.match(loader, /if \(!quiet\) \{\s*container\.innerHTML = loadingPanelHtml/)
+  const refresh = fnBody('async function refreshOpenDiffs')
+  assert.match(refresh, /state\.diffsLoadedForSnapshot === state\.workingTreeSnapshot/)
+  assert.match(refresh, /quiet: true/)
+  assert.match(refresh, /maxLines: state\.openDiffLines\.get\(path\) \?\? DIFF_DEFAULT_LINES/)
+  assert.match(app, /state\.openDiffLines\.set\(path, DIFF_MAX_LINES\)/)
+  assert.match(app, /state\.openDiffLines\.delete\(path\)/)
+})
+
+test('remembered diff lengths are forgotten together with the open diffs', () => {
+  assert.match(fnBody('function resetDiffsOnProjectChange'), /state\.openDiffLines\.clear\(\)/)
+  assert.match(fnBody('function renderChangedFilesSelection'), /state\.openDiffs\.clear\(\)\s*state\.openDiffLines\.clear\(\)/)
+})

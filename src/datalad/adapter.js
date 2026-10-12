@@ -1,5 +1,5 @@
 import { lstat, mkdir, open, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
-import { basename, isAbsolute, join, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
 import { redactUrlCredentials } from './redact.js'
@@ -44,6 +44,12 @@ export const DIFF_MAX_LINES = 20_000
 export const DIFF_SAFE_FLAGS = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-renames']
 const UNTRACKED_READ_LIMIT = 1024 * 1024 // an untracked file is shown from its first MiB at most
 const ANNEX_KEY_SIZE = /-s(\d+)--/
+
+// True when `file` is strictly inside `folder`; also right for a filesystem or drive root ("/", "E:\\").
+export function isInsideFolder(folder, file) {
+  const path = relative(folder, file)
+  return path !== '' && path !== '..' && !path.startsWith(`..${'/'}`) && !path.startsWith('..\\') && !isAbsolute(path)
+}
 
 function isSafeRelativePath(value) {
   return (
@@ -1024,7 +1030,8 @@ export class DataLadAdapter {
     // A lock/unlock change (symlink <-> regular file) arrives as a delete plus an add: that is a modification.
     const typeChange = /^deleted file mode/m.test(output) && /^new file mode/m.test(output)
     const status = typeChange ? 'modified' : /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
-    const body = firstHunk === -1 ? [] : lines.slice(firstHunk)
+    // "\ No newline at end of file" markers are noise: dropped, so counts match what is shown.
+    const body = (firstHunk === -1 ? [] : lines.slice(firstHunk)).filter((line) => !line.startsWith('\\'))
     while (body.length > 0 && body.at(-1) === '') {
       body.pop()
     }
@@ -1049,6 +1056,17 @@ export class DataLadAdapter {
         oldSize: sizeOf('-'),
         newSize: sizeOf('+') ?? (status === 'deleted' ? null : await this.#worktreeSize(projectPath, path))
       }
+    }
+
+    if (firstHunk === -1 && !/^Binary files .* differ$/m.test(header) && !/^GIT binary patch$/m.test(header)) {
+      const note = /^old mode/m.test(header)
+        ? 'Only the file permissions changed.'
+        : status === 'added'
+          ? 'This is an empty file.'
+          : status === 'deleted'
+            ? 'The file was empty and is now deleted.'
+            : 'Nothing to show for this change.'
+      return { kind: 'note', status, note, patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
     }
 
     if (/^Binary files .* differ$/m.test(header) || /^GIT binary patch$/m.test(header) || firstHunk === -1) {
@@ -1095,7 +1113,7 @@ export class DataLadAdapter {
       return { kind: 'unchanged', status: 'added', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
     }
     const [realRoot, realFile] = await Promise.all([realpath(projectPath).catch(() => null), realpath(full).catch(() => null)])
-    if (!info.isFile() || !realRoot || !realFile || !realFile.startsWith(realRoot + sep)) {
+    if (!info.isFile() || !realRoot || !realFile || !isInsideFolder(realRoot, realFile)) {
       return data(info.isFile() ? info.size : null)
     }
 
@@ -1122,7 +1140,8 @@ export class DataLadAdapter {
       status: 'added',
       patch: body.slice(0, maxLines).join('\n'),
       totalLines: body.length,
-      truncated: body.length > maxLines || info.size > UNTRACKED_READ_LIMIT,
+      truncated: body.length > maxLines,
+      byteLimited: info.size > UNTRACKED_READ_LIMIT, // only the first MiB was read
       oldSize: null,
       newSize: null
     }

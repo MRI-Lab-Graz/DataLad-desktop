@@ -60,8 +60,11 @@ differences says "No differences since this save."
 `getFileDiff(projectPath, { path, against })` where `against` is `'HEAD'` (Home) or a commit
 hash (History); the other side is always the working tree. Optional `maxLines` (default 500,
 at most 20 000). Returns
-`{ kind: 'text' | 'binary' | 'unchanged', status: 'added' | 'deleted' | 'modified' | 'renamed',
-lines: [{ type: 'hunk' | 'context' | 'add' | 'del', text }], totalLines, truncated, oldSize, newSize }`.
+`{ kind: 'text' | 'binary' | 'note' | 'unchanged', status: 'added' | 'deleted' | 'modified',
+patch, totalLines, truncated, byteLimited?, note?, oldSize, newSize }` where `patch` is the unified diff
+starting at its first `@@` line (the renderer parses it; "No newline" markers are dropped, so counts match
+what is shown), `note` carries a one-line explanation for a permissions-only change or an empty file, and
+`byteLimited` says only the first 1 MiB of an untracked file was read.
 `listChangesSince(projectPath, commitHash)` returns `[{ status, path }]`.
 
 ### Security (read-only, but git diff can run programs)

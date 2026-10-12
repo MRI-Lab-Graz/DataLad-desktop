@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join, basename, parse } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
 
 class FakeRunner {
@@ -2679,4 +2679,41 @@ test('getFileDiff does not mistake an ordinary text file for annexed data', asyn
   const text = 'diff --git a/a.tsv b/a.tsv\nindex 111..222 100644\n--- a/a.tsv\n+++ b/a.tsv\n@@ -1 +1 @@\n-120000\n+/annex/objects/ is a folder\n'
   const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: text } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
   assert.equal(result.kind, 'text')
+})
+
+test('getFileDiff does not count "No newline at end of file" markers in the line totals or the patch', async () => {
+  const body = '@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n'
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: HEADER + body } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.totalLines, 3)
+  assert.equal(result.patch, '@@ -1 +1 @@\n-a\n+b')
+})
+
+test('getFileDiff says "permissions only" for a mode change and "empty file" for an empty new or deleted file', async () => {
+  const mode = 'diff --git a/a.tsv b/a.tsv\nold mode 100644\nnew mode 100755\n'
+  const modeResult = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: mode } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.deepEqual([modeResult.kind, modeResult.note], ['note', 'Only the file permissions changed.'])
+  const empty = 'diff --git a/a.tsv b/a.tsv\nnew file mode 100644\nindex 0000000..e69de29\n'
+  const emptyResult = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: empty } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.deepEqual([emptyResult.kind, emptyResult.status, emptyResult.note], ['note', 'added', 'This is an empty file.'])
+  const gone = 'diff --git a/a.tsv b/a.tsv\ndeleted file mode 100644\nindex e69de29..0000000\n'
+  assert.equal((await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: gone } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })).note, 'The file was empty and is now deleted.')
+})
+
+test('getFileDiff marks an untracked file longer than 1 MiB as cut by size, not by lines', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  await writeFile(join(dir, 'a.tsv'), 'x'.repeat(1024 * 1024 + 10)) // a single huge line
+  const result = await new DataLadAdapter({ runner: diffRunner(dir, { untracked: true }) }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+  assert.equal(result.byteLimited, true)
+  assert.equal(result.truncated, false)
+})
+
+test('isInsideFolder is true below the folder, false beside or above it, and works for a drive or filesystem root', async () => {
+  const { isInsideFolder } = await import('../src/datalad/adapter.js')
+  const root = parse(process.cwd()).root
+  assert.equal(isInsideFolder(root, join(root, 'a', 'b.txt')), true)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a', 'b.txt')), true)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'ab', 'b.txt')), false)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'b.txt')), false)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a')), false)
 })

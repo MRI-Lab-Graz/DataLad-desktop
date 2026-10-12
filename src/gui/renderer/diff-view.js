@@ -113,6 +113,10 @@ export function renderDiffHtml(diff, { path, requestedMax }) {
     return '<p class="hint-inline">No changes.</p>'
   }
 
+  if (diff.kind === 'note') {
+    return `<p class="hint-inline">${escapeHtml(diff.note)}</p>`
+  }
+
   if (diff.kind === 'binary') {
     const sizes = [diff.oldSize, diff.newSize].every((size) => size === null || size === undefined)
       ? ''
@@ -126,8 +130,11 @@ export function renderDiffHtml(diff, { path, requestedMax }) {
     const shown = lines.length
     footer = requestedMax < DIFF_MAX_LINES
       ? `<p class="hint-inline">Showing ${shown} of ${diff.totalLines} lines. ` +
-        '<button type="button" class="button button-ghost button-inline diff-more-button">Show the rest</button></p>'
+        '<button type="button" class="button button-ghost button-inline diff-more-button" aria-label="Show the rest of the changes">Show the rest</button></p>'
       : `<p class="hint-inline">Showing ${shown} of ${diff.totalLines} lines. The rest is not shown.</p>`
+  }
+  if (diff.byteLimited) {
+    footer += '<p class="hint-inline">Only the first 1 MB of this new file is shown.</p>'
   }
   return `<div class="diff" role="group" aria-label="Changes in ${escapeHtml(path)}">${renderRows(lines, separatorFor(path))}</div>${footer}`
 }

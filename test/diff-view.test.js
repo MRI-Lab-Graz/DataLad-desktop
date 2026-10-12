@@ -121,3 +121,15 @@ test('renderDiffHtml offers the rest when cut at the default, and says it stops 
   assert.doesNotMatch(stop, /diff-more-button/)
   assert.match(stop, /The rest is not shown/)
 })
+
+test('renderDiffHtml shows an adapter note as plain text, escaped', () => {
+  const html = renderDiffHtml({ kind: 'note', status: 'modified', note: 'Only the <file> permissions changed.' }, { path: 'a.sh', requestedMax: 500 })
+  assert.match(html, /Only the &lt;file&gt; permissions changed\./)
+  assert.doesNotMatch(html, /<file>/)
+})
+
+test('renderDiffHtml says when only the first 1 MB of a new file is shown, without offering "Show the rest"', () => {
+  const html = renderDiffHtml(text({ byteLimited: true, truncated: false }), { path: 'big.txt', requestedMax: 500 })
+  assert.match(html, /Only the first 1 MB of this new file is shown\./)
+  assert.doesNotMatch(html, /diff-more-button/)
+})

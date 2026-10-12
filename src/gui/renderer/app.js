@@ -85,6 +85,8 @@ const state = {
   timeMachineProjectPath: null,
   openDiffs: new Map(),
   openDiffsProject: null,
+  openDiffLines: new Map(),
+  diffsLoadedForSnapshot: null,
   diffRefreshGeneration: 0,
   headerProjectPath: null,
   rootProjectIsBids: false,
@@ -382,6 +384,7 @@ elements.changedFilesOutput.addEventListener('click', async (event) => {
     }
     if (diffButton && state.openDiffs.has(path)) {
       state.openDiffs.delete(path)
+      state.openDiffLines.delete(path)
       container.hidden = true
       diffButton.textContent = 'Show changes'
       diffButton.setAttribute('aria-expanded', 'false')
@@ -392,6 +395,9 @@ elements.changedFilesOutput.addEventListener('click', async (event) => {
       state.openDiffs.set(path, '')
       diffButton.textContent = 'Hide changes'
       diffButton.setAttribute('aria-expanded', 'true')
+    }
+    if (moreButton) {
+      state.openDiffLines.set(path, DIFF_MAX_LINES)
     }
     const html = await loadDiffInto(container, { projectPath, path, against: 'HEAD', ...(moreButton ? { maxLines: DIFF_MAX_LINES } : {}) })
     if (state.openDiffs.has(path) && readProjectPath() === projectPath) {
@@ -1390,7 +1396,7 @@ elements.timeMachineCompareButton.addEventListener('click', async () => {
             '<li class="changed-file-item">' +
             `<span class="changed-file-path" title="${escapeHtml(change.path)}">${escapeHtml(change.path)}</span>` +
             `<span>${renderGitStatusBadge(change.status)}` +
-            `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(change.path)}" aria-expanded="false">Show changes</button></span>` +
+            `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(change.path)}" aria-label="Changes in ${escapeHtml(change.path)}" aria-expanded="false">Show changes</button></span>` +
             `<div class="file-diff" data-diff-container="${escapeHtml(change.path)}" hidden></div>` +
             '</li>'
         )
@@ -2974,7 +2980,7 @@ function renderChangedFileItem(entry, isNested = false) {
   const canDiff = !isNested && !entry.isSubmodule && !entry.conflicted
   const open = state.openDiffs.has(entry.path)
   const diffButton = canDiff
-    ? `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(entry.path)}" aria-expanded="${open}">${open ? 'Hide changes' : 'Show changes'}</button>`
+    ? `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(entry.path)}" aria-label="Changes in ${escapeHtml(entry.path)}" aria-expanded="${open}">${open ? 'Hide changes' : 'Show changes'}</button>`
     : ''
   const diffContainer = canDiff
     ? `<div class="file-diff" data-diff-container="${escapeHtml(entry.path)}"${open ? '' : ' hidden'}>${open ? state.openDiffs.get(entry.path) : ''}</div>`
@@ -3002,6 +3008,7 @@ function renderChangedFilesSelection() {
   if (files.length === 0) {
     elements.changedFilesOutput.textContent = 'No changed files detected.'
     state.openDiffs.clear()
+    state.openDiffLines.clear()
     elements.changedFilesSelectAllButton.disabled = true
     elements.changedFilesSelectNoneButton.disabled = true
     return
@@ -3027,9 +3034,11 @@ function renderChangedFilesSelection() {
 }
 
 // Fills one diff container (Home row or History compare entry). Never throws: errors are shown in the container.
-async function loadDiffInto(container, { projectPath, path, against, maxLines = DIFF_DEFAULT_LINES }) {
+async function loadDiffInto(container, { projectPath, path, against, maxLines = DIFF_DEFAULT_LINES, quiet = false }) {
   container.hidden = false
-  container.innerHTML = loadingPanelHtml('Loading changes…')
+  if (!quiet) {
+    container.innerHTML = loadingPanelHtml('Loading changes…')
+  }
   try {
     const diff = await api.getFileDiff(projectPath, { path, against, maxLines })
     container.innerHTML = renderDiffHtml(diff, { path, requestedMax: maxLines })
@@ -3049,6 +3058,7 @@ function resetDiffsOnProjectChange(projectPath) {
     return false
   }
   state.openDiffs.clear()
+  state.openDiffLines.clear()
   state.openDiffsProject = projectPath
   return true
 }
@@ -3060,6 +3070,11 @@ async function refreshOpenDiffs() {
   if (resetDiffsOnProjectChange(projectPath)) {
     return
   }
+  // A selection change re-renders the same snapshot: the remembered diffs are already current.
+  if (state.diffsLoadedForSnapshot === state.workingTreeSnapshot) {
+    return
+  }
+  state.diffsLoadedForSnapshot = state.workingTreeSnapshot
   const generation = ++state.diffRefreshGeneration
   const changed = new Set((state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path))
   for (const path of [...state.openDiffs.keys()]) {
@@ -3068,7 +3083,13 @@ async function refreshOpenDiffs() {
       state.openDiffs.delete(path)
       continue
     }
-    const html = await loadDiffInto(container, { projectPath, path, against: 'HEAD' })
+    const html = await loadDiffInto(container, {
+      projectPath,
+      path,
+      against: 'HEAD',
+      maxLines: state.openDiffLines.get(path) ?? DIFF_DEFAULT_LINES,
+      quiet: true // keep what is shown (and the scroll position) until the new diff arrives
+    })
     if (generation !== state.diffRefreshGeneration || readProjectPath() !== projectPath) {
       return
     }
