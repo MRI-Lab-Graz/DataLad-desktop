@@ -30,7 +30,8 @@ import {
   computeSaveStatusChip,
   computeSyncStatusChip,
   computeMissingContentChip,
-  computeStatusLine
+  computeStatusLine,
+  computeAttentionRows
 } from './project-health-chips.js'
 
 const api = window.dataladDesktop
@@ -128,12 +129,14 @@ const elements = {
   onboardingGroup: document.getElementById('onboarding-group'),
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
-  projectHealthCard: document.getElementById('project-health-card'),
   projectNavGroup: document.getElementById('project-nav-group'),
   projectHome: document.getElementById('project-home'),
   projectTools: document.getElementById('project-tools'),
   openToolsButton: document.getElementById('open-tools'),
   closeToolsButton: document.getElementById('close-tools'),
+  attentionRows: document.getElementById('attention-rows'),
+  historyFullLink: document.getElementById('history-full-link'),
+  lastActionDetails: document.getElementById('last-action-details'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
   projectNavTileConsole: document.getElementById('project-nav-tile-console'),
@@ -543,6 +546,12 @@ function showTools(target = DEFAULT_TOOL) {
 
 elements.openToolsButton.addEventListener('click', () => showTools())
 elements.closeToolsButton.addEventListener('click', showHome)
+elements.historyFullLink.addEventListener('click', () => showTools('time-machine-zone'))
+
+// Validation messages go to #command-output too, so a collapsed details must open when anything is written.
+new MutationObserver(() => {
+  elements.lastActionDetails.open = true
+}).observe(elements.commandOutput, { childList: true, characterData: true, subtree: true })
 
 function updateGetRemoteMode() {
   const isUrl = elements.getRemoteModeUrlRadio.checked
@@ -3428,7 +3437,6 @@ function setOnboardingExpanded(expanded) {
 // or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
-  elements.projectHealthCard.hidden = !visible
   elements.projectNavGroup.hidden = !visible
   if (visible) {
     showHome()
@@ -3515,15 +3523,39 @@ function setStatusLine(text, tone) {
   elements.projectStatusLine.className = `status-line status-line-${tone}`
 }
 
+function renderAttentionRows(health) {
+  const buttonFor = {
+    missing: elements.filesGetAllButton,
+    publish: elements.publishProjectButton,
+    update: elements.updateProjectButton
+  }
+  const rows = computeAttentionRows(health)
+  elements.attentionRows.hidden = rows.length === 0
+  elements.attentionRows.innerHTML = rows
+    .map(
+      (row) => `<div class="attention-row"><span>${escapeHtml(row.label)}</span>` +
+        `<button class="button button-ghost button-inline" type="button" data-attention="${row.kind}">${escapeHtml(row.action)}</button></div>`
+    )
+    .join('')
+  elements.attentionRows.querySelectorAll('button[data-attention]').forEach((rowButton) => {
+    const button = buttonFor[rowButton.dataset.attention]
+    rowButton.disabled = button.disabled
+    rowButton.title = button.title
+    rowButton.addEventListener('click', () => button.click())
+  })
+}
+
 function renderProjectHealth(overrideMessage = null) {
   if (overrideMessage) {
     elements.projectHealthOutput.textContent = overrideMessage
     setStatusLine(overrideMessage, 'neutral')
+    renderAttentionRows(null)
     return
   }
 
   const health = state.projectHealthSnapshot
   applyRemoteGatedButtons(health)
+  renderAttentionRows(health)
 
   if (!health) {
     const message = 'Select a project to see its save, sync, and data status.'

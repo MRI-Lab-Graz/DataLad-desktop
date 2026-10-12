@@ -43,3 +43,41 @@ test('opening or switching a project returns to Home', () => {
   const fn = app.slice(app.indexOf('function setProjectDependentSectionsVisible'))
   assert.match(fn.slice(0, fn.indexOf('\n}\n')), /showHome\(\)/)
 })
+
+test('the health status line lives in the project strip and the Health card is gone', () => {
+  const strip = html.slice(at('id="project-strip"'), at('id="running-commands"'))
+  assert.match(strip, /id="project-status-line"/)
+  assert.doesNotMatch(html, /id="project-health-card"/)
+  assert.doesNotMatch(app, /projectHealthCard/)
+})
+
+test('Home order: merge banner, attention rows, Save, then recent history', () => {
+  assert.ok(at('id="merge-banner"') < at('id="attention-rows"'))
+  assert.ok(at('id="attention-rows"') < at('id="save-project"'))
+  assert.ok(at('id="save-project"') < at('id="recent-commits-output"'))
+  assert.ok(at('id="merge-banner"') < at('id="project-tools"'))
+})
+
+test('Home cards carry no emoji badge', () => {
+  const home = html.slice(at('id="project-home"'), at('id="project-tools"'))
+  assert.doesNotMatch(home, /card-icon-badge/)
+})
+
+test('Full history jumps to Tools, History', () => {
+  at('id="history-full-link"')
+  assert.match(app, /historyFullLink\.addEventListener\('click', \(\) => showTools\('time-machine-zone'\)\)/)
+})
+
+test('attention rows come from computeAttentionRows and act through the existing buttons', () => {
+  assert.match(app, /computeAttentionRows\(health\)/)
+  assert.match(app, /missing: elements\.filesGetAllButton/)
+  assert.match(app, /publish: elements\.publishProjectButton/)
+  assert.match(app, /update: elements\.updateProjectButton/)
+  assert.match(app, /button\.disabled/)
+})
+
+test('the last action result is collapsed but opens itself when something is written', () => {
+  at('id="last-action-details"')
+  assert.match(app, /new MutationObserver\(/)
+  assert.match(app, /\.observe\(elements\.commandOutput/)
+})

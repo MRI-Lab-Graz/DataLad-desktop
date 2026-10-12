@@ -102,11 +102,6 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 }
 
-.project-health {
-  padding-top: 14px;
-  padding-bottom: 14px;
-}
-
 .open-project-strip {
   padding-top: 14px;
   padding-bottom: 14px;
@@ -1974,4 +1969,20 @@ select:disabled {
   .tools-layout {
     grid-template-columns: 1fr;
   }
+}
+
+.attention-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.attention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(168, 110, 11, 0.4);
+  border-radius: 12px;
+  background: var(--teal-soft);
 }

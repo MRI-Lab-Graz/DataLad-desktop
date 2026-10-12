@@ -254,6 +254,9 @@
             />
             <p id="current-project-path" class="strip-path">No project selected</p>
             <p id="current-project-nested-info" class="strip-nested-info" hidden></p>
+            <p id="project-status-line" class="status-line status-line-neutral">
+              Select a project to see its save, sync, and data status.
+            </p>
           </div>
         </div>
         <div class="strip-state-group">
@@ -270,20 +273,23 @@
 
       <section id="running-commands" class="card running-commands" role="status" aria-label="Running commands" hidden></section>
 
-      <section id="project-health-card" class="card project-health reveal reveal-3" aria-labelledby="project-health-title" hidden>
-        <span class="card-icon-badge" aria-hidden="true">🩺</span>
-        <div class="section-head">
-          <h2 id="project-health-title">Project Health</h2>
-        </div>
-        <p id="project-status-line" class="status-line status-line-neutral">
-          Select a project to see its save, sync, and data status.
-        </p>
-      </section>
-
       <section id="project-nav-group" class="onboarding-group" hidden>
         <div id="project-home">
+          <section id="merge-banner" class="card status-box" aria-labelledby="merge-banner-title" hidden>
+            <div class="section-head branch-head">
+              <h3 id="merge-banner-title">Merge in progress</h3>
+              <div class="section-actions">
+                <button id="merge-cancel" class="button button-ghost button-inline" type="button">Cancel Merge</button>
+                <button id="merge-finish" class="button button-primary button-inline" type="button">Finish Merge</button>
+              </div>
+            </div>
+            <p id="merge-summary" class="lede-small"></p>
+            <ul id="merge-conflict-list" class="changed-files-list"></ul>
+          </section>
+
+          <div id="attention-rows" class="attention-rows" hidden></div>
+
         <section id="save-checkpoint-panel" class="card save-hero reveal" aria-labelledby="project-actions-title">
-          <span class="card-icon-badge" aria-hidden="true">💾</span>
           <div class="section-head">
             <h2 id="project-actions-title">Save a Checkpoint</h2>
           </div>
@@ -310,18 +316,6 @@
             </div>
             <p class="hint-inline">This project has nested datasets — pick which one Save applies to.</p>
           </label>
-
-          <section id="merge-banner" class="status-box" aria-labelledby="merge-banner-title" hidden>
-            <div class="section-head branch-head">
-              <h3 id="merge-banner-title">Merge in progress</h3>
-              <div class="section-actions">
-                <button id="merge-cancel" class="button button-ghost button-inline" type="button">Cancel Merge</button>
-                <button id="merge-finish" class="button button-primary button-inline" type="button">Finish Merge</button>
-              </div>
-            </div>
-            <p id="merge-summary" class="lede-small"></p>
-            <ul id="merge-conflict-list" class="changed-files-list"></ul>
-          </section>
 
           <section class="status-box" aria-labelledby="changed-files-title">
             <div class="section-head branch-head">
@@ -365,6 +359,18 @@
             Save Checkpoint
           </button>
 
+          <section class="status-box" aria-labelledby="recent-commits-title">
+            <div class="section-head branch-head">
+              <h3 id="recent-commits-title">Recent Commits</h3>
+              <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history ▸</button>
+            </div>
+            <div id="recent-commits-output" class="panel panel-muted panel-compact">
+              Recent saves appear here.
+            </div>
+          </section>
+
+          <details id="last-action-details" class="branch-details">
+            <summary>Details of last action</summary>
           <section class="status-box" aria-labelledby="command-output-title">
             <div class="section-head branch-head">
               <h3 id="command-output-title">Last Action Result</h3>
@@ -372,15 +378,7 @@
             <p class="lede-small">Shows what happened after Save, Get Data, Update, or Publish runs.</p>
             <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
           </section>
-
-          <section class="status-box" aria-labelledby="recent-commits-title">
-            <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent Commits</h3>
-            </div>
-            <div id="recent-commits-output" class="panel panel-muted panel-compact">
-              Recent saves appear here.
-            </div>
-          </section>
+          </details>
         </section>
         </div>
         <div id="project-tools" hidden>
