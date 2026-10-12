@@ -2,8 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const html = readFileSync(new URL('../src/gui/renderer/index.html', import.meta.url), 'utf8')
-const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+// A Windows checkout has CRLF line endings; the slicing helpers below look for "\n}\n".
+const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const html = read('../src/gui/renderer/index.html')
+const app = read('../src/gui/renderer/app.js')
 const at = (needle) => {
   const index = html.indexOf(needle)
   assert.notEqual(index, -1, `missing in index.html: ${needle}`)
