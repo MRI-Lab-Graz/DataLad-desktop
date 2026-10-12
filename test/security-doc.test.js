@@ -117,3 +117,11 @@ test('SECURITY.md documents the controls of the science-workflow commands, and t
   assert.match(doc, /trusted\*? remote|marks? a remote as \*trusted\*/)
   assert.match(doc, /Passwords and tokens in URLs/)
 })
+
+test('SECURITY.md documents that file diffs never run repository-named programs, and the code does the same', () => {
+  assert.match(doc, /--no-ext-diff/)
+  assert.match(doc, /--no-textconv/)
+  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
+  assert.match(adapter, /DIFF_SAFE_FLAGS = \['--no-ext-diff', '--no-textconv'/)
+  assert.match(adapter, /must never run a program named by repository content/)
+})

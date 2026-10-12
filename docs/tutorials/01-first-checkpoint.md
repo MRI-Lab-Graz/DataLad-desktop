@@ -32,6 +32,7 @@ changes in the newly created project and make a clean first save.
 1. Open the project in DataLad Desktop.
 2. Confirm project classification badge (Git, Dataset, or Superdataset).
 3. Review changed and untracked files in the working-tree list.
+   Click **Show changes** under a file to see exactly what changed in it before you save.
 
    ![The Files view, with changed items badged](../_static/screenshots/05-files.png)
 
