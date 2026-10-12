@@ -502,9 +502,11 @@ elements.detectProjectButton.addEventListener('click', async () => {
 // (Save/Sync/Files/...) so both stay on one interaction model.
 function wireTileGroup(tiles, datasetKey, { required = false } = {}) {
   function select(targetId) {
+    const anySelected = tiles.some((tile) => tile.dataset[datasetKey] === targetId)
     for (const tile of tiles) {
       const isSelected = tile.dataset[datasetKey] === targetId
       tile.setAttribute('aria-selected', String(isSelected))
+      tile.tabIndex = isSelected || !anySelected ? 0 : -1
       const panel = document.getElementById(tile.dataset[datasetKey])
       if (panel) {
         panel.hidden = !isSelected
@@ -523,6 +525,15 @@ function wireTileGroup(tiles, datasetKey, { required = false } = {}) {
       }
       select(alreadySelected ? null : tile.dataset[datasetKey])
     })
+    tile.addEventListener('keydown', (event) => {
+      const index = nextTabIndex(tiles.indexOf(tile), event.key, tiles.map((candidate) => candidate.hidden))
+      if (index === -1) {
+        return
+      }
+      event.preventDefault()
+      tiles[index].focus()
+      tiles[index].click()
+    })
   }
 
   return select
@@ -532,23 +543,29 @@ const selectOnboardingTile = wireTileGroup(elements.onboardingTiles, 'onboarding
 const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget', { required: true })
 const DEFAULT_TOOL = 'files-panel'
 
-function showHome() {
+function showHome({ focus = false } = {}) {
   elements.projectTools.hidden = true
   elements.projectHome.hidden = false
+  elements.openToolsButton.setAttribute('aria-expanded', 'false')
+  if (focus) {
+    elements.openToolsButton.focus()
+  }
 }
 
 function showTools(target = DEFAULT_TOOL) {
   elements.projectHome.hidden = true
   elements.projectTools.hidden = false
+  elements.openToolsButton.setAttribute('aria-expanded', 'true')
   selectProjectTile(target)
+  elements.projectNavTiles.find((tile) => tile.dataset.navTarget === target)?.focus()
   if (target === 'time-machine-zone') {
     // Always refresh: a save on Home since the last visit must show up in the full history.
     refreshTimeMachineHistory(readProjectPath())
   }
 }
 
-elements.openToolsButton.addEventListener('click', () => showTools())
-elements.closeToolsButton.addEventListener('click', showHome)
+elements.openToolsButton.addEventListener('click', () => (elements.projectTools.hidden ? showTools() : showHome({ focus: true })))
+elements.closeToolsButton.addEventListener('click', () => showHome({ focus: true }))
 elements.historyFullLink.addEventListener('click', () => showTools('time-machine-zone'))
 
 // Validation messages go to #command-output too, so a collapsed details must open when anything is written.
@@ -1647,7 +1664,7 @@ api.onFilesChanged(({ projectPath }) => {
   }
 
   void refreshWorkingTreeStatus(state.rootProjectPath)
-  void refreshFileBrowser(state.rootProjectPath)
+  void refreshFileBrowser(state.fileBrowserProject ?? state.rootProjectPath)
 })
 
 async function detectProjectType(projectPath) {
@@ -1865,7 +1882,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     if (state.pendingCommands.size === 0 && state.watchRefreshPending) {
       state.watchRefreshPending = false
       void refreshWorkingTreeStatus(state.rootProjectPath)
-      void refreshFileBrowser(state.rootProjectPath)
+      void refreshFileBrowser(state.fileBrowserProject ?? state.rootProjectPath)
     }
   }
 }
@@ -3529,12 +3546,24 @@ function setStatusLine(text, tone) {
   elements.projectStatusLine.className = `status-line status-line-${tone}`
 }
 
-function renderAttentionRows(health) {
-  const buttonFor = {
+function attentionTargetButton(kind) {
+  return {
     missing: elements.filesGetAllButton,
     publish: elements.publishProjectButton,
     update: elements.updateProjectButton
+  }[kind]
+}
+
+// Mirror the real buttons' gating (busy, no remote, ...) onto the row buttons.
+function syncAttentionRowGating() {
+  for (const rowButton of elements.attentionRows.querySelectorAll('button[data-attention]')) {
+    const button = attentionTargetButton(rowButton.dataset.attention)
+    rowButton.disabled = button.disabled
+    rowButton.title = button.title
   }
+}
+
+function renderAttentionRows(health) {
   const rows = computeAttentionRows(health)
   elements.attentionRows.hidden = rows.length === 0
   elements.attentionRows.innerHTML = rows
@@ -3544,11 +3573,9 @@ function renderAttentionRows(health) {
     )
     .join('')
   elements.attentionRows.querySelectorAll('button[data-attention]').forEach((rowButton) => {
-    const button = buttonFor[rowButton.dataset.attention]
-    rowButton.disabled = button.disabled
-    rowButton.title = button.title
-    rowButton.addEventListener('click', () => button.click())
+    rowButton.addEventListener('click', () => attentionTargetButton(rowButton.dataset.attention).click())
   })
+  syncAttentionRowGating()
 }
 
 function renderProjectHealth(overrideMessage = null) {
@@ -3647,6 +3674,7 @@ function setButtonBusy(button, busy, busyLabel = 'Working…') {
     button.disabled = true
     button.classList.add('is-busy')
     button.textContent = busyLabel
+    syncAttentionRowGating()
     return
   }
 
@@ -3656,6 +3684,7 @@ function setButtonBusy(button, busy, busyLabel = 'Working…') {
     button.textContent = button.dataset.idleLabel
     delete button.dataset.idleLabel
   }
+  syncAttentionRowGating()
 }
 
 function setLastActionState(text, tone) {

@@ -93,3 +93,47 @@ test('the last action result is collapsed but opens itself when something is wri
   assert.match(app, /new MutationObserver\(/)
   assert.match(app, /\.observe\(elements\.commandOutput/)
 })
+
+test('the Tools list is a vertical tablist with arrow-key movement', () => {
+  assert.match(html, /class="[^"]*tools-nav"[^>]*aria-orientation="vertical"/)
+  const wire = fnBody('function wireTileGroup')
+  assert.match(wire, /addEventListener\('keydown'/)
+  assert.match(wire, /nextTabIndex\(/)
+  // With nothing selected (onboarding picker closed) every tile must stay reachable by Tab.
+  assert.match(wire, /tabIndex = isSelected \|\| !anySelected \? 0 : -1/)
+})
+
+test('the Tools button is a toggle that announces its state', () => {
+  assert.match(html, /id="open-tools"[^>]*aria-controls="project-tools"[^>]*aria-expanded="false"/)
+  assert.match(fnBody('function showTools'), /setAttribute\('aria-expanded', 'true'\)/)
+  assert.match(fnBody('function showHome'), /setAttribute\('aria-expanded', 'false'\)/)
+  assert.match(app, /openToolsButton\.addEventListener\('click', \(\) => \(elements\.projectTools\.hidden \? showTools\(\) : showHome\(\{ focus: true \}\)\)\)/)
+})
+
+test('focus follows the view swap', () => {
+  assert.match(fnBody('function showTools'), /\.focus\(\)/)
+  assert.match(fnBody('function showHome'), /if \(focus\)/)
+  assert.match(app, /closeToolsButton\.addEventListener\('click', \(\) => showHome\(\{ focus: true \}\)\)/)
+})
+
+test('decorative arrows are hidden from screen readers', () => {
+  for (const id of ['open-tools', 'close-tools', 'history-full-link']) {
+    const button = html.slice(at(`id="${id}"`), html.indexOf('</button>', at(`id="${id}"`)))
+    assert.doesNotMatch(button.replace(/<span aria-hidden="true">[←▸]<\/span>/g, ''), /[←▸]/, id)
+  }
+})
+
+test('tool panels carry no emoji badge and History is called History', () => {
+  assert.doesNotMatch(html.slice(at('id="project-tools"')), /card-icon-badge/)
+  assert.match(html, /<h2 id="time-machine-title">History — Browse &amp; Restore Past Saves<\/h2>/)
+})
+
+test('attention rows follow busy state of the buttons they mirror', () => {
+  // Synced in place, not re-rendered: re-rendering would drop focus from the row button just clicked.
+  assert.match(fnBody('function setButtonBusy'), /syncAttentionRowGating\(\)/)
+  assert.doesNotMatch(fnBody('function setButtonBusy'), /renderAttentionRows/)
+})
+
+test('file-watch refreshes keep the folder the file browser shows (not the root)', () => {
+  assert.doesNotMatch(app, /refreshFileBrowser\(state\.rootProjectPath\)/)
+})

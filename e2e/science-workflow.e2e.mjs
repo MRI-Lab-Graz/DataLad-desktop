@@ -81,7 +81,7 @@ test('Free up space on the file row removes the local copy now that the backup h
   const dropButton = '[data-data-action="drop"][data-data-path="data.bin"]'
   await app.page.evaluate(() => {
     window.confirm = () => true
-    document.getElementById('open-tools').click()
+    if (document.getElementById('project-tools').hidden) document.getElementById('open-tools').click() // Tools ▸ toggles
     document.querySelector('[data-nav-target="files-panel"]').click()
   })
   await app.page.waitForSelector(dropButton)
@@ -134,7 +134,7 @@ test('a version marked in git reaches the remote on Publish', async () => {
 
 test('Time Machine marks the datalad run commit and shows its command', async () => {
   await app.page.evaluate(() => {
-    document.getElementById('open-tools').click()
+    if (document.getElementById('project-tools').hidden) document.getElementById('open-tools').click() // Tools ▸ toggles
     document.querySelector('[data-nav-target="time-machine-zone"]').click()
   })
   await app.page.waitForSelector('.run-chip', { timeout: 30_000 })

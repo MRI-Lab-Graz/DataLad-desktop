@@ -264,7 +264,7 @@
           <span id="current-project-bids-badge" class="badge badge-bids" hidden>BIDS</span>
           <span id="current-project-prism-badge" class="badge badge-bids" hidden>PRISM</span>
           <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
-          <button id="open-tools" class="button button-ghost button-inline" type="button">Tools ▸</button>
+          <button id="open-tools" class="button button-ghost button-inline" type="button" aria-controls="project-tools" aria-expanded="false">Tools <span aria-hidden="true">▸</span></button>
           <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
             Switch Project
           </button>
@@ -362,7 +362,7 @@
           <section class="status-box" aria-labelledby="recent-commits-title">
             <div class="section-head branch-head">
               <h3 id="recent-commits-title">Recent Commits</h3>
-              <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history ▸</button>
+              <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history <span aria-hidden="true">▸</span></button>
             </div>
             <div id="recent-commits-output" class="panel panel-muted panel-compact">
               Recent saves appear here.
@@ -382,9 +382,9 @@
         </section>
         </div>
         <div id="project-tools" hidden>
-          <button id="close-tools" class="button button-ghost button-inline" type="button">← Back to project</button>
+          <button id="close-tools" class="button button-ghost button-inline" type="button"><span aria-hidden="true">←</span> Back to project</button>
           <div class="tools-layout">
-          <div class="onboarding-picker project-nav-picker tools-nav" role="tablist" aria-label="Project tools">
+          <div class="onboarding-picker project-nav-picker tools-nav" role="tablist" aria-orientation="vertical" aria-label="Project tools">
             <button type="button" class="onboarding-tile" data-nav-target="files-panel" role="tab" aria-selected="false" aria-controls="files-panel">
               <span class="onboarding-tile-icon" aria-hidden="true">🗂️</span>
               <span class="onboarding-tile-label">Files</span>
@@ -413,7 +413,6 @@
           </div>
             <div class="tools-panels">
         <section id="power-user-console" class="card reveal" aria-labelledby="power-user-console-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🖥️</span>
           <div class="section-head">
             <h2 id="power-user-console-title">Power User Console — Run Any Command</h2>
           </div>
@@ -449,7 +448,6 @@
         </section>
 
         <section id="sync-data-section" class="card reveal" aria-labelledby="sync-data-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🔄</span>
           <div class="section-head">
             <h2 id="sync-data-title">Sync</h2>
           </div>
@@ -502,7 +500,6 @@
         </section>
 
         <section id="files-panel" class="card reveal" aria-labelledby="files-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🗂️</span>
           <div class="section-head">
             <h2 id="files-title">Files</h2>
             <div class="section-actions">
@@ -522,7 +519,6 @@
         </section>
 
         <section id="project-health-panel" class="card reveal" aria-labelledby="project-health-panel-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🩺</span>
           <div class="section-head">
             <h2 id="project-health-panel-title">Project Health Details</h2>
           </div>
@@ -545,7 +541,6 @@
         </section>
 
         <section id="project-setup-zone" class="card reveal" aria-labelledby="setup-zone-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">⚙️</span>
           <div class="section-head">
             <h2 id="setup-zone-title">Branches &amp; Ignore Rules</h2>
           </div>
@@ -637,9 +632,8 @@
         </section>
 
         <section id="time-machine-zone" class="card reveal" aria-labelledby="time-machine-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">⏳</span>
           <div class="section-head">
-            <h2 id="time-machine-title">Time Machine — Browse &amp; Restore Past Saves</h2>
+            <h2 id="time-machine-title">History — Browse &amp; Restore Past Saves</h2>
           </div>
           <p class="lede-small">
             Browse the full history of this project, restore individual files from any past save point,
