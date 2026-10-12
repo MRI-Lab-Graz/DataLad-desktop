@@ -105,6 +105,8 @@ export function collectChangedPaths(files) {
  * @param {Array<{ path: string }> | null | undefined} filesAfter top-level changed files after the save
  */
 export function unsavedLeftovers(selectedPaths, filesAfter) {
-  const stillChanged = new Set((filesAfter ?? []).map((entry) => entry.path))
+  // A nested dataset's own entry is not judged: on Windows git-annex's adjusted branches make git report it as
+  // modified even straight after a clean DataLad save (seen on the windows-latest runner).
+  const stillChanged = new Set((filesAfter ?? []).filter((entry) => !entry.isSubmodule).map((entry) => entry.path))
   return selectedPaths.filter((path) => stillChanged.has(path))
 }

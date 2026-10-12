@@ -117,3 +117,10 @@ test('unsavedLeftovers lists the selected files that still show as changed after
   assert.deepEqual(unsavedLeftovers(['a.txt'], undefined), [])
   assert.deepEqual(unsavedLeftovers([], [{ path: 'a.txt' }]), [])
 })
+
+test('unsavedLeftovers ignores a nested dataset entry: on Windows git reports it as modified even right after a clean DataLad save', async () => {
+  const { unsavedLeftovers } = await import('../src/gui/renderer/save-gating.js')
+  const after = [{ path: 'sub', isSubmodule: true }, { path: 'my file.csv' }]
+  assert.deepEqual(unsavedLeftovers(['sub', 'my file.csv'], after), ['my file.csv'])
+  assert.deepEqual(unsavedLeftovers(['sub'], after), [])
+})

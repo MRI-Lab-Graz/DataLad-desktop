@@ -13,6 +13,10 @@ let root
 let sub
 
 const sh = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8' })
+// On Windows DataLad puts the nested dataset into git-annex's adjusted-branch mode, where `git status` in the root
+// shows " M sub" even straight after a clean `datalad save -r` (seen on the windows-latest runner, before the app
+// did anything). So "the root is clean" can only be asserted elsewhere; the nested commits are checked everywhere.
+const rootCleanCheckable = process.platform !== 'win32'
 const status = (dir) => sh('git', ['status', '--porcelain'], dir).trim()
 const saved = () =>
   app.page.waitForFunction(
@@ -29,7 +33,7 @@ test.before(async () => {
   sh('datalad', ['create', '-d', root, sub])
   await writeFile(join(root, 'seed.txt'), 'seed\n')
   sh('datalad', ['save', '-r', '-m', 'baseline'], root)
-  assert.equal(status(root), '')
+  if (rootCleanCheckable) assert.equal(status(root), '')
   app = await launchApp({ trustedPaths: [root] })
   await app.openProject(root)
 })
@@ -46,7 +50,7 @@ test('one Save records changes in the root and in the nested dataset, and leaves
   await app.page.fill('#message', 'both levels')
   await app.page.click('#save-project')
   await saved()
-  assert.equal(status(root), '', 'the root is clean (it recorded the nested dataset\'s new state)')
+  if (rootCleanCheckable) assert.equal(status(root), '', 'the root is clean (it recorded the nested dataset\'s new state)')
   assert.equal(status(sub), '', 'the nested dataset is clean')
   assert.match(sh('git', ['log', '--all', '--format=%s'], sub), /both levels/)
 })
@@ -65,10 +69,10 @@ test('saving only a file inside the nested dataset also updates the root (needs 
   await app.page.click('#save-project')
   // Poll git rather than the page: the status text from the previous Save is still showing, so it cannot tell
   // this Save's end. Wait for the nested commit and for the root to be clean.
-  for (let i = 0; i < 120 && !(/nested only/.test(sh('git', ['log', '--all', '--format=%s'], sub)) && status(root) === ''); i += 1) {
+  for (let i = 0; i < 120 && !(/nested only/.test(sh('git', ['log', '--all', '--format=%s'], sub)) && (!rootCleanCheckable || status(root) === '')); i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   assert.equal(status(sub), '')
-  assert.equal(status(root), '', 'the root recorded the new nested state')
+  if (rootCleanCheckable) assert.equal(status(root), '', 'the root recorded the new nested state')
   assert.match(sh('git', ['log', '--all', '--format=%s'], sub), /nested only/)
 })
