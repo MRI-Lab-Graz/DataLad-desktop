@@ -12,7 +12,7 @@ import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
-import { computeSaveGating } from './save-gating.js'
+import { computeSaveGating, unsavedLeftovers } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -1019,6 +1019,20 @@ elements.saveProjectButton.addEventListener('click', async () => {
     }, elements.saveProjectButton)
     if (saveResult?.ok) {
       elements.message.value = '' // the next save is a new one, with its own suggestion
+      // "Save completed." must not hide a save that left files behind (a gated save ignores the selection).
+      if (!prismSavesEverything && selectedPaths.length > 0) {
+        const afterSave = await api.getWorkingTreeStatus(projectPath).catch(() => null)
+        const left = unsavedLeftovers(selectedPaths, afterSave?.files)
+        if (left.length > 0) {
+          const names = left.slice(0, 5).map((path) => `<code>${escapeHtml(path)}</code>`).join(', ')
+          const more = left.length > 5 ? ` and ${left.length - 5} more` : ''
+          elements.commandOutput.insertAdjacentHTML(
+            'afterbegin',
+            `<p class="hint-inline hint-inline-warning"><strong>Not everything was saved.</strong> ${left.length === 1 ? 'This file is' : 'These files are'} still unsaved: ${names}${more}. Check the technical details below.</p>`
+          )
+          setLastActionState(`Saved, but ${left.length} selected file${left.length === 1 ? ' is' : 's are'} still unsaved.`, 'warning')
+        }
+      }
     }
   } finally {
     setButtonBusy(elements.saveProjectButton, false)
@@ -3139,6 +3153,7 @@ function gatherSavePaths() {
 
 function updateSaveButtonState() {
   const snapshot = state.workingTreeSnapshot
+  const prismMode = state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
 
   const gating = computeSaveGating({
     hasMessage: Boolean(elements.message.value.trim()),
@@ -3147,7 +3162,7 @@ function updateSaveButtonState() {
     mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
+    prismMode
   })
 
   elements.saveProjectButton.disabled = gating.disabled
@@ -3155,10 +3170,12 @@ function updateSaveButtonState() {
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 
-  const selectedFiles = (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
+  // PRISM and BIDS projects are validated and saved as a whole, whatever is ticked, so describe all of it.
+  const savesEverything = prismMode === 'gated' || prismMode === 'bids'
+  const selectedFiles = savesEverything ? (snapshot?.files ?? []) : (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
   const suggestion = suggestMessage(selectedFiles)
   elements.message.placeholder = suggestion || 'Describe what you changed'
-  elements.useSuggestionButton.hidden = !suggestion || Boolean(elements.message.value.trim())
+  elements.useSuggestionButton.hidden = !suggestion || Boolean(snapshot?.mergeInProgress) || Boolean(elements.message.value.trim())
   elements.useSuggestionButton.dataset.suggestion = suggestion
   elements.useSuggestionButton.setAttribute('aria-label', `Use suggestion: ${suggestion}`)
 }

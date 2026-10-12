@@ -148,3 +148,25 @@ test('the suggestion button says what it would insert', () => {
 test('REVIEW-OVERVIEW.md no longer describes the removed console', () => {
   assert.doesNotMatch(read('REVIEW-OVERVIEW.md'), /console:runCommand|console:setEnabled|consoleEnabled|console-gate|DISABLE_CONSOLE|Command console|Console toggle/)
 })
+
+test('the shared process runner in main.js is called toolRunner (the console it was named after is gone)', () => {
+  assert.doesNotMatch(main, /consoleRunner/)
+  assert.match(main, /const toolRunner = new ProcessRunner\(\)/)
+})
+
+test('the message suggestion describes everything a PRISM or BIDS save will save, and is not offered during a merge', () => {
+  const body = fnBody('function updateSaveButtonState')
+  assert.match(body, /const prismMode = /)
+  assert.match(body, /const savesEverything = prismMode === 'gated' \|\| prismMode === 'bids'/)
+  assert.match(body, /savesEverything \? \(snapshot\?\.files \?\? \[\]\)/)
+  assert.match(body, /useSuggestionButton\.hidden = !suggestion \|\| Boolean\(snapshot\?\.mergeInProgress\)/)
+})
+
+test('a save that reports success but leaves selected files unsaved says so', () => {
+  const saveHandler = app.slice(app.indexOf("const saveResult = await runWorkflowCommand('save'"), app.indexOf("elements.verifyDataButton.addEventListener('click'"))
+  assert.match(app, /import \{ computeSaveGating, unsavedLeftovers \} from '\.\/save-gating\.js'|unsavedLeftovers/)
+  assert.match(saveHandler, /unsavedLeftovers\(selectedPaths, afterSave\?\.files\)/)
+  assert.match(saveHandler, /api\.getWorkingTreeStatus\(projectPath\)/)
+  assert.match(saveHandler, /still unsaved/)
+  assert.match(saveHandler, /prismSavesEverything/) // a gated save ignores the selection, so it is not checked against it
+})

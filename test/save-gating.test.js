@@ -98,3 +98,11 @@ test('changes without a selection ask to select changed files (there are no manu
   const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true })
   assert.equal(gating.guidance.text, 'Select changed files before saving.')
 })
+
+test('unsavedLeftovers lists the selected files that still show as changed after a save', async () => {
+  const { unsavedLeftovers } = await import('../src/gui/renderer/save-gating.js')
+  assert.deepEqual(unsavedLeftovers(['a.txt', 'my file.csv'], [{ path: 'my file.csv' }, { path: 'other.txt' }]), ['my file.csv'])
+  assert.deepEqual(unsavedLeftovers(['a.txt'], [{ path: 'other.txt' }]), [])
+  assert.deepEqual(unsavedLeftovers(['a.txt'], undefined), [])
+  assert.deepEqual(unsavedLeftovers([], [{ path: 'a.txt' }]), [])
+})

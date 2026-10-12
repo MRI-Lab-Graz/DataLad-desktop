@@ -77,3 +77,15 @@ export function computeSaveGating({
     guidance: { text: 'No local changes detected. Save remains available if needed.', warning: false }
   }
 }
+
+/**
+ * After a save that reported success: the selected files that are still listed as changed. A save that matched
+ * none of the given paths (or that git-annex could not add) can exit successfully while saving nothing.
+ *
+ * @param {string[]} selectedPaths
+ * @param {Array<{ path: string }> | null | undefined} filesAfter top-level changed files after the save
+ */
+export function unsavedLeftovers(selectedPaths, filesAfter) {
+  const stillChanged = new Set((filesAfter ?? []).map((entry) => entry.path))
+  return selectedPaths.filter((path) => stillChanged.has(path))
+}
