@@ -322,7 +322,7 @@ elements.continueProjectButton.addEventListener('click', async () => {
   await openRecentProject(state.recentProjects[0])
   // The status pill lives in the (still hidden) project strip, so a failure must be said here.
   if (elements.projectStrip.hidden) {
-    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists, for example that the drive is connected.`
+    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists (for example that the drive is connected) and that you accepted the trust prompt.`
     elements.continueProjectError.hidden = false
   }
 })
@@ -971,11 +971,14 @@ elements.saveProjectButton.addEventListener('click', async () => {
       return
     }
 
-    await runWorkflowCommand('save', {
+    const saveResult = await runWorkflowCommand('save', {
       projectPath,
       message,
       paths: selectedPaths
     }, elements.saveProjectButton)
+    if (saveResult?.ok) {
+      elements.message.value = '' // the next save is a new one, with its own suggestion
+    }
   } finally {
     setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
@@ -2962,6 +2965,7 @@ function updateSaveButtonState() {
   elements.message.placeholder = suggestion || 'Describe what you changed'
   elements.useSuggestionButton.hidden = !suggestion || Boolean(elements.message.value.trim())
   elements.useSuggestionButton.dataset.suggestion = suggestion
+  elements.useSuggestionButton.setAttribute('aria-label', `Use suggestion: ${suggestion}`)
 }
 
 elements.useSuggestionButton.addEventListener('click', () => {
@@ -3418,6 +3422,8 @@ function updateSyncSectionVisibility() {
 }
 
 function setOnboardingExpanded(expanded) {
+  // The full header belongs to the start screen (also when reached through Switch Project).
+  elements.appHeader.classList.toggle('hero-slim', !expanded)
   elements.onboardingGroup.classList.toggle('onboarding-collapsed', !expanded)
   elements.switchProjectButton.hidden = expanded
 }
@@ -3430,7 +3436,7 @@ function setOnboardingExpanded(expanded) {
 // or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
-  elements.appHeader.classList.toggle('hero-slim', visible)
+  updateContinueButton()
   elements.projectNavGroup.hidden = !visible
   if (!visible) {
     clearTimeMachine()
@@ -3765,17 +3771,6 @@ function setLastCommitMeta(text, tone, tooltip = '') {
   elements.lastCommitMeta.removeAttribute('tabindex')
 }
 
-function buildQuickSaveMessage() {
-  const now = new Date()
-  const date = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-')
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  return `save ${date} ${time}`
-}
-
 function loadRecentProjects() {
   try {
     const raw = localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY)
@@ -3892,10 +3887,19 @@ function rememberRecentProject(projectPath) {
   renderRecentProjects()
 }
 
+// "Continue with <latest project>" belongs to the start screen: hidden while a project is open or when there is none.
+function updateContinueButton() {
+  const hidden = state.recentProjects.length === 0 || !elements.projectStrip.hidden
+  elements.continueProjectButton.hidden = hidden
+  if (hidden) {
+    elements.continueProjectError.hidden = true
+  }
+}
+
 function renderRecentProjects() {
   const currentPath = elements.projectPath.value.trim()
 
-  elements.continueProjectButton.hidden = state.recentProjects.length === 0
+  updateContinueButton()
   if (state.recentProjects.length === 0) {
     elements.recentProjectsOutput.innerHTML =
       '<p class="hint-inline">No recent projects yet — opened projects will appear here.</p>'
