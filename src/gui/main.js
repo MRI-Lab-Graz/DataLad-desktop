@@ -426,6 +426,16 @@ handle('adapter:getCommitDetails', async (_event, payload = {}) => {
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
 })
 
+handle('adapter:getFileDiff', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.getFileDiff(payload.projectPath, payload.request)
+})
+
+handle('adapter:listChangesSince', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.listChangesSince(payload.projectPath, payload.commitHash)
+})
+
 handle('adapter:listOwnTags', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return adapter.listOwnTags(projectPath)
