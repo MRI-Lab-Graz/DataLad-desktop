@@ -9,7 +9,7 @@ The team must avoid conflicts on main while integrating safely.
 
 ## Skills trained
 
-- Create and switch branches in Project Setup
+- Create and switch branches in Tools → Branches & Ignore
 - Isolate work in feature branches
 - Integrate feature branches in controlled order
 - Resolve simple branch-level conflicts
@@ -33,7 +33,7 @@ The team must avoid conflicts on main while integrating safely.
 2. Switch to `feature/statistics` and Save statistics edits.
 3. Switch to `feature/figures` and Save figure edits.
 4. Save all changes first; Merge refuses to start with unsaved changes.
-   - In **Project Setup → Branch**, switch to `main`.
+   - In **Tools → Branches & Ignore → Branch**, switch to `main`.
    - Choose `feature/preprocessing` under **Merge Into Current Branch** and click **Merge**.
 5. Repeat for `feature/statistics`, then `feature/figures`.
 6. Confirm final `main` status is clean and complete.

@@ -32,7 +32,7 @@ must ingest new waves while preserving site-level traceability.
 1. Process wave 1 on site branches and Save per site.
 2. Save all changes first; Merge refuses to start with unsaved changes.
    - Switch to `integration/wave-01`.
-   - In **Project Setup → Branch**, choose a site branch under **Merge Into Current Branch** and click **Merge**.
+   - In **Tools → Branches & Ignore → Branch**, choose a site branch under **Merge Into Current Branch** and click **Merge**.
    - Repeat for the other site branch.
 3. Validate integration, switch to `main` and merge `integration/wave-01` the same way.
 4. Repeat for wave 2 with the same discipline.

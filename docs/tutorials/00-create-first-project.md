@@ -45,7 +45,7 @@ keeps the first checkpoint scientifically auditable.
 
 5. Verify the project opens and classification is Dataset or Superdataset.
 
-   ![The new project open, with its classification badge and the project navigation tiles](../_static/screenshots/03-project-open.png)
+   ![The new project open, with its classification badge and the Home view with the Tools button](../_static/screenshots/03-project-open.png)
 
 6. Add an initial `README.md` line in the project folder.
 7. Return to the app, review the changed-file list, and Save with message:
