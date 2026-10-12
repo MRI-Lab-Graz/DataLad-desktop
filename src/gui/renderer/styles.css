@@ -387,6 +387,21 @@ body {
   gap: 0.38rem;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.setup-section .power-toggle-wrap {
+  justify-content: flex-start;
+  margin-top: 0.5rem;
+}
+
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+
 .hero-logo {
   width: 128px;
   height: 128px;

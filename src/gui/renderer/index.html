@@ -21,26 +21,26 @@
               <p id="last-commit-meta" class="hero-meta hero-meta-idle">
                 Last commit status appears here after selecting a project.
               </p>
-              <label class="power-toggle-wrap" for="power-user-mode-toggle">
-                <input type="checkbox" id="power-user-mode-toggle" role="switch" />
-                Power user mode
-              </label>
-              <label
-                class="power-toggle-wrap"
-                for="bids-auto-nest-toggle"
-                title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
-              >
-                <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
-                Auto-nest BIDS datasets
-              </label>
-              <button
-                id="open-settings"
-                class="button button-ghost button-inline"
-                type="button"
-                title="Check that Git, git-annex and DataLad are installed"
-              >
-                Setup
-              </button>
+              <div class="hero-actions">
+                <button
+                  id="open-settings"
+                  class="button button-ghost button-inline"
+                  type="button"
+                  title="Check that Git, git-annex and DataLad are installed"
+                >
+                  Setup
+                </button>
+                <a
+                  id="open-docs"
+                  class="button button-ghost button-inline"
+                  href="https://datalad-desktop.readthedocs.io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open the tutorials and documentation on Read the Docs"
+                >
+                  <span aria-hidden="true">📖</span> Docs
+                </a>
+              </div>
             </div>
             <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
           </div>
@@ -57,6 +57,22 @@
           <h2 id="settings-title">Setup</h2>
           <p class="lede-small">Version <span data-app-version></span></p>
           <button id="close-settings" class="button button-ghost button-inline" type="button">Close</button>
+        </div>
+
+        <div class="setup-section">
+          <h3 class="setup-section-title">Preferences</h3>
+          <label class="power-toggle-wrap" for="power-user-mode-toggle">
+            <input type="checkbox" id="power-user-mode-toggle" role="switch" />
+            Power user mode
+          </label>
+          <label
+            class="power-toggle-wrap"
+            for="bids-auto-nest-toggle"
+            title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
+          >
+            <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
+            Auto-nest BIDS datasets
+          </label>
         </div>
 
         <div class="setup-section">
