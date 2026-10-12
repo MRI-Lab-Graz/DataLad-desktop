@@ -77,3 +77,22 @@ export function computeSaveGating({
     guidance: { text: 'No local changes detected. Save remains available if needed.', warning: false }
   }
 }
+
+/**
+ * Every changed path in a status snapshot, including files inside nested datasets (any depth). The selection
+ * must be able to keep a ticked nested file; the top-level list alone only knows the nested dataset itself.
+ *
+ * @param {Array<{ path: string, nestedFiles?: unknown[] }> | null | undefined} files
+ * @returns {Set<string>}
+ */
+export function collectChangedPaths(files) {
+  const paths = new Set()
+  const visit = (entries) => {
+    for (const entry of entries ?? []) {
+      paths.add(entry.path)
+      visit(entry.nestedFiles)
+    }
+  }
+  visit(files)
+  return paths
+}

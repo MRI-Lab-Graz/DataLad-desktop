@@ -98,3 +98,14 @@ test('changes without a selection ask to select changed files (there are no manu
   const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true })
   assert.equal(gating.guidance.text, 'Select changed files before saving.')
 })
+
+test('collectChangedPaths includes the files inside nested datasets, at any depth', async () => {
+  const { collectChangedPaths } = await import('../src/gui/renderer/save-gating.js')
+  const files = [
+    { path: 'top.txt' },
+    { path: 'sub', isSubmodule: true, nestedFiles: [{ path: 'sub/a.txt' }, { path: 'sub/deeper', nestedFiles: [{ path: 'sub/deeper/b.txt' }] }] },
+    { path: 'plain', nestedFiles: undefined }
+  ]
+  assert.deepEqual([...collectChangedPaths(files)].sort(), ['plain', 'sub', 'sub/a.txt', 'sub/deeper', 'sub/deeper/b.txt', 'top.txt'])
+  assert.deepEqual([...collectChangedPaths(undefined)], [])
+})

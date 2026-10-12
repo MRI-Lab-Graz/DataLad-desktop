@@ -27,3 +27,9 @@ test('the active folder is always the project root, while the dataset list still
   assert.match(body, /const nextPath = root\?\.path \?\? projectPath/)
   assert.doesNotMatch(body, /hasActivePath/)
 })
+
+test('a ticked file inside a nested dataset survives a status refresh', () => {
+  const body = fnBody('function syncSelectedChangedPaths')
+  assert.match(body, /const availablePaths = collectChangedPaths\(files\)/)
+  assert.match(app, /import \{[^}]*collectChangedPaths[^}]*\} from '\.\/save-gating\.js'/)
+})

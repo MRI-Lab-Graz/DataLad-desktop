@@ -12,7 +12,7 @@ import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
-import { computeSaveGating } from './save-gating.js'
+import { collectChangedPaths, computeSaveGating } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
@@ -2728,7 +2728,7 @@ function renderDismissibleEnvironmentOutput(bodyHtml, label = 'Setup status') {
 }
 
 function syncSelectedChangedPaths(files, preserveSelection) {
-  const availablePaths = new Set(files.map((entry) => entry.path))
+  const availablePaths = collectChangedPaths(files)
 
   if (!preserveSelection) {
     state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
