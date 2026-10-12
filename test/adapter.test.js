@@ -503,7 +503,7 @@ test('listBranches returns current branch and local branch names', async () => {
 
 test('runCommand routes save through curated datalad invocation', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-r', '--message=checkpoint', '--', 'results.csv'], {
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint', '--', 'results.csv'], {
     exitCode: 0,
     stdout: 'save ok\n',
     stderr: '',
@@ -519,13 +519,13 @@ test('runCommand routes save through curated datalad invocation', async () => {
 
   assert.equal(result.ok, true)
   assert.equal(runner.calls.length, 1)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-r', '--message=checkpoint', '--', 'results.csv'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint', '--', 'results.csv'])
   assert.deepEqual(result.warnings, [])
 })
 
 test('runCommand builds a safe save invocation even when the message looks like a CLI flag', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-r', '--message=--amend'], {
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=--amend'], {
     exitCode: 0,
     stdout: 'save ok\n',
     stderr: '',
@@ -539,7 +539,7 @@ test('runCommand builds a safe save invocation even when the message looks like 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-r', '--message=--amend'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=--amend'])
 })
 
 test('runCommand routes createBranch through curated git invocation', async () => {
@@ -1955,7 +1955,7 @@ test('detectProject bounds its datalad probes with a timeout so a hung process c
 
 test('runCommand hands signal and onOutput to the runner and maps a cancelled run to CANCELLED', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-r', '--message=checkpoint'], {
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint'], {
     exitCode: 130,
     failed: true,
     cancelled: true
@@ -1979,7 +1979,7 @@ test('runCommand hands signal and onOutput to the runner and maps a cancelled ru
 
 test('runCommand still works when no runOptions are given', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'save', '-r', '--message=checkpoint'], { stdout: 'ok\n' })
+  runner.set('datalad', ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint'], { stdout: 'ok\n' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('save', {
     projectPath: '/tmp/project',

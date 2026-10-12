@@ -18,6 +18,8 @@ Measured with real DataLad (2026-10-12, a root with one subdataset):
 | `datalad save -m x -- sub/file` | saved **inside** the subdataset, root still shows ` M sub` |
 | `datalad save -r -m x` | everything saved, root and sub clean |
 | `datalad save -r -m x -- top.txt sub/file` | both files saved, root records the new sub state, all clean |
+| `datalad save -r -m x -- sub/file` (nested file only) | saved inside the subdataset, **root still shows ` M sub`** |
+| `datalad save -d . -r -m x -- sub/file` | saved, and the root records the new sub state: **all clean** |
 
 ## Goal
 
@@ -31,8 +33,8 @@ dataset, then pressing Save once, leaves `git status` clean in both.
 
 ## Changes
 
-1. **Save is recursive.** The adapter's `save` command passes `-r` (`--recursive`) before the message:
-   `datalad -C <project> save -r --message=<msg> [-- <paths>]`. This applies to every Save, including the
+1. **Save is recursive and records into the root.** The adapter's `save` command passes `-d . -r` before the message:
+   `datalad -C <project> save -d . -r --message=<msg> [-- <paths>]` (`-d .` is what makes the root record a nested-only selection). This applies to every Save, including the
    PRISM/BIDS "saved together" path and the BIDS auto-nest flow (harmless there).
 2. **The picker is removed.** `#dataset-select-field`, `#dataset-select`, `#refresh-datasets`, the
    `datasetSelect` change handler and the "pick which dataset Save applies to" hint go. The active folder is
