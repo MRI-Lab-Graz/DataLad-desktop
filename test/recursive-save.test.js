@@ -19,13 +19,12 @@ test('nothing in the renderer reads the removed picker elements', () => {
   assert.doesNotMatch(app, /datasetSelect|datasetSelectField|refreshDatasetsButton/)
 })
 
-test('the active folder is always the project root, while the dataset list still feeds the ignore-rules scope', () => {
+test('the active folder is the project root, while the dataset list still feeds the ignore-rules scope', () => {
   const body = fnBody('async function refreshDatasetList')
   assert.match(body, /state\.datasets = datasets/)
   assert.match(body, /renderIgnoreRulesScope\(\)/)
-  assert.match(body, /const root = datasets\.find\(\(dataset\) => dataset\.relativePath === '\.'\)/)
-  assert.match(body, /const nextPath = root\?\.path \?\? projectPath/)
-  assert.doesNotMatch(body, /hasActivePath/)
+  assert.match(body, /const nextPath = projectPath/)
+  assert.doesNotMatch(body, /hasActivePath|datasets\[0\]|dataset\.relativePath === '\.'/)
 })
 
 test('a ticked file inside a nested dataset survives a status refresh', () => {

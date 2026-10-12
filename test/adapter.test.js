@@ -518,8 +518,8 @@ test('runCommand routes save through curated datalad invocation', async () => {
   })
 
   assert.equal(result.ok, true)
-  assert.equal(runner.calls.length, 1)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint', '--', 'results.csv'])
+  assert.equal(runner.calls.filter((call) => call.command === 'datalad').length, 1)
+  assert.deepEqual(runner.calls.at(-1).args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=checkpoint', '--', 'results.csv'])
   assert.deepEqual(result.warnings, [])
 })
 
@@ -539,7 +539,7 @@ test('runCommand builds a safe save invocation even when the message looks like 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=--amend'])
+  assert.deepEqual(runner.calls.at(-1).args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=--amend'])
 })
 
 test('runCommand routes createBranch through curated git invocation', async () => {
@@ -1970,8 +1970,8 @@ test('runCommand hands signal and onOutput to the runner and maps a cancelled ru
     { signal, onOutput }
   )
 
-  assert.equal(runner.calls[0].options.signal, signal)
-  assert.equal(runner.calls[0].options.onOutput, onOutput)
+  assert.equal(runner.calls.at(-1).options.signal, signal)
+  assert.equal(runner.calls.at(-1).options.onOutput, onOutput)
   assert.equal(result.ok, false)
   assert.equal(result.cancelled, true)
   assert.equal(result.userError.code, 'CANCELLED')
@@ -2453,4 +2453,51 @@ test('a merge that fails without leaving MERGE_HEAD is a real failure', async ()
   const result = await new DataLadAdapter({ runner }).runCommand('merge', { projectPath: '/p', branchName: 'feature' })
   assert.equal(result.ok, false)
   assert.equal(result.userError.code, 'MERGE_UNRELATED')
+})
+
+const STATUS_ARGS = (p) => ['-C', p, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all']
+const TOP_ARGS = (p) => ['-C', p, 'rev-parse', '--show-toplevel', '--show-prefix']
+const saveCall = (runner) => runner.calls.find((call) => call.command === 'datalad')
+
+test('save records into the repository top level, so a project opened at a subfolder still saves', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', TOP_ARGS('/tmp/top/code'), { stdout: '/tmp/top\ncode/\n' })
+  runner.set('datalad', ['-C', '/tmp/top/code', 'save', '-d', '/tmp/top', '-r', '--message=m', '--', 't.py'], { stdout: 'ok\n' })
+  const result = await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/top/code', message: 'm', paths: ['t.py'] })
+  assert.equal(result.ok, true)
+  assert.equal(runner.calls.some((call) => call.args.includes('status')), false, 'explicit paths need no status read')
+})
+
+test('saving everything names the changed top-level entries instead of making DataLad inspect every nested dataset', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', TOP_ARGS('/tmp/project'), { stdout: '/tmp/project\n\n' })
+  runner.set('git', STATUS_ARGS('/tmp/project'), { stdout: ' M sub\n?? new.txt\n D gone.txt\n' })
+  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
+  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '/tmp/project', '-r', '--message=m', '--', 'gone.txt', 'new.txt', 'sub'])
+})
+
+test('saving everything on a clean project skips the recursive scan', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', STATUS_ARGS('/tmp/project'), { stdout: '' })
+  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
+  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '.', '--message=m'])
+})
+
+test('saving everything falls back to a plain recursive save when the list could be wrong or too long', async () => {
+  const many = Array.from({ length: 201 }, (_, i) => `?? f${i}.txt`).join('\n') + '\n'
+  for (const stdout of [many, 'R  old.txt -> new.txt\n', 'M  staged.txt\n', 'UU conflicted.txt\n']) {
+    const runner = new FakeRunner()
+    runner.set('git', STATUS_ARGS('/tmp/project'), { stdout })
+    await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
+    assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=m'], stdout.slice(0, 20))
+  }
+})
+
+test('saving everything from a subfolder does not list status paths (git reports them relative to the repository root)', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', TOP_ARGS('/tmp/top/code'), { stdout: '/tmp/top\ncode/\n' })
+  runner.set('git', STATUS_ARGS('/tmp/top/code'), { stdout: '?? code/u.py\n' }) // root-relative: wrong as a save path from here
+  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/top/code', message: 'm' })
+  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/top/code', 'save', '-d', '/tmp/top', '-r', '--message=m'])
+  assert.equal(runner.calls.some((call) => call.args.includes('status')), false)
 })

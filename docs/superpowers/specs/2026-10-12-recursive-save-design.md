@@ -34,7 +34,7 @@ dataset, then pressing Save once, leaves `git status` clean in both.
 ## Changes
 
 1. **Save is recursive and records into the root.** The adapter's `save` command passes `-d . -r` before the message:
-   `datalad -C <project> save -d . -r --message=<msg> [-- <paths>]` (`-d .` is what makes the root record a nested-only selection). This applies to every Save, including the
+   `datalad -C <project> save -d <repo top level> -r --message=<msg> [-- <paths>]` (the `-d` is what makes the root record a nested-only selection). This applies to every Save, including the
    PRISM/BIDS "saved together" path and the BIDS auto-nest flow (harmless there).
 2. **The picker is removed.** `#dataset-select-field`, `#dataset-select`, `#refresh-datasets`, the
    `datasetSelect` change handler and the "pick which dataset Save applies to" hint go. The active folder is
@@ -49,9 +49,14 @@ dataset, then pressing Save once, leaves `git status` clean in both.
   Nested datasets remain visible as folders and as "subdataset" entries with their changed files in Files To
   Save. A user can no longer browse one nested dataset's own history from the app (the terminal still can).
   This is the cost of the "one project, one Save" model the maintainer chose.
-- `save -r` checks every nested dataset. For a project with hundreds of subject datasets that is slower than a
-  root-only save. Not measured on a large BIDS project; if it proves slow, the follow-up is to pass only the
-  paths of datasets that actually changed.
+- `save -r` with no paths checks every nested dataset: measured 12 s for a project with 100 empty subdatasets
+  (about 0.12 s each). So "save everything" does **not** send an empty path list: the adapter reads
+  `git status` and names the changed top-level entries (measured 0.6 to 1.3 s on the same project). It falls
+  back to a plain recursive save when that list could be wrong (staged, renamed or conflicted entries, more
+  than 200 entries, unreadable status, or a project opened at a subfolder, where git reports root-relative
+  paths) and skips the recursion on a clean project.
+- `-d` is the repository **top level** (`git rev-parse --show-toplevel`), not `.`: `-d .` fails with "No
+  installed dataset found" when the opened folder is a subfolder of the repository.
 
 ## Testing
 

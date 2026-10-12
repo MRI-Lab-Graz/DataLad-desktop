@@ -1906,24 +1906,14 @@ async function refreshDatasetList(projectPath) {
     state.datasetsRootPath = projectPath
     renderIgnoreRulesScope()
 
-    // Save always acts on the whole project, so the active folder is the root; nested datasets stay
-    // visible as folders and as "subdataset" entries in Files To Save.
-    const root = datasets.find((dataset) => dataset.relativePath === '.')
-    const nextPath = root?.path ?? projectPath
-
-    if (nextPath) {
-      elements.commandProjectPath.value = nextPath
-      setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
-      await refreshBranchList(nextPath)
-      await refreshWorkingTreeStatus(nextPath)
-      await refreshRecentCommits(nextPath)
-      updateSaveButtonState()
-      return true
-    }
-
-    await refreshBranchList(projectPath)
-    await refreshWorkingTreeStatus(projectPath)
-    await refreshRecentCommits(projectPath)
+    // Save always acts on the whole project, so the active folder is the root (listDatasets always puts the
+    // root first); nested datasets stay visible as folders and as "subdataset" entries in Files To Save.
+    const nextPath = projectPath
+    elements.commandProjectPath.value = nextPath
+    setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
+    await refreshBranchList(nextPath)
+    await refreshWorkingTreeStatus(nextPath)
+    await refreshRecentCommits(nextPath)
     updateSaveButtonState()
     return true
   } catch (error) {

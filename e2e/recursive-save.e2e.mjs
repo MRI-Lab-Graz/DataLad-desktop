@@ -41,7 +41,8 @@ test.after(async () => {
 test('one Save records changes in the root and in the nested dataset, and leaves both clean', async () => {
   await writeFile(join(root, 'new-root.txt'), 'root change\n')
   await writeFile(join(sub, 'new-sub.txt'), 'nested change\n')
-  await app.page.waitForFunction(() => document.getElementById('changed-files-output').textContent.includes('new-root.txt'), null, { timeout: 30_000 })
+  // Both changes must be listed before Save: the default selection is taken when the list first shows a change.
+  await app.page.waitForFunction(() => /new-root\.txt/.test(document.getElementById('changed-files-output').textContent) && /new-sub\.txt/.test(document.getElementById('changed-files-output').textContent), null, { timeout: 30_000 })
   await app.page.fill('#message', 'both levels')
   await app.page.click('#save-project')
   await saved()
@@ -62,8 +63,8 @@ test('saving only a file inside the nested dataset also updates the root (needs 
   })
   await app.page.fill('#message', 'nested only')
   await app.page.click('#save-project')
-  // Poll git rather than the page (the status text from the previous Save is still showing), and wait for the root
-  // too: DataLad commits the nested dataset first and records it in the root a moment later.
+  // Poll git rather than the page: the status text from the previous Save is still showing, so it cannot tell
+  // this Save's end. Wait for the nested commit and for the root to be clean.
   for (let i = 0; i < 120 && !(/nested only/.test(sh('git', ['log', '--all', '--format=%s'], sub)) && status(root) === ''); i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 500))
   }

@@ -38,6 +38,7 @@ export const CURATED_COMMANDS = new Set([
 const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
 const MAX_SUBDATASET_DEPTH = 8 // symlinked or hostile nesting cannot recurse forever
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+const SAVE_PATHS_LIMIT = 200 // more changed entries than this are not listed on the command line (Windows limit)
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 function isSafeName(name) {
@@ -402,7 +403,8 @@ export class DataLadAdapter {
       }
     }
 
-    const commandSpec = this.#buildCommand(commandName, request)
+    const saveScope = commandName === 'save' ? await this.#resolveSaveScope(request) : null
+    const commandSpec = this.#buildCommand(commandName, request, saveScope)
     const raw = await this.runner.run(commandSpec.command, commandSpec.args, {
       ...commandSpec.options,
       ...runOptions
@@ -1332,7 +1334,36 @@ export class DataLadAdapter {
     return warnings
   }
 
-  #buildCommand(commandName, request) {
+  // Which dataset a save records into, and which paths it names. Decided before the command is built because it
+  // needs two read-only git calls.
+  //  - datasetRoot: the repository top level (`-d .` alone fails when the opened folder is a subfolder).
+  //  - "save everything" (no paths): naming the changed top-level entries keeps `save -r` from inspecting every
+  //    nested dataset (~0.12 s each, measured: 12 s for 100 empty ones). Anything that could make that list wrong
+  //    (staged or renamed entries, conflicts, a very long list for Windows' command-line limit, an unreadable status)
+  //    falls back to a plain recursive save; a clean project skips the recursion altogether.
+  async #resolveSaveScope(request) {
+    const top = await this.runner.run('git', ['-C', request.projectPath, 'rev-parse', '--show-toplevel', '--show-prefix'])
+    const [toplevel = '', prefix = ''] = top.failed ? [] : (top.stdout ?? '').split(/\r?\n/)
+    const datasetRoot = toplevel.trim() || '.'
+    const given = request.paths ?? []
+    // From a subfolder `git status` reports root-relative paths but `save` reads them relative to the folder, so the
+    // status shortcut is only used at the top level (the prefix is empty there).
+    if (given.length > 0 || prefix.trim() !== '') {
+      return { datasetRoot, paths: given, recursive: true }
+    }
+    try {
+      const status = await this.#readGitStatus(request.projectPath)
+      if (status.clean) {
+        return { datasetRoot, paths: [], recursive: false }
+      }
+      const risky = status.files.length > SAVE_PATHS_LIMIT || status.files.some((file) => file.staged || file.conflicted || file.status === 'renamed')
+      return { datasetRoot, paths: risky ? [] : status.files.map((file) => file.path), recursive: true }
+    } catch {
+      return { datasetRoot, paths: [], recursive: true }
+    }
+  }
+
+  #buildCommand(commandName, request, saveScope = null) {
     switch (commandName) {
       case 'cloneInstall': {
         // `datalad clone` has no -r/--recursive flag; recursive subdataset
@@ -1386,17 +1417,18 @@ export class DataLadAdapter {
       case 'save': {
         const projectPath = request.projectPath
         const message = request.message
-        const paths = request.paths ?? []
+        const { datasetRoot, paths, recursive } = saveScope ?? { datasetRoot: '.', paths: request.paths ?? [], recursive: true }
         // `--message=<value>` binds the whole value as one token, so a message that happens to look
         // like a flag (e.g. "--amend") can't be misparsed the way `-m <value>` can.
-        // -r saves nested datasets too. -d . names the project as the dataset to record into: without it a path
-        // inside a nested dataset is saved there only and the root keeps showing " M sub" (measured with real
-        // DataLad; with both flags root and nested end up clean for every selection).
+        // -r saves nested datasets too. -d names the project's dataset to record into: without it a path inside a
+        // nested dataset is saved there only and the root keeps showing " M sub" (measured with real DataLad;
+        // with both flags root and nested end up clean for every selection).
         return {
           command: 'datalad',
-          args: paths.length > 0
-            ? ['-C', projectPath, 'save', '-d', '.', '-r', `--message=${message}`, '--', ...paths]
-            : ['-C', projectPath, 'save', '-d', '.', '-r', `--message=${message}`],
+          args: [
+            '-C', projectPath, 'save', '-d', datasetRoot, ...(recursive ? ['-r'] : []), `--message=${message}`,
+            ...(paths.length > 0 ? ['--', ...paths] : [])
+          ],
           options: { cwd: projectPath }
         }
       }
