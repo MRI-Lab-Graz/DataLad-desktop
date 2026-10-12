@@ -56,7 +56,6 @@ test('user-facing strings in app.js and the pure helpers say save', () => {
   assert.doesNotMatch(app, /Latest commit|Last commit|No commits yet|recent commits'|`checkpoint |Save a Checkpoint|Checkpoint Message|Save Checkpoint|checkpoint message/)
   assert.doesNotMatch(chips + gating, /checkpoint|messageLabel/i)
   assert.match(app, /Last saved \$\{relativeAge\}/)
-  assert.match(app, /return `save \$\{date\} \$\{time\}`/)
 })
 
 test('the header is slim while a project is open and the last-save line sits in the project strip', () => {
@@ -64,8 +63,6 @@ test('the header is slim while a project is open and the last-save line sits in 
   const strip = html.slice(html.indexOf('id="project-strip"'), html.indexOf('id="running-commands"'))
   assert.match(strip, /id="last-commit-meta"/)
   assert.doesNotMatch(html.slice(0, html.indexOf('id="project-strip"')), /id="last-commit-meta"/)
-  const fn = app.slice(app.indexOf('function setProjectDependentSectionsVisible'))
-  assert.match(fn.slice(0, fn.indexOf('\n}\n')), /appHeader\.classList\.toggle\('hero-slim', visible\)/)
   assert.match(read('src/gui/renderer/styles.css'), /\.hero-slim h1/)
 })
 
@@ -87,7 +84,7 @@ test('the start screen offers one big Continue button for the most recent projec
   assert.match(app, /continueProjectButton\.addEventListener\('click'/)
   assert.match(app, /await openRecentProject\(state\.recentProjects\[0\]\)/)
   const render = app.slice(app.indexOf('function renderRecentProjects'))
-  assert.match(render.slice(0, render.indexOf('\n}\n')), /continueProjectButton\.hidden/)
+  assert.match(render.slice(0, render.indexOf('\n}\n')), /updateContinueButton\(\)/)
 })
 
 test('a failed Continue says so under the button, because the status pill is hidden on the start screen', () => {
@@ -112,4 +109,64 @@ test('user docs no longer mention checkpoints, the console or Power user mode', 
     const text = read(file).replace(/\]\([^)]*\)/g, '](...)')
     assert.doesNotMatch(text, /checkpoint|Power user mode|power-user mode|command console/i, file)
   }
+})
+
+const fnBody = (name) => {
+  const rest = app.slice(app.indexOf(name))
+  return rest.slice(0, rest.indexOf('\n}\n'))
+}
+
+test('the header is full on the start screen (also via Switch Project) and slim only with a project in view', () => {
+  const body = fnBody('function setOnboardingExpanded')
+  assert.match(body, /appHeader\.classList\.toggle\('hero-slim', !expanded\)/)
+  assert.doesNotMatch(fnBody('function setProjectDependentSectionsVisible'), /hero-slim/)
+})
+
+test('Continue is hidden while a project is open, and its error goes with it', () => {
+  const body = fnBody('function updateContinueButton')
+  assert.match(body, /state\.recentProjects\.length === 0/)
+  assert.match(body, /!elements\.projectStrip\.hidden/)
+  assert.match(body, /continueProjectError\.hidden = true/)
+  assert.match(fnBody('function setProjectDependentSectionsVisible'), /updateContinueButton\(\)/)
+  assert.match(fnBody('function renderRecentProjects'), /updateContinueButton\(\)/)
+  assert.match(app, /and that you accepted the trust prompt/)
+})
+
+test('a finished save clears the message, so the next save gets its own suggestion', () => {
+  assert.match(app, /const saveResult = await runWorkflowCommand\('save'/)
+  assert.match(app, /if \(saveResult\?\.ok\) \{\s*elements\.message\.value = ''/)
+})
+
+test('the unused quick-save message builder is gone', () => {
+  assert.doesNotMatch(app, /buildQuickSaveMessage/)
+})
+
+test('the suggestion button says what it would insert', () => {
+  assert.match(app, /useSuggestionButton\.setAttribute\('aria-label', `Use suggestion: \$\{suggestion\}`\)/)
+})
+
+test('REVIEW-OVERVIEW.md no longer describes the removed console', () => {
+  assert.doesNotMatch(read('REVIEW-OVERVIEW.md'), /console:runCommand|console:setEnabled|consoleEnabled|console-gate|DISABLE_CONSOLE|Command console|Console toggle/)
+})
+
+test('the shared process runner in main.js is called toolRunner (the console it was named after is gone)', () => {
+  assert.doesNotMatch(main, /consoleRunner/)
+  assert.match(main, /const toolRunner = new ProcessRunner\(\)/)
+})
+
+test('the message suggestion describes everything a PRISM or BIDS save will save, and is not offered during a merge', () => {
+  const body = fnBody('function updateSaveButtonState')
+  assert.match(body, /const prismMode = /)
+  assert.match(body, /const savesEverything = prismMode === 'gated' \|\| prismMode === 'bids'/)
+  assert.match(body, /savesEverything \? \(snapshot\?\.files \?\? \[\]\)/)
+  assert.match(body, /useSuggestionButton\.hidden = !suggestion \|\| Boolean\(snapshot\?\.mergeInProgress\)/)
+})
+
+test('a save that reports success but leaves selected files unsaved says so', () => {
+  const saveHandler = app.slice(app.indexOf("const saveResult = await runWorkflowCommand('save'"), app.indexOf("elements.verifyDataButton.addEventListener('click'"))
+  assert.match(app, /import \{ computeSaveGating, unsavedLeftovers \} from '\.\/save-gating\.js'|unsavedLeftovers/)
+  assert.match(saveHandler, /unsavedLeftovers\(selectedPaths, afterSave\?\.files\)/)
+  assert.match(saveHandler, /api\.getWorkingTreeStatus\(projectPath\)/)
+  assert.match(saveHandler, /still unsaved/)
+  assert.match(saveHandler, /prismSavesEverything/) // a gated save ignores the selection, so it is not checked against it
 })

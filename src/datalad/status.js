@@ -8,13 +8,46 @@ const STATUS_PRIORITY = {
   changed: 0
 }
 
+const GIT_ESCAPES = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 }
+
+// git wraps a name in "..." with C-style escapes when it holds a space, tab, quote or backslash
+// (and, unless core.quotePath=false, non-ASCII bytes as \303\251). The quotes are not part of the name.
+// ponytail: status without -z is the shortcut; `status -z` would avoid quoting but changes the rename format.
+function unquoteGitPath(value) {
+  if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) {
+    return value
+  }
+  const bytes = []
+  const inner = value.slice(1, -1)
+  for (let index = 0; index < inner.length; index += 1) {
+    const char = inner[index]
+    const octal = char === '\\' ? /^[0-7]{3}/.exec(inner.slice(index + 1))?.[0] : undefined
+    if (octal) {
+      bytes.push(parseInt(octal, 8))
+      index += 3
+    } else if (char === '\\' && inner[index + 1] in GIT_ESCAPES) {
+      bytes.push(GIT_ESCAPES[inner[index + 1]])
+      index += 1
+    } else {
+      bytes.push(...Buffer.from(char, 'utf8'))
+    }
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
 export function normalizeGitStatusPath(pathValue, statusCode = '') {
   let nextPath = pathValue
   if ((statusCode.includes('R') || statusCode.includes('C')) && pathValue.includes(' -> ')) {
     nextPath = pathValue.split(' -> ').at(-1)?.trim() ?? pathValue
   }
 
-  return nextPath
+  const trimmed = nextPath.trim()
+  const unquoted = unquoteGitPath(trimmed)
+  if (unquoted !== trimmed) {
+    return unquoted // git quoted it, so it already uses "/" and any backslash is part of the name
+  }
+
+  return trimmed
     .replaceAll('\\', '/')
     .replace(/^\.\//, '')
     .trim()

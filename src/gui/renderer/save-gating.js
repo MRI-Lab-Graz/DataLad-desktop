@@ -79,20 +79,13 @@ export function computeSaveGating({
 }
 
 /**
- * Every changed path in a status snapshot, including files inside nested datasets (any depth). The selection
- * must be able to keep a ticked nested file; the top-level list alone only knows the nested dataset itself.
+ * After a save that reported success: the selected files that are still listed as changed. A save that matched
+ * none of the given paths (or that git-annex could not add) can exit successfully while saving nothing.
  *
- * @param {Array<{ path: string, nestedFiles?: unknown[] }> | null | undefined} files
- * @returns {Set<string>}
+ * @param {string[]} selectedPaths
+ * @param {Array<{ path: string }> | null | undefined} filesAfter top-level changed files after the save
  */
-export function collectChangedPaths(files) {
-  const paths = new Set()
-  const visit = (entries) => {
-    for (const entry of entries ?? []) {
-      paths.add(entry.path)
-      visit(entry.nestedFiles)
-    }
-  }
-  visit(files)
-  return paths
+export function unsavedLeftovers(selectedPaths, filesAfter) {
+  const stillChanged = new Set((filesAfter ?? []).map((entry) => entry.path))
+  return selectedPaths.filter((path) => stillChanged.has(path))
 }

@@ -22,7 +22,8 @@ across nested sub-projects? The app shows you exactly what changed and where.
 
 - **See your changes at a glance** — a working-tree view of what's new,
   modified, or missing, including nested datasets, no Git commands needed.
-- **Save with confidence** — pick files, write a message, save. One Save covers nested datasets too, so the whole project ends up saved and clean.
+- **Save with confidence** — pick files, write a message, save.
+- **See what changed** — one click under a changed file shows exactly which lines (for tables: which cells) changed; Tools → History can compare any earlier save with your files now.
   The app warns you before anything risky (like saving over a conflict).
 - **Get data on demand** — large files tracked by git-annex don't have to
   live on your disk until you need them; fetch with one click.

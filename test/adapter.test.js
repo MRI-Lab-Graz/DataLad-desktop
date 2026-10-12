@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join, basename, parse } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
 
 class FakeRunner {
@@ -1691,11 +1691,11 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
   })
   runner.set('git', [
     '-C', '/tmp/project',
-    'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
+    'diff-tree', '--no-commit-id', '-r', '--name-only', '-z', '--root',
     'abc1234'
   ], {
     exitCode: 0,
-    stdout: 'results.csv\ndata/raw.tsv\n',
+    stdout: 'results.csv\0data/raw.tsv\0my file.csv\0',
     stderr: '',
     failed: false
   })
@@ -1707,7 +1707,7 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
   assert.equal(details.author, 'Alice')
   assert.equal(details.timestamp, 1_700_000_000)
   assert.ok(details.stat.includes('results.csv'))
-  assert.deepEqual(details.changedFiles, ['results.csv', 'data/raw.tsv'])
+  assert.deepEqual(details.changedFiles, ['results.csv', 'data/raw.tsv', 'my file.csv'])
 })
 
 test('getCommitDetails rejects an invalid commit hash format', async () => {
@@ -2455,49 +2455,265 @@ test('a merge that fails without leaving MERGE_HEAD is a real failure', async ()
   assert.equal(result.userError.code, 'MERGE_UNRELATED')
 })
 
-const STATUS_ARGS = (p) => ['-C', p, '-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all']
-const TOP_ARGS = (p) => ['-C', p, 'rev-parse', '--show-toplevel', '--show-prefix']
-const saveCall = (runner) => runner.calls.find((call) => call.command === 'datalad')
+const GIT_OK = { exitCode: 0, stdout: 'true\n', stderr: '', failed: false }
+const DIFF_FLAGS = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-renames']
+const diffArgs = (project, against, path) => ['-C', project, 'diff', against, ...DIFF_FLAGS, '-U3', '--', path]
+const untrackedArgs = (project, path) => ['-C', project, 'ls-files', '--others', '--exclude-standard', '-z', '--', path]
 
-test('save records into the repository top level, so a project opened at a subfolder still saves', async () => {
+function diffRunner(project, { untracked = false, diff }) {
   const runner = new FakeRunner()
-  runner.set('git', TOP_ARGS('/tmp/top/code'), { stdout: '/tmp/top\ncode/\n' })
-  runner.set('datalad', ['-C', '/tmp/top/code', 'save', '-d', '/tmp/top', '-r', '--message=m', '--', 't.py'], { stdout: 'ok\n' })
-  const result = await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/top/code', message: 'm', paths: ['t.py'] })
-  assert.equal(result.ok, true)
-  assert.equal(runner.calls.some((call) => call.args.includes('status')), false, 'explicit paths need no status read')
-})
-
-test('saving everything names the changed top-level entries instead of making DataLad inspect every nested dataset', async () => {
-  const runner = new FakeRunner()
-  runner.set('git', TOP_ARGS('/tmp/project'), { stdout: '/tmp/project\n\n' })
-  runner.set('git', STATUS_ARGS('/tmp/project'), { stdout: ' M sub\n?? new.txt\n D gone.txt\n' })
-  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
-  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '/tmp/project', '-r', '--message=m', '--', 'gone.txt', 'new.txt', 'sub'])
-})
-
-test('saving everything on a clean project skips the recursive scan', async () => {
-  const runner = new FakeRunner()
-  runner.set('git', STATUS_ARGS('/tmp/project'), { stdout: '' })
-  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
-  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '.', '--message=m'])
-})
-
-test('saving everything falls back to a plain recursive save when the list could be wrong or too long', async () => {
-  const many = Array.from({ length: 201 }, (_, i) => `?? f${i}.txt`).join('\n') + '\n'
-  for (const stdout of [many, 'R  old.txt -> new.txt\n', 'M  staged.txt\n', 'UU conflicted.txt\n']) {
-    const runner = new FakeRunner()
-    runner.set('git', STATUS_ARGS('/tmp/project'), { stdout })
-    await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/project', message: 'm' })
-    assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/project', 'save', '-d', '.', '-r', '--message=m'], stdout.slice(0, 20))
+  runner.set('git', ['-C', project, 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', untrackedArgs(project, 'a.tsv'), { stdout: untracked ? 'a.tsv\0' : '' })
+  if (diff) {
+    runner.set('git', diffArgs(project, 'HEAD', 'a.tsv'), diff)
   }
+  return runner
+}
+
+const HEADER = 'diff --git a/a.tsv b/a.tsv\nindex 111..222 100644\n--- a/a.tsv\n+++ b/a.tsv\n'
+const HUNK = '@@ -1,2 +1,2 @@\n id\tage\n-sub-01\t24\n+sub-01\t25\n'
+
+test('getFileDiff returns the patch from the first hunk, with status and counts', async () => {
+  const runner = diffRunner('/tmp/project', { diff: { stdout: HEADER + HUNK } })
+  const result = await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+  assert.equal(result.status, 'modified')
+  assert.equal(result.patch, '@@ -1,2 +1,2 @@\n id\tage\n-sub-01\t24\n+sub-01\t25')
+  assert.equal(result.totalLines, 4)
+  assert.equal(result.truncated, false)
 })
 
-test('saving everything from a subfolder does not list status paths (git reports them relative to the repository root)', async () => {
+test('every git diff the adapter runs for a file is made harmless and pathspec-safe', async () => {
+  const runner = diffRunner('/tmp/project', { diff: { stdout: HEADER + HUNK } })
+  await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  const diffCalls = runner.calls.filter((call) => call.args.includes('diff'))
+  assert.equal(diffCalls.length, 1)
+  for (const flag of DIFF_FLAGS) {
+    assert.ok(diffCalls[0].args.includes(flag), flag)
+  }
+  assert.equal(diffCalls[0].args.at(-2), '--')
+  assert.equal(diffCalls[0].args.at(-1), 'a.tsv')
+})
+
+test('getFileDiff detects added and deleted files from the header', async () => {
+  const added = diffRunner('/tmp/project', { diff: { stdout: 'diff --git a/a.tsv b/a.tsv\nnew file mode 100644\nindex 000..222\n--- /dev/null\n+++ b/a.tsv\n@@ -0,0 +1 @@\n+x\n' } })
+  assert.equal((await new DataLadAdapter({ runner: added }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })).status, 'added')
+  const deleted = diffRunner('/tmp/project', { diff: { stdout: 'diff --git a/a.tsv b/a.tsv\ndeleted file mode 100644\nindex 111..000\n--- a/a.tsv\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n' } })
+  const result = await new DataLadAdapter({ runner: deleted }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.status, 'deleted')
+  assert.equal(result.patch, '@@ -1 +0,0 @@\n-x')
+})
+
+test('getFileDiff cuts at maxLines and says how many there were', async () => {
+  const body = '@@ -1,5 +1,5 @@\n' + Array.from({ length: 9 }, (_, i) => `+l${i}`).join('\n') + '\n'
+  const runner = diffRunner('/tmp/project', { diff: { stdout: HEADER + body } })
+  const result = await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD', maxLines: 4 })
+  assert.equal(result.totalLines, 10)
+  assert.equal(result.truncated, true)
+  assert.equal(result.patch.split('\n').length, 4)
+})
+
+test('getFileDiff clamps maxLines to 1..20000 and defaults to 500', async () => {
+  const body = '@@ -1 +1 @@\n' + Array.from({ length: 700 }, (_, i) => `+l${i}`).join('\n') + '\n'
+  const runner = diffRunner('/tmp/project', { diff: { stdout: HEADER + body } })
+  const adapter = new DataLadAdapter({ runner })
+  assert.equal((await adapter.getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })).patch.split('\n').length, 500)
+  assert.equal((await adapter.getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD', maxLines: 99999999 })).truncated, false)
+  assert.equal((await adapter.getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD', maxLines: -5 })).patch.split('\n').length, 500)
+})
+
+test('getFileDiff reports an unchanged file', async () => {
+  const runner = diffRunner('/tmp/project', { diff: { stdout: '' } })
+  const result = await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'unchanged')
+})
+
+test('getFileDiff treats a binary file as a data file with its sizes', async () => {
+  const runner = diffRunner('/tmp/project', { diff: { stdout: 'diff --git a/a.tsv b/a.tsv\nindex 111..222 100644\nBinary files a/a.tsv and b/a.tsv differ\n' } })
+  runner.set('git', ['-C', '/tmp/project', 'cat-file', '-s', 'HEAD:a.tsv'], { stdout: '2048\n' })
+  const result = await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.oldSize, 2048)
+  assert.equal(result.newSize, null) // /tmp/project/a.tsv does not exist in this test
+})
+
+test('getFileDiff reads sizes of a locked annexed file from the key in its link target', async () => {
+  const link = [
+    'diff --git a/a.tsv b/a.tsv', 'index 111..222 120000', '--- a/a.tsv', '+++ b/a.tsv', '@@ -1 +1 @@',
+    '-../.git/annex/objects/aa/bb/MD5E-s1000--abc.nii.gz/MD5E-s1000--abc.nii.gz',
+    '\\ No newline at end of file',
+    '+../.git/annex/objects/cc/dd/MD5E-s2500--def.nii.gz/MD5E-s2500--def.nii.gz',
+    '\\ No newline at end of file', ''
+  ].join('\n')
+  const runner = diffRunner('/tmp/project', { diff: { stdout: link } })
+  const result = await new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.oldSize, 1000)
+  assert.equal(result.newSize, 2500)
+  assert.equal(result.patch, '')
+})
+
+test('getFileDiff refuses hostile paths and hashes before running git', async () => {
   const runner = new FakeRunner()
-  runner.set('git', TOP_ARGS('/tmp/top/code'), { stdout: '/tmp/top\ncode/\n' })
-  runner.set('git', STATUS_ARGS('/tmp/top/code'), { stdout: '?? code/u.py\n' }) // root-relative: wrong as a save path from here
-  await new DataLadAdapter({ runner }).runCommand('save', { projectPath: '/tmp/top/code', message: 'm' })
-  assert.deepEqual(saveCall(runner).args, ['-C', '/tmp/top/code', 'save', '-d', '/tmp/top', '-r', '--message=m'])
-  assert.equal(runner.calls.some((call) => call.args.includes('status')), false)
+  const adapter = new DataLadAdapter({ runner })
+  for (const path of ['', '../secret', 'a/../../b', '/etc/passwd', 'C:\\x', 'a\0b', undefined, 7]) {
+    await assert.rejects(() => adapter.getFileDiff('/tmp/project', { path, against: 'HEAD' }), /invalid file path/i, String(path))
+  }
+  for (const against of ['--output=/tmp/x', 'HEAD~1', 'not!a!hash', '', undefined]) {
+    await assert.rejects(() => adapter.getFileDiff('/tmp/project', { path: 'a.tsv', against }), /invalid commit hash/i, String(against))
+  }
+  assert.equal(runner.calls.length, 0)
+})
+
+test('getFileDiff against HEAD with no saves yet says there is nothing to compare', async () => {
+  const runner = diffRunner('/tmp/project', { diff: { failed: true, exitCode: 128, stderr: "fatal: bad revision 'HEAD'\n" } })
+  await assert.rejects(
+    () => new DataLadAdapter({ runner }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' }),
+    /no saves yet/i
+  )
+})
+
+test('getFileDiff shows an untracked text file as all-added lines', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  await writeFile(join(dir, 'a.tsv'), 'id\tage\nsub-01\t24\n')
+  const runner = diffRunner(dir, { untracked: true })
+  const result = await new DataLadAdapter({ runner }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+  assert.equal(result.status, 'added')
+  assert.equal(result.patch, '@@ -0,0 +1,2 @@\n+id\tage\n+sub-01\t24')
+  assert.equal(runner.calls.filter((call) => call.args.includes('diff')).length, 0)
+})
+
+test('getFileDiff calls an untracked binary file a data file, with its size', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  await writeFile(join(dir, 'a.tsv'), Buffer.from([1, 2, 0, 3, 4]))
+  const result = await new DataLadAdapter({ runner: diffRunner(dir, { untracked: true }) }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.newSize, 5)
+})
+
+test('getFileDiff cuts a large untracked text file and flags it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  await writeFile(join(dir, 'a.tsv'), Array.from({ length: 800 }, (_, i) => `row${i}`).join('\n') + '\n')
+  const result = await new DataLadAdapter({ runner: diffRunner(dir, { untracked: true }) }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.truncated, true)
+  assert.equal(result.patch.split('\n').length, 500)
+  assert.equal(result.totalLines, 801)
+})
+
+test('getFileDiff never follows a symlink out of the project for an untracked file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  const outside = await mkdtemp(join(tmpdir(), 'diff-outside-'))
+  await writeFile(join(outside, 'secret.txt'), 'top secret\n')
+  await symlink(join(outside, 'secret.txt'), join(dir, 'a.tsv'))
+  const result = await new DataLadAdapter({ runner: diffRunner(dir, { untracked: true }) }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.doesNotMatch(JSON.stringify(result), /top secret/)
+})
+
+test('getFileDiff does not read through a symlinked folder that leaves the project', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  const outside = await mkdtemp(join(tmpdir(), 'diff-outside-'))
+  await writeFile(join(outside, 'secret.txt'), 'top secret\n')
+  await symlink(outside, join(dir, 'linked'), 'dir')
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', dir, 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', untrackedArgs(dir, 'linked/secret.txt'), { stdout: 'linked/secret.txt\0' })
+  const result = await new DataLadAdapter({ runner }).getFileDiff(dir, { path: 'linked/secret.txt', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.doesNotMatch(JSON.stringify(result), /top secret/)
+})
+
+test('listChangesSince lists files that differ from a save with exact names and statuses', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', ['-C', '/tmp/project', 'diff', 'abc1234', '--name-status', '-z', ...DIFF_FLAGS, '--'], {
+    stdout: 'M\0data/participants.tsv\0A\0my file.csv\0D\0old.txt\0T\0link\0'
+  })
+  const changes = await new DataLadAdapter({ runner }).listChangesSince('/tmp/project', 'abc1234')
+  assert.deepEqual(changes, [
+    { status: 'modified', path: 'data/participants.tsv' },
+    { status: 'added', path: 'my file.csv' },
+    { status: 'deleted', path: 'old.txt' },
+    { status: 'modified', path: 'link' }
+  ])
+})
+
+test('listChangesSince returns an empty list when nothing differs and refuses a bad hash', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', ['-C', '/tmp/project', 'diff', 'abc1234', '--name-status', '-z', ...DIFF_FLAGS, '--'], { stdout: '' })
+  const adapter = new DataLadAdapter({ runner })
+  assert.deepEqual(await adapter.listChangesSince('/tmp/project', 'abc1234'), [])
+  await assert.rejects(() => adapter.listChangesSince('/tmp/project', '--output=x'), /invalid commit hash/i)
+})
+
+test('getFileDiff shows an unlocked annexed file (pointer text in git) as a data file with sizes', async () => {
+  const pointer = [
+    'diff --git a/a.tsv b/a.tsv', 'index 111..222 100644', '--- a/a.tsv', '+++ b/a.tsv', '@@ -1 +1 @@',
+    '-/annex/objects/SHA256E-s4--aaaa.tsv', '+/annex/objects/SHA256E-s9--bbbb.tsv', ''
+  ].join('\n')
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: pointer } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.status, 'modified')
+  assert.equal(result.oldSize, 4)
+  assert.equal(result.newSize, 9)
+  assert.equal(result.patch, '')
+})
+
+test('getFileDiff reports a locked file that was unlocked and edited as modified, with both sizes', async () => {
+  const typeChange = [
+    'diff --git a/a.tsv b/a.tsv', 'deleted file mode 120000', 'index 111..000', '--- a/a.tsv', '+++ /dev/null', '@@ -1 +0,0 @@',
+    '-../.git/annex/objects/aa/bb/SHA256E-s2900--abc.tsv/SHA256E-s2900--abc.tsv', '\\ No newline at end of file',
+    'diff --git a/a.tsv b/a.tsv', 'new file mode 100644', 'index 000..222', '--- /dev/null', '+++ b/a.tsv', '@@ -0,0 +1 @@',
+    '+/annex/objects/SHA256E-s3100--def.tsv', ''
+  ].join('\n')
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: typeChange } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'binary')
+  assert.equal(result.status, 'modified')
+  assert.equal(result.oldSize, 2900)
+  assert.equal(result.newSize, 3100)
+})
+
+test('getFileDiff does not mistake an ordinary text file for annexed data', async () => {
+  const text = 'diff --git a/a.tsv b/a.tsv\nindex 111..222 100644\n--- a/a.tsv\n+++ b/a.tsv\n@@ -1 +1 @@\n-120000\n+/annex/objects/ is a folder\n'
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: text } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+})
+
+test('getFileDiff does not count "No newline at end of file" markers in the line totals or the patch', async () => {
+  const body = '@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n'
+  const result = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: HEADER + body } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.totalLines, 3)
+  assert.equal(result.patch, '@@ -1 +1 @@\n-a\n+b')
+})
+
+test('getFileDiff says "permissions only" for a mode change and "empty file" for an empty new or deleted file', async () => {
+  const mode = 'diff --git a/a.tsv b/a.tsv\nold mode 100644\nnew mode 100755\n'
+  const modeResult = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: mode } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.deepEqual([modeResult.kind, modeResult.note], ['note', 'Only the file permissions changed.'])
+  const empty = 'diff --git a/a.tsv b/a.tsv\nnew file mode 100644\nindex 0000000..e69de29\n'
+  const emptyResult = await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: empty } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })
+  assert.deepEqual([emptyResult.kind, emptyResult.status, emptyResult.note], ['note', 'added', 'This is an empty file.'])
+  const gone = 'diff --git a/a.tsv b/a.tsv\ndeleted file mode 100644\nindex e69de29..0000000\n'
+  assert.equal((await new DataLadAdapter({ runner: diffRunner('/tmp/project', { diff: { stdout: gone } }) }).getFileDiff('/tmp/project', { path: 'a.tsv', against: 'HEAD' })).note, 'The file was empty and is now deleted.')
+})
+
+test('getFileDiff marks an untracked file longer than 1 MiB as cut by size, not by lines', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'diff-untracked-'))
+  await writeFile(join(dir, 'a.tsv'), 'x'.repeat(1024 * 1024 + 10)) // a single huge line
+  const result = await new DataLadAdapter({ runner: diffRunner(dir, { untracked: true }) }).getFileDiff(dir, { path: 'a.tsv', against: 'HEAD' })
+  assert.equal(result.kind, 'text')
+  assert.equal(result.byteLimited, true)
+  assert.equal(result.truncated, false)
+})
+
+test('isInsideFolder is true below the folder, false beside or above it, and works for a drive or filesystem root', async () => {
+  const { isInsideFolder } = await import('../src/datalad/adapter.js')
+  const root = parse(process.cwd()).root
+  assert.equal(isInsideFolder(root, join(root, 'a', 'b.txt')), true)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a', 'b.txt')), true)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'ab', 'b.txt')), false)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'b.txt')), false)
+  assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a')), false)
 })

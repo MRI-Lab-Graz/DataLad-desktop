@@ -22,7 +22,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const adapter = new DataLadAdapter()
-const consoleRunner = new ProcessRunner()
+const toolRunner = new ProcessRunner()
 const runRegistry = createRunRegistry()
 const ensureGuard = createEnsureGuard()
 // Packaged: electron-builder copies build/uv to <resources>/uv; dev: build/uv in the repo.
@@ -103,7 +103,7 @@ let gate
 const trustGate = () =>
   (gate ??= createTrustGate({
     store: createTrustStore({ file: join(app.getPath('userData'), 'trusted-folders.json'), adminRoots: policy.trustedRoots }),
-    scan: (path, kind) => (kind === 'remote' ? findRemoteVectors(consoleRunner, path) : findExecVectors(path)),
+    scan: (path, kind) => (kind === 'remote' ? findRemoteVectors(toolRunner, path) : findExecVectors(path)),
     ask: askToTrust,
     authorize: authorizeRoot
   }))
@@ -280,7 +280,7 @@ handle('adapter:runCommand', async (event, payload) => {
         await trustGate().require(payload.request.projectPath, { event })
       }
       if (PUSHES.has(payload.commandName)) {
-        for (const remote of await localRemotePaths(consoleRunner, payload.request.projectPath)) {
+        for (const remote of await localRemotePaths(toolRunner, payload.request.projectPath)) {
           await trustGate().require(remote.path, { kind: 'remote', event })
         }
       }
@@ -316,10 +316,10 @@ handle('adapter:runCommand', async (event, payload) => {
   if (payload.commandName === 'save') {
     const gate = await runWithHandle(event, payload.runId, (runOptions) =>
       gateSave({
-        runner: consoleRunner,
+        runner: toolRunner,
         projectPath: request.projectPath,
         validatorBin: envBin(managedEnvDir(), 'prism-validator'),
-        checkValidator: async () => (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready,
+        checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready,
         ...runOptions
       })
     )
@@ -345,9 +345,9 @@ handle('adapter:runCommand', async (event, payload) => {
 handle('prism:inspect', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
   return inspectProject({
-    runner: consoleRunner,
+    runner: toolRunner,
     projectPath,
-    checkValidator: async () => (await envStatus({ runner: consoleRunner, envDir: managedEnvDir() })).ready
+    checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready
   })
 })
 
@@ -357,14 +357,14 @@ handle('adapter:cancelCommand', (_event, runId) => {
 
 handle('app:version', () => app.getVersion())
 
-handle('env:status', () => envStatus({ runner: consoleRunner, envDir: managedEnvDir() }))
+handle('env:status', () => envStatus({ runner: toolRunner, envDir: managedEnvDir() }))
 
 handle('env:ensure', (event, runId) =>
   ensureGuard.run(async () => {
     const uvPath = resolveUv(uvBaseDir())
     const result = await runWithHandle(event, runId, (runOptions) =>
       ensureEnv({
-        runner: consoleRunner,
+        runner: toolRunner,
         uvPath,
         envDir: managedEnvDir(),
         lockPath: join(uvBaseDir(), 'prism-requirements.txt'),
@@ -424,6 +424,16 @@ handle('adapter:listRecentCommits', async (_event, payload = {}) => {
 handle('adapter:getCommitDetails', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.getCommitDetails(payload.projectPath, payload.commitHash)
+})
+
+handle('adapter:getFileDiff', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.getFileDiff(payload.projectPath, payload.request)
+})
+
+handle('adapter:listChangesSince', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  return adapter.listChangesSince(payload.projectPath, payload.commitHash)
 })
 
 handle('adapter:listOwnTags', async (_event, projectPath) => {
@@ -513,9 +523,9 @@ handle('watch:setActiveProject', async (event, projectPath = null) => {
 })
 
 // Global git config only (user.name/user.email); setGitIdentity validates its input.
-handle('identity:get', () => getGitIdentity((command, args) => consoleRunner.run(command, args)))
+handle('identity:get', () => getGitIdentity((command, args) => toolRunner.run(command, args)))
 handle('identity:set', (_event, identity) =>
-  setGitIdentity((command, args) => consoleRunner.run(command, args), identity)
+  setGitIdentity((command, args) => toolRunner.run(command, args), identity)
 )
 
 handle('app:getWorkspaceRoot', async () => {
@@ -566,7 +576,7 @@ handle('fs:listEntries', async (_event, payload = {}) => {
     }
   }
 
-  return listDirectory({ rootPath, dirPath, run: (command, args) => consoleRunner.run(command, args) })
+  return listDirectory({ rootPath, dirPath, run: (command, args) => toolRunner.run(command, args) })
 })
 
 handle('fs:revealPath', async (_event, targetPath) => {

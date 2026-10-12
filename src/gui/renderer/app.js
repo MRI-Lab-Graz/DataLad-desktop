@@ -12,8 +12,9 @@ import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
-import { collectChangedPaths, computeSaveGating } from './save-gating.js'
+import { computeSaveGating, unsavedLeftovers } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
+import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -82,6 +83,11 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
+  openDiffs: new Map(),
+  openDiffsProject: null,
+  openDiffLines: new Map(),
+  diffsLoadedForSnapshot: null,
+  diffRefreshGeneration: 0,
   headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
@@ -235,6 +241,8 @@ const elements = {
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
   timeMachineDetail: document.getElementById('tm-detail'),
+  timeMachineCompareButton: document.getElementById('tm-compare'),
+  timeMachineCompareOutput: document.getElementById('tm-compare-output'),
   timeMachineDetailOutput: document.getElementById('tm-detail-output'),
   timeMachineCloseDetailButton: document.getElementById('tm-close-detail'),
   timeMachineBranchName: document.getElementById('tm-branch-name'),
@@ -319,7 +327,7 @@ elements.continueProjectButton.addEventListener('click', async () => {
   await openRecentProject(state.recentProjects[0])
   // The status pill lives in the (still hidden) project strip, so a failure must be said here.
   if (elements.projectStrip.hidden) {
-    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists, for example that the drive is connected.`
+    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists (for example that the drive is connected) and that you accepted the trust prompt.`
     elements.continueProjectError.hidden = false
   }
 })
@@ -362,6 +370,39 @@ elements.changedFilesSelectNoneButton.addEventListener('click', () => {
 })
 
 elements.changedFilesOutput.addEventListener('click', async (event) => {
+  const diffButton = event.target.closest('.show-diff-button')
+  const moreButton = event.target.closest('.diff-more-button')
+  if (diffButton || moreButton) {
+    const projectPath = readProjectPath()
+    const container = (diffButton ?? moreButton).closest('li')?.querySelector('[data-diff-container]')
+    const path = container?.dataset.diffContainer
+    if (!projectPath || !path) {
+      return
+    }
+    if (diffButton && state.openDiffs.has(path)) {
+      state.openDiffs.delete(path)
+      state.openDiffLines.delete(path)
+      container.hidden = true
+      diffButton.textContent = 'Show changes'
+      diffButton.setAttribute('aria-expanded', 'false')
+      return
+    }
+    if (diffButton) {
+      state.openDiffsProject = projectPath
+      state.openDiffs.set(path, '')
+      diffButton.textContent = 'Hide changes'
+      diffButton.setAttribute('aria-expanded', 'true')
+    }
+    if (moreButton) {
+      state.openDiffLines.set(path, DIFF_MAX_LINES)
+    }
+    const html = await loadDiffInto(container, { projectPath, path, against: 'HEAD', ...(moreButton ? { maxLines: DIFF_MAX_LINES } : {}) })
+    if (state.openDiffs.has(path) && readProjectPath() === projectPath) {
+      state.openDiffs.set(path, html) // not if the user hid it, or switched project, while it loaded
+    }
+    return
+  }
+
   const button = event.target.closest('.discard-file-button')
   if (!button) {
     return
@@ -968,11 +1009,28 @@ elements.saveProjectButton.addEventListener('click', async () => {
       return
     }
 
-    await runWorkflowCommand('save', {
+    const saveResult = await runWorkflowCommand('save', {
       projectPath,
       message,
       paths: selectedPaths
     }, elements.saveProjectButton)
+    if (saveResult?.ok) {
+      elements.message.value = '' // the next save is a new one, with its own suggestion
+      // "Save completed." must not hide a save that left files behind (a gated save ignores the selection).
+      if (!prismSavesEverything && selectedPaths.length > 0) {
+        const afterSave = await api.getWorkingTreeStatus(projectPath).catch(() => null)
+        const left = unsavedLeftovers(selectedPaths, afterSave?.files)
+        if (left.length > 0) {
+          const names = left.slice(0, 5).map((path) => `<code>${escapeHtml(path)}</code>`).join(', ')
+          const more = left.length > 5 ? ` and ${left.length - 5} more` : ''
+          elements.commandOutput.insertAdjacentHTML(
+            'afterbegin',
+            `<p class="hint-inline hint-inline-warning"><strong>Not everything was saved.</strong> ${left.length === 1 ? 'This file is' : 'These files are'} still unsaved: ${names}${more}. Check the technical details below.</p>`
+          )
+          setLastActionState(`Saved, but ${left.length} selected file${left.length === 1 ? ' is' : 's are'} still unsaved.`, 'warning')
+        }
+      }
+    }
   } finally {
     setButtonBusy(elements.saveProjectButton, false)
     updateSaveButtonState()
@@ -1310,7 +1368,73 @@ elements.timeMachineHistoryOutput.addEventListener('keydown', async (event) => {
   await loadTimeMachineDetail(hash)
 })
 
+const COMPARE_FILES_RENDER_LIMIT = 200
+
+elements.timeMachineCompareButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  if (!projectPath || !commitHash) {
+    return
+  }
+  elements.timeMachineCompareOutput.hidden = false
+  elements.timeMachineCompareOutput.innerHTML = loadingPanelHtml('Comparing…')
+  try {
+    const changes = await api.listChangesSince(projectPath, commitHash)
+    if (commitHash !== state.timeMachineSelectedHash) {
+      return // another save was selected meanwhile
+    }
+    if (changes.length === 0) {
+      elements.timeMachineCompareOutput.textContent = 'No differences since this save.'
+      return
+    }
+    const shown = changes.slice(0, COMPARE_FILES_RENDER_LIMIT)
+    const note = changes.length > shown.length ? `<p class="hint-inline">Showing the first ${shown.length} of ${changes.length} files.</p>` : ''
+    elements.timeMachineCompareOutput.innerHTML =
+      '<p class="hint-inline">Files that differ between this save and your files now:</p>' + note +
+      `<ul class="changed-files-list">${shown
+        .map(
+          (change) =>
+            '<li class="changed-file-item">' +
+            `<span class="changed-file-path" title="${escapeHtml(change.path)}">${escapeHtml(change.path)}</span>` +
+            `<span>${renderGitStatusBadge(change.status)}` +
+            `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(change.path)}" aria-label="Changes in ${escapeHtml(change.path)}" aria-expanded="false">Show changes</button></span>` +
+            `<div class="file-diff" data-diff-container="${escapeHtml(change.path)}" hidden></div>` +
+            '</li>'
+        )
+        .join('')}</ul>`
+  } catch (error) {
+    elements.timeMachineCompareOutput.textContent = friendlyIpcError(error)
+  }
+})
+
+elements.timeMachineCompareOutput.addEventListener('click', async (event) => {
+  const button = event.target.closest('.show-diff-button') ?? event.target.closest('.diff-more-button')
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  const container = button?.closest('li')?.querySelector('[data-diff-container]')
+  const path = container?.dataset.diffContainer
+  if (!button || !projectPath || !commitHash || !path) {
+    return
+  }
+  if (button.classList.contains('show-diff-button')) {
+    const open = button.getAttribute('aria-expanded') === 'true'
+    button.setAttribute('aria-expanded', String(!open))
+    button.textContent = open ? 'Show changes' : 'Hide changes'
+    if (open) {
+      container.hidden = true
+      return
+    }
+  }
+  await loadDiffInto(container, {
+    projectPath,
+    path,
+    against: commitHash,
+    ...(button.classList.contains('diff-more-button') ? { maxLines: DIFF_MAX_LINES } : {})
+  })
+})
+
 elements.timeMachineCloseDetailButton.addEventListener('click', () => {
+  clearCompare()
   state.timeMachineSelectedHash = null
   state.timeMachineDetails = null
   elements.timeMachineDetail.hidden = true
@@ -2379,7 +2503,13 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
   }
 }
 
+function clearCompare() {
+  elements.timeMachineCompareOutput.hidden = true
+  elements.timeMachineCompareOutput.innerHTML = ''
+}
+
 function clearTimeMachine() {
+  clearCompare()
   state.timeMachineCommits = []
   state.timeMachineLimit = 50
   state.timeMachineSelectedHash = null
@@ -2472,6 +2602,7 @@ function renderTimeMachineHistory() {
 }
 
 async function loadTimeMachineDetail(commitHash) {
+  clearCompare()
   state.timeMachineSelectedHash = commitHash
   state.timeMachineDetails = null
   renderTimeMachineHistory()
@@ -2797,13 +2928,24 @@ function renderChangedFileItem(entry, isNested = false) {
     ? `<button type="button" class="button button-ghost button-inline discard-file-button" data-discard-path="${escapeHtml(entry.path)}" title="Throw away changes and return this file to the last save point">Discard</button>`
     : ''
 
+  // Show changes: top-level, non-conflicted files only (nested files belong to another repository).
+  const canDiff = !isNested && !entry.isSubmodule && !entry.conflicted
+  const open = state.openDiffs.has(entry.path)
+  const diffButton = canDiff
+    ? `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(entry.path)}" aria-label="Changes in ${escapeHtml(entry.path)}" aria-expanded="${open}">${open ? 'Hide changes' : 'Show changes'}</button>`
+    : ''
+  const diffContainer = canDiff
+    ? `<div class="file-diff" data-diff-container="${escapeHtml(entry.path)}"${open ? '' : ' hidden'}>${open ? state.openDiffs.get(entry.path) : ''}</div>`
+    : ''
+
   return (
     '<li class="changed-file-item">' +
     `<label class="changed-file-label">` +
     `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
     `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
     '</label>' +
-    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}${discardButton}</span>` +
+    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}${diffButton}${discardButton}</span>` +
+    diffContainer +
     nestedList +
     '</li>'
   )
@@ -2813,9 +2955,12 @@ const CHANGED_FILES_RENDER_LIMIT = 300
 const TM_RESTORE_FILES_RENDER_LIMIT = 100
 
 function renderChangedFilesSelection() {
+  resetDiffsOnProjectChange(readProjectPath())
   const files = state.workingTreeSnapshot?.files ?? []
   if (files.length === 0) {
     elements.changedFilesOutput.textContent = 'No changed files detected.'
+    state.openDiffs.clear()
+    state.openDiffLines.clear()
     elements.changedFilesSelectAllButton.disabled = true
     elements.changedFilesSelectNoneButton.disabled = true
     return
@@ -2837,6 +2982,73 @@ function renderChangedFilesSelection() {
   elements.changedFilesOutput.innerHTML = truncationNote + `<ul class="changed-files-list">${list}</ul>`
   elements.changedFilesSelectAllButton.disabled = false
   elements.changedFilesSelectNoneButton.disabled = false
+  void refreshOpenDiffs()
+}
+
+// Fills one diff container (Home row or History compare entry). Never throws: errors are shown in the container.
+async function loadDiffInto(container, { projectPath, path, against, maxLines = DIFF_DEFAULT_LINES, quiet = false }) {
+  container.hidden = false
+  if (!quiet) {
+    container.innerHTML = loadingPanelHtml('Loading changes…')
+  }
+  try {
+    const diff = await api.getFileDiff(projectPath, { path, against, maxLines })
+    container.innerHTML = renderDiffHtml(diff, { path, requestedMax: maxLines })
+  } catch (error) {
+    container.innerHTML = `<p class="hint-inline hint-inline-warning">${escapeHtml(friendlyIpcError(error))}</p>`
+  }
+  return container.innerHTML
+}
+
+function homeDiffContainer(path) {
+  return [...elements.changedFilesOutput.querySelectorAll('[data-diff-container]')].find((node) => node.dataset.diffContainer === path)
+}
+
+// Open diffs belong to the project they were opened in.
+function resetDiffsOnProjectChange(projectPath) {
+  if (state.openDiffsProject === projectPath) {
+    return false
+  }
+  state.openDiffs.clear()
+  state.openDiffLines.clear()
+  state.openDiffsProject = projectPath
+  return true
+}
+
+// The list is rebuilt whenever status refreshes, so remembered diffs are re-attached and then reloaded.
+// A newer refresh, a project switch, or a Hide click while a diff is loading must win over the late response.
+async function refreshOpenDiffs() {
+  const projectPath = readProjectPath()
+  if (resetDiffsOnProjectChange(projectPath)) {
+    return
+  }
+  // A selection change re-renders the same snapshot: the remembered diffs are already current.
+  if (state.diffsLoadedForSnapshot === state.workingTreeSnapshot) {
+    return
+  }
+  state.diffsLoadedForSnapshot = state.workingTreeSnapshot
+  const generation = ++state.diffRefreshGeneration
+  const changed = new Set((state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path))
+  for (const path of [...state.openDiffs.keys()]) {
+    const container = homeDiffContainer(path)
+    if (!changed.has(path) || !container || !projectPath) {
+      state.openDiffs.delete(path)
+      continue
+    }
+    const html = await loadDiffInto(container, {
+      projectPath,
+      path,
+      against: 'HEAD',
+      maxLines: state.openDiffLines.get(path) ?? DIFF_DEFAULT_LINES,
+      quiet: true // keep what is shown (and the scroll position) until the new diff arrives
+    })
+    if (generation !== state.diffRefreshGeneration || readProjectPath() !== projectPath) {
+      return
+    }
+    if (state.openDiffs.has(path)) {
+      state.openDiffs.set(path, html)
+    }
+  }
 }
 
 function renderRecentCommitList(overrideMessage = null) {
@@ -2879,6 +3091,7 @@ function gatherSavePaths() {
 
 function updateSaveButtonState() {
   const snapshot = state.workingTreeSnapshot
+  const prismMode = state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
 
   const gating = computeSaveGating({
     hasMessage: Boolean(elements.message.value.trim()),
@@ -2887,7 +3100,7 @@ function updateSaveButtonState() {
     mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    prismMode: state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
+    prismMode
   })
 
   elements.saveProjectButton.disabled = gating.disabled
@@ -2895,11 +3108,14 @@ function updateSaveButtonState() {
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 
-  const selectedFiles = (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
+  // PRISM and BIDS projects are validated and saved as a whole, whatever is ticked, so describe all of it.
+  const savesEverything = prismMode === 'gated' || prismMode === 'bids'
+  const selectedFiles = savesEverything ? (snapshot?.files ?? []) : (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
   const suggestion = suggestMessage(selectedFiles)
   elements.message.placeholder = suggestion || 'Describe what you changed'
-  elements.useSuggestionButton.hidden = !suggestion || Boolean(elements.message.value.trim())
+  elements.useSuggestionButton.hidden = !suggestion || Boolean(snapshot?.mergeInProgress) || Boolean(elements.message.value.trim())
   elements.useSuggestionButton.dataset.suggestion = suggestion
+  elements.useSuggestionButton.setAttribute('aria-label', `Use suggestion: ${suggestion}`)
 }
 
 elements.useSuggestionButton.addEventListener('click', () => {
@@ -3356,6 +3572,8 @@ function updateSyncSectionVisibility() {
 }
 
 function setOnboardingExpanded(expanded) {
+  // The full header belongs to the start screen (also when reached through Switch Project).
+  elements.appHeader.classList.toggle('hero-slim', !expanded)
   elements.onboardingGroup.classList.toggle('onboarding-collapsed', !expanded)
   elements.switchProjectButton.hidden = expanded
 }
@@ -3368,7 +3586,7 @@ function setOnboardingExpanded(expanded) {
 // or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
-  elements.appHeader.classList.toggle('hero-slim', visible)
+  updateContinueButton()
   elements.projectNavGroup.hidden = !visible
   if (!visible) {
     clearTimeMachine()
@@ -3703,17 +3921,6 @@ function setLastCommitMeta(text, tone, tooltip = '') {
   elements.lastCommitMeta.removeAttribute('tabindex')
 }
 
-function buildQuickSaveMessage() {
-  const now = new Date()
-  const date = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0')
-  ].join('-')
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  return `save ${date} ${time}`
-}
-
 function loadRecentProjects() {
   try {
     const raw = localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY)
@@ -3830,10 +4037,19 @@ function rememberRecentProject(projectPath) {
   renderRecentProjects()
 }
 
+// "Continue with <latest project>" belongs to the start screen: hidden while a project is open or when there is none.
+function updateContinueButton() {
+  const hidden = state.recentProjects.length === 0 || !elements.projectStrip.hidden
+  elements.continueProjectButton.hidden = hidden
+  if (hidden) {
+    elements.continueProjectError.hidden = true
+  }
+}
+
 function renderRecentProjects() {
   const currentPath = elements.projectPath.value.trim()
 
-  elements.continueProjectButton.hidden = state.recentProjects.length === 0
+  updateContinueButton()
   if (state.recentProjects.length === 0) {
     elements.recentProjectsOutput.innerHTML =
       '<p class="hint-inline">No recent projects yet — opened projects will appear here.</p>'

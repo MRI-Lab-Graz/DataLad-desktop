@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     }),
   getCommitDetails: (projectPath, commitHash) =>
     ipcRenderer.invoke('adapter:getCommitDetails', { projectPath, commitHash }),
+  getFileDiff: (projectPath, request) => ipcRenderer.invoke('adapter:getFileDiff', { projectPath, request }),
+  listChangesSince: (projectPath, commitHash) => ipcRenderer.invoke('adapter:listChangesSince', { projectPath, commitHash }),
   listOwnTags: (projectPath) => ipcRenderer.invoke('adapter:listOwnTags', projectPath),
   getProjectHealth: (projectPath) => ipcRenderer.invoke('adapter:getProjectHealth', projectPath),
   clearRepositoryLock: (projectPath) => ipcRenderer.invoke('adapter:clearRepositoryLock', projectPath),
