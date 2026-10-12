@@ -185,7 +185,6 @@ const elements = {
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
-  syncDataSummaryHint: document.getElementById('sync-data-summary-hint'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   verifyDataButton: document.getElementById('verify-data'),
@@ -3446,7 +3445,6 @@ function updateSyncSectionVisibility() {
   elements.syncActionsStrip.hidden = Boolean(quietMessage)
   elements.syncActionsQuiet.hidden = !quietMessage
   elements.syncActionsQuiet.textContent = quietMessage ?? ''
-  elements.syncDataSummaryHint.textContent = quietMessage ? '— nothing to do right now' : ''
 }
 
 function setOnboardingExpanded(expanded) {
@@ -3546,6 +3544,11 @@ function setStatusLine(text, tone) {
   elements.projectStatusLine.className = `status-line status-line-${tone}`
 }
 
+elements.attentionRows.addEventListener('click', (event) => {
+  const kind = event.target.closest('button[data-attention]')?.dataset.attention
+  attentionTargetButton(kind)?.click()
+})
+
 function attentionTargetButton(kind) {
   return {
     missing: elements.filesGetAllButton,
@@ -3572,9 +3575,6 @@ function renderAttentionRows(health) {
         `<button class="button button-ghost button-inline" type="button" data-attention="${row.kind}">${escapeHtml(row.action)}</button></div>`
     )
     .join('')
-  elements.attentionRows.querySelectorAll('button[data-attention]').forEach((rowButton) => {
-    rowButton.addEventListener('click', () => attentionTargetButton(rowButton.dataset.attention).click())
-  })
   syncAttentionRowGating()
 }
 

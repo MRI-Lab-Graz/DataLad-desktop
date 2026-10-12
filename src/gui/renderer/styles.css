@@ -784,13 +784,6 @@ h2 {
   color: #8f431f;
 }
 
-.onboarding-tile-hint {
-  font-weight: 500;
-  color: var(--ink-soft);
-  font-size: 0.78rem;
-  text-align: center;
-}
-
 .changed-files-list {
   list-style: none;
   margin: 0;
@@ -1953,10 +1946,6 @@ select:disabled {
 
 .tools-nav .onboarding-tile-label {
   font-size: 0.95rem;
-}
-
-.tools-nav .onboarding-tile-hint {
-  display: none;
 }
 
 .tools-panels {

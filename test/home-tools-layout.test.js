@@ -137,3 +137,10 @@ test('attention rows follow busy state of the buttons they mirror', () => {
 test('file-watch refreshes keep the folder the file browser shows (not the root)', () => {
   assert.doesNotMatch(app, /refreshFileBrowser\(state\.rootProjectPath\)/)
 })
+
+test('no dead Sync hint, and attention rows use one delegated click listener', () => {
+  assert.doesNotMatch(html, /sync-data-summary-hint/)
+  assert.doesNotMatch(app, /syncDataSummaryHint/)
+  assert.match(app, /elements\.attentionRows\.addEventListener\('click'/)
+  assert.doesNotMatch(fnBody('function renderAttentionRows'), /addEventListener/)
+})
