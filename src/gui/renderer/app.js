@@ -30,8 +30,11 @@ import {
   computeSaveStatusChip,
   computeSyncStatusChip,
   computeMissingContentChip,
-  computeStatusLine
+  computeStatusLine,
+  computeAttentionRows
 } from './project-health-chips.js'
+import { formatAge } from './relative-age.js'
+import { nextTabIndex } from './tab-keys.js'
 
 const api = window.dataladDesktop
 
@@ -79,6 +82,7 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
+  headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
   createProjectBidsCandidate: null
@@ -86,7 +90,6 @@ const state = {
 
 const BIDS_PROCEDURE = 'text2git'
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_PROJECTS = 8
 const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
@@ -128,8 +131,14 @@ const elements = {
   onboardingGroup: document.getElementById('onboarding-group'),
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
-  projectHealthCard: document.getElementById('project-health-card'),
   projectNavGroup: document.getElementById('project-nav-group'),
+  projectHome: document.getElementById('project-home'),
+  projectTools: document.getElementById('project-tools'),
+  openToolsButton: document.getElementById('open-tools'),
+  closeToolsButton: document.getElementById('close-tools'),
+  attentionRows: document.getElementById('attention-rows'),
+  historyFullLink: document.getElementById('history-full-link'),
+  lastActionDetails: document.getElementById('last-action-details'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
   projectNavTileConsole: document.getElementById('project-nav-tile-console'),
@@ -176,7 +185,6 @@ const elements = {
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
   recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
-  syncDataSummaryHint: document.getElementById('sync-data-summary-hint'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
   verifyDataButton: document.getElementById('verify-data'),
@@ -491,11 +499,13 @@ elements.detectProjectButton.addEventListener('click', async () => {
 // -open tile again closes it, returning to just the tile row. Shared between
 // the landing-page picker (Open/Create Project) and the running-project nav
 // (Save/Sync/Files/...) so both stay on one interaction model.
-function wireTileGroup(tiles, datasetKey) {
+function wireTileGroup(tiles, datasetKey, { required = false } = {}) {
   function select(targetId) {
+    const anySelected = tiles.some((tile) => tile.dataset[datasetKey] === targetId)
     for (const tile of tiles) {
       const isSelected = tile.dataset[datasetKey] === targetId
       tile.setAttribute('aria-selected', String(isSelected))
+      tile.tabIndex = isSelected || !anySelected ? 0 : -1
       const panel = document.getElementById(tile.dataset[datasetKey])
       if (panel) {
         panel.hidden = !isSelected
@@ -509,7 +519,19 @@ function wireTileGroup(tiles, datasetKey) {
         return
       }
       const alreadySelected = tile.getAttribute('aria-selected') === 'true'
+      if (alreadySelected && required) {
+        return
+      }
       select(alreadySelected ? null : tile.dataset[datasetKey])
+    })
+    tile.addEventListener('keydown', (event) => {
+      const index = nextTabIndex(tiles.indexOf(tile), event.key, tiles.map((candidate) => candidate.hidden))
+      if (index === -1) {
+        return
+      }
+      event.preventDefault()
+      tiles[index].focus()
+      tiles[index].click()
     })
   }
 
@@ -517,7 +539,38 @@ function wireTileGroup(tiles, datasetKey) {
 }
 
 const selectOnboardingTile = wireTileGroup(elements.onboardingTiles, 'onboardingTarget')
-const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget')
+const selectProjectTile = wireTileGroup(elements.projectNavTiles, 'navTarget', { required: true })
+const DEFAULT_TOOL = 'files-panel'
+
+function showHome({ focus = false } = {}) {
+  elements.projectTools.hidden = true
+  elements.projectHome.hidden = false
+  elements.openToolsButton.setAttribute('aria-expanded', 'false')
+  if (focus) {
+    elements.openToolsButton.focus()
+  }
+}
+
+function showTools(target = DEFAULT_TOOL) {
+  elements.projectHome.hidden = true
+  elements.projectTools.hidden = false
+  elements.openToolsButton.setAttribute('aria-expanded', 'true')
+  selectProjectTile(target)
+  elements.projectNavTiles.find((tile) => tile.dataset.navTarget === target)?.focus()
+  if (target === 'time-machine-zone') {
+    // Always refresh: a save on Home since the last visit must show up in the full history.
+    refreshTimeMachineHistory(readProjectPath())
+  }
+}
+
+elements.openToolsButton.addEventListener('click', () => (elements.projectTools.hidden ? showTools() : showHome({ focus: true })))
+elements.closeToolsButton.addEventListener('click', () => showHome({ focus: true }))
+elements.historyFullLink.addEventListener('click', () => showTools('time-machine-zone'))
+
+// Validation messages go to #command-output too, so a collapsed details must open when anything is written.
+new MutationObserver(() => {
+  elements.lastActionDetails.open = true
+}).observe(elements.commandOutput, { childList: true, characterData: true, subtree: true })
 
 function updateGetRemoteMode() {
   const isUrl = elements.getRemoteModeUrlRadio.checked
@@ -1219,15 +1272,17 @@ elements.createBranchButton.addEventListener('click', async () => {
   await refreshBranchList(projectPath)
 })
 
+async function loadTimeMachineIfEmpty() {
+  const projectPath = readProjectPath()
+  if (!projectPath || (state.timeMachineCommits.length > 0 && state.timeMachineProjectPath === projectPath)) {
+    return
+  }
+  await refreshTimeMachineHistory(projectPath)
+}
+
 elements.projectNavTiles
   .find((tile) => tile.dataset.navTarget === 'time-machine-zone')
-  ?.addEventListener('click', async () => {
-    const projectPath = readProjectPath()
-    if (!projectPath || state.timeMachineCommits.length > 0) {
-      return
-    }
-    await refreshTimeMachineHistory(projectPath)
-  })
+  ?.addEventListener('click', loadTimeMachineIfEmpty)
 
 elements.timeMachineLoadMoreButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
@@ -1608,7 +1663,7 @@ api.onFilesChanged(({ projectPath }) => {
   }
 
   void refreshWorkingTreeStatus(state.rootProjectPath)
-  void refreshFileBrowser(state.rootProjectPath)
+  void refreshFileBrowser(state.fileBrowserProject ?? state.rootProjectPath)
 })
 
 async function detectProjectType(projectPath) {
@@ -1826,7 +1881,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     if (state.pendingCommands.size === 0 && state.watchRefreshPending) {
       state.watchRefreshPending = false
       void refreshWorkingTreeStatus(state.rootProjectPath)
-      void refreshFileBrowser(state.rootProjectPath)
+      void refreshFileBrowser(state.fileBrowserProject ?? state.rootProjectPath)
     }
   }
 }
@@ -2448,7 +2503,7 @@ function renderTimeMachineHistory() {
 
   const rows = commits
     .map((entry) => {
-      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const age = formatAge(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
       const hash = entry.commitHash || 'unknown'
       const subject = entry.subject || '(no subject)'
       const author = entry.author || 'Unknown'
@@ -2460,7 +2515,7 @@ function renderTimeMachineHistory() {
         `aria-pressed="${isSelected ? 'true' : 'false'}">` +
         '<div class="history-item-head">' +
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
-        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        `<span class="history-age">${escapeHtml(age)}</span>` +
         '</div>' +
         `<div class="history-subject">${isRunCommit(subject) ? '<span class="run-chip">recorded run</span> ' : ''}` +
         `${escapeHtml(subject.replace('[DATALAD RUNCMD] ', ''))}</div>` +
@@ -2867,7 +2922,7 @@ function renderRecentCommitList(overrideMessage = null) {
 
   const rows = state.recentCommits
     .map((entry) => {
-      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const age = formatAge(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
       const hash = entry.commitHash || 'unknown'
       const subject = entry.subject || '(no subject)'
       const author = entry.author || 'Unknown author'
@@ -2876,7 +2931,7 @@ function renderRecentCommitList(overrideMessage = null) {
         '<li class="history-item">' +
         '<div class="history-item-head">' +
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
-        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        `<span class="history-age">${escapeHtml(age)}</span>` +
         '</div>' +
         `<div class="history-subject">${escapeHtml(subject)}</div>` +
         `<div class="history-author">${escapeHtml(author)}</div>` +
@@ -3314,6 +3369,11 @@ function setCurrentProjectHeader(projectPath, classification) {
   void refreshLastCommitMeta(projectPath)
   setOnboardingExpanded(!projectPath)
   setProjectDependentSectionsVisible(Boolean(projectPath))
+  // Only a different project sends us Home; re-rendering the same one (e.g. Convert to subdataset) must not close Tools.
+  if (projectPath !== state.headerProjectPath) {
+    state.headerProjectPath = projectPath
+    showHome()
+  }
 
   // Clear the previous project's health snapshot (and re-render) *before*
   // kicking off the new fetch. Without this, other in-flight refreshes for
@@ -3378,14 +3438,13 @@ function updateSyncSectionVisibility() {
   const nowVisible = computeSyncSectionVisible(classification, health)
   elements.projectNavTileSync.hidden = !nowVisible
   if (!nowVisible && elements.projectNavTileSync.getAttribute('aria-selected') === 'true') {
-    selectProjectTile('save-checkpoint-panel')
+    selectProjectTile(DEFAULT_TOOL)
   }
 
   const quietMessage = computeSyncActionsQuietMessage(health)
   elements.syncActionsStrip.hidden = Boolean(quietMessage)
   elements.syncActionsQuiet.hidden = !quietMessage
   elements.syncActionsQuiet.textContent = quietMessage ?? ''
-  elements.syncDataSummaryHint.textContent = quietMessage ? '— nothing to do right now' : ''
 }
 
 function setOnboardingExpanded(expanded) {
@@ -3396,16 +3455,13 @@ function setOnboardingExpanded(expanded) {
 // Until a project is actually opened, only "Latest Projects" / "Open Project"
 // (the onboarding group) should be visible — every other card reads as
 // confusing noise for a project nobody has chosen yet. Once a project opens,
-// its sections live behind click-to-reveal tiles (see wireTileGroup) rather
-// than all showing at once, and default back to the Save Checkpoint tile —
-// the action used most — each time a project is opened or switched.
+// the Home view (Save, status, recent history) shows, and every other section
+// lives behind the Tools button (see showTools); each time a project is opened
+// or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
-  elements.projectHealthCard.hidden = !visible
   elements.projectNavGroup.hidden = !visible
-  if (visible) {
-    selectProjectTile('save-checkpoint-panel')
-  } else {
+  if (!visible) {
     clearTimeMachine()
   }
   updatePowerUserConsoleVisibility()
@@ -3488,15 +3544,51 @@ function setStatusLine(text, tone) {
   elements.projectStatusLine.className = `status-line status-line-${tone}`
 }
 
+elements.attentionRows.addEventListener('click', (event) => {
+  const kind = event.target.closest('button[data-attention]')?.dataset.attention
+  attentionTargetButton(kind)?.click()
+})
+
+function attentionTargetButton(kind) {
+  return {
+    missing: elements.filesGetAllButton,
+    publish: elements.publishProjectButton,
+    update: elements.updateProjectButton
+  }[kind]
+}
+
+// Mirror the real buttons' gating (busy, no remote, ...) onto the row buttons.
+function syncAttentionRowGating() {
+  for (const rowButton of elements.attentionRows.querySelectorAll('button[data-attention]')) {
+    const button = attentionTargetButton(rowButton.dataset.attention)
+    rowButton.disabled = button.disabled
+    rowButton.title = button.title
+  }
+}
+
+function renderAttentionRows(health) {
+  const rows = computeAttentionRows(health)
+  elements.attentionRows.hidden = rows.length === 0
+  elements.attentionRows.innerHTML = rows
+    .map(
+      (row) => `<div class="attention-row"><span>${escapeHtml(row.label)}</span>` +
+        `<button class="button button-ghost button-inline" type="button" data-attention="${row.kind}">${escapeHtml(row.action)}</button></div>`
+    )
+    .join('')
+  syncAttentionRowGating()
+}
+
 function renderProjectHealth(overrideMessage = null) {
   if (overrideMessage) {
     elements.projectHealthOutput.textContent = overrideMessage
     setStatusLine(overrideMessage, 'neutral')
+    renderAttentionRows(null)
     return
   }
 
   const health = state.projectHealthSnapshot
   applyRemoteGatedButtons(health)
+  renderAttentionRows(health)
 
   if (!health) {
     const message = 'Select a project to see its save, sync, and data status.'
@@ -3582,6 +3674,7 @@ function setButtonBusy(button, busy, busyLabel = 'Working…') {
     button.disabled = true
     button.classList.add('is-busy')
     button.textContent = busyLabel
+    syncAttentionRowGating()
     return
   }
 
@@ -3591,6 +3684,7 @@ function setButtonBusy(button, busy, busyLabel = 'Working…') {
     button.textContent = button.dataset.idleLabel
     delete button.dataset.idleLabel
   }
+  syncAttentionRowGating()
 }
 
 function setLastActionState(text, tone) {
@@ -3655,13 +3749,13 @@ async function refreshLastCommitMeta(projectPath) {
     }
 
     const ageMs = Math.max(0, Date.now() - Number(lastCommit.timestamp) * 1000)
-    const relativeAge = formatAgeFromMilliseconds(ageMs)
+    const relativeAge = formatAge(ageMs)
     const suffix = lastCommit.commitHash ? ` (${lastCommit.commitHash})` : ''
     const commitMessage = (lastCommit.message ?? '').trim()
     const commitSubject = (lastCommit.subject ?? '').trim()
     const tooltipSource = commitMessage || commitSubject
     const tooltip = tooltipSource ? `Last commit message:\n${tooltipSource}` : ''
-    setLastCommitMeta(`Last commit ${relativeAge} ago${suffix}.`, 'reminder', tooltip)
+    setLastCommitMeta(`Last commit ${relativeAge}${suffix}.`, 'reminder', tooltip)
   } catch {
     if (state.commitMetaRequestToken !== nextToken) {
       return
@@ -3699,30 +3793,6 @@ function setLastCommitMeta(text, tone, tooltip = '') {
   elements.lastCommitMeta.removeAttribute('title')
   elements.lastCommitMeta.removeAttribute('data-tooltip')
   elements.lastCommitMeta.removeAttribute('tabindex')
-}
-
-function formatAgeFromMilliseconds(ageMs) {
-  if (ageMs < 60 * 1000) {
-    return 'just now'
-  }
-
-  if (ageMs < 60 * 60 * 1000) {
-    const minutes = Math.floor(ageMs / (60 * 1000))
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
-  }
-
-  if (ageMs < DAY_IN_MS) {
-    const hours = Math.floor(ageMs / (60 * 60 * 1000))
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-  }
-
-  if (ageMs < 7 * DAY_IN_MS) {
-    const days = Math.floor(ageMs / DAY_IN_MS)
-    return `${days} ${days === 1 ? 'day' : 'days'}`
-  }
-
-  const weeks = Math.floor(ageMs / (7 * DAY_IN_MS))
-  return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`
 }
 
 function buildQuickSaveMessage() {
@@ -4042,7 +4112,7 @@ function updatePowerUserConsoleVisibility() {
   const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
   elements.projectNavTileConsole.hidden = !visible
   if (!visible && elements.projectNavTileConsole.getAttribute('aria-selected') === 'true') {
-    selectProjectTile('save-checkpoint-panel')
+    selectProjectTile(DEFAULT_TOOL)
   }
 }
 

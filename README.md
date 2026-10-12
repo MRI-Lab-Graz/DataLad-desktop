@@ -37,11 +37,11 @@ across nested sub-projects? The app shows you exactly what changed and where.
 - **Check your data is intact** — one click re-checks every downloaded file
   against its checksum.
 - **See how a result was made** — commits recorded with `datalad run` show their
-  command, inputs and outputs in Time Machine.
+  command, inputs and outputs in Tools → History.
 - **Keep a second copy** — add a USB drive, network share or an empty GIN/GitHub/
   GitLab repository as a remote in one step.
 - **Branch when you need to**, without it getting in the way when you don't —
-  branch management lives in an optional "Project Setup" area.
+  branch management lives under Tools → Branches & Ignore.
 - **Bring branches together** — merge a branch into the one you are on; if the same file changed on both, pick a version per file and finish (or cancel) the merge.
 
 ## Download & Install

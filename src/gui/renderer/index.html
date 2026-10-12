@@ -21,26 +21,26 @@
               <p id="last-commit-meta" class="hero-meta hero-meta-idle">
                 Last commit status appears here after selecting a project.
               </p>
-              <label class="power-toggle-wrap" for="power-user-mode-toggle">
-                <input type="checkbox" id="power-user-mode-toggle" role="switch" />
-                Power user mode
-              </label>
-              <label
-                class="power-toggle-wrap"
-                for="bids-auto-nest-toggle"
-                title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
-              >
-                <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
-                Auto-nest BIDS datasets
-              </label>
-              <button
-                id="open-settings"
-                class="button button-ghost button-inline"
-                type="button"
-                title="Check that Git, git-annex and DataLad are installed"
-              >
-                Setup
-              </button>
+              <div class="hero-actions">
+                <button
+                  id="open-settings"
+                  class="button button-ghost button-inline"
+                  type="button"
+                  title="Check that Git, git-annex and DataLad are installed"
+                >
+                  Setup
+                </button>
+                <a
+                  id="open-docs"
+                  class="button button-ghost button-inline"
+                  href="https://datalad-desktop.readthedocs.io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open the tutorials and documentation on Read the Docs"
+                >
+                  <span aria-hidden="true">📖</span> Docs
+                </a>
+              </div>
             </div>
             <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
           </div>
@@ -57,6 +57,22 @@
           <h2 id="settings-title">Setup</h2>
           <p class="lede-small">Version <span data-app-version></span></p>
           <button id="close-settings" class="button button-ghost button-inline" type="button">Close</button>
+        </div>
+
+        <div class="setup-section">
+          <h3 class="setup-section-title">Preferences</h3>
+          <label class="power-toggle-wrap" for="power-user-mode-toggle">
+            <input type="checkbox" id="power-user-mode-toggle" role="switch" />
+            Power user mode
+          </label>
+          <label
+            class="power-toggle-wrap"
+            for="bids-auto-nest-toggle"
+            title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
+          >
+            <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
+            Auto-nest BIDS datasets
+          </label>
         </div>
 
         <div class="setup-section">
@@ -238,6 +254,9 @@
             />
             <p id="current-project-path" class="strip-path">No project selected</p>
             <p id="current-project-nested-info" class="strip-nested-info" hidden></p>
+            <p id="project-status-line" class="status-line status-line-neutral">
+              Select a project to see its save, sync, and data status.
+            </p>
           </div>
         </div>
         <div class="strip-state-group">
@@ -245,6 +264,7 @@
           <span id="current-project-bids-badge" class="badge badge-bids" hidden>BIDS</span>
           <span id="current-project-prism-badge" class="badge badge-bids" hidden>PRISM</span>
           <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
+          <button id="open-tools" class="button button-ghost button-inline" type="button" aria-controls="project-tools" aria-expanded="false">Tools <span aria-hidden="true">▸</span></button>
           <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
             Switch Project
           </button>
@@ -253,87 +273,23 @@
 
       <section id="running-commands" class="card running-commands" role="status" aria-label="Running commands" hidden></section>
 
-      <section id="project-health-card" class="card project-health reveal reveal-3" aria-labelledby="project-health-title" hidden>
-        <span class="card-icon-badge" aria-hidden="true">🩺</span>
-        <div class="section-head">
-          <h2 id="project-health-title">Project Health</h2>
-        </div>
-        <p id="project-status-line" class="status-line status-line-neutral">
-          Select a project to see its save, sync, and data status.
-        </p>
-      </section>
-
       <section id="project-nav-group" class="onboarding-group" hidden>
-        <div class="onboarding-picker project-nav-picker reveal reveal-4" role="tablist" aria-label="Project sections">
-          <button type="button" class="onboarding-tile" data-nav-target="save-checkpoint-panel" role="tab" aria-selected="false" aria-controls="save-checkpoint-panel">
-            <span class="onboarding-tile-icon" aria-hidden="true">💾</span>
-            <span class="onboarding-tile-label">Save Checkpoint</span>
-          </button>
-          <button type="button" class="onboarding-tile" id="project-nav-tile-sync" data-nav-target="sync-data-section" role="tab" aria-selected="false" aria-controls="sync-data-section" hidden>
-            <span class="onboarding-tile-icon" aria-hidden="true">🔄</span>
-            <span class="onboarding-tile-label">Sync</span>
-            <span id="sync-data-summary-hint" class="onboarding-tile-hint"></span>
-          </button>
-          <button type="button" class="onboarding-tile" data-nav-target="files-panel" role="tab" aria-selected="false" aria-controls="files-panel">
-            <span class="onboarding-tile-icon" aria-hidden="true">🗂️</span>
-            <span class="onboarding-tile-label">Files</span>
-          </button>
-          <button type="button" class="onboarding-tile" data-nav-target="project-health-panel" role="tab" aria-selected="false" aria-controls="project-health-panel">
-            <span class="onboarding-tile-icon" aria-hidden="true">🩺</span>
-            <span class="onboarding-tile-label">Health Details</span>
-          </button>
-          <button type="button" class="onboarding-tile" data-nav-target="project-setup-zone" role="tab" aria-selected="false" aria-controls="project-setup-zone">
-            <span class="onboarding-tile-icon" aria-hidden="true">⚙️</span>
-            <span class="onboarding-tile-label">Project Setup</span>
-          </button>
-          <button type="button" class="onboarding-tile" data-nav-target="time-machine-zone" role="tab" aria-selected="false" aria-controls="time-machine-zone">
-            <span class="onboarding-tile-icon" aria-hidden="true">⏳</span>
-            <span class="onboarding-tile-label">Time Machine</span>
-          </button>
-          <button type="button" class="onboarding-tile" id="project-nav-tile-console" data-nav-target="power-user-console" role="tab" aria-selected="false" aria-controls="power-user-console" hidden>
-            <span class="onboarding-tile-icon" aria-hidden="true">🖥️</span>
-            <span class="onboarding-tile-label">Power User Console</span>
-          </button>
-        </div>
-
-        <section id="power-user-console" class="card reveal" aria-labelledby="power-user-console-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🖥️</span>
-          <div class="section-head">
-            <h2 id="power-user-console-title">Power User Console — Run Any Command</h2>
-          </div>
-          <p id="console-help-text" class="lede-small">
-            Run any command directly against the active project folder, for anything the buttons above don't
-            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
-            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
-          </p>
-
-          <label class="field">
-            <span>Active Project Folder</span>
-            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
-          </label>
-
-          <label class="field">
-            <span>Command</span>
-            <div class="field-row">
-              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
-              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
-            </div>
-          </label>
-
-          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
-
-          <section class="status-box" aria-labelledby="console-history-title">
+        <div id="project-home">
+          <section id="merge-banner" class="card status-box" aria-labelledby="merge-banner-title" hidden>
             <div class="section-head branch-head">
-              <h3 id="console-history-title">Recent Commands</h3>
+              <h3 id="merge-banner-title">Merge in progress</h3>
+              <div class="section-actions">
+                <button id="merge-cancel" class="button button-ghost button-inline" type="button">Cancel Merge</button>
+                <button id="merge-finish" class="button button-primary button-inline" type="button">Finish Merge</button>
+              </div>
             </div>
-            <div id="console-history-output" class="panel panel-muted panel-compact">
-              No commands run yet this session.
-            </div>
+            <p id="merge-summary" class="lede-small"></p>
+            <ul id="merge-conflict-list" class="changed-files-list"></ul>
           </section>
-        </section>
 
-        <section id="save-checkpoint-panel" class="card save-hero reveal" aria-labelledby="project-actions-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">💾</span>
+          <div id="attention-rows" class="attention-rows" hidden></div>
+
+        <section id="save-checkpoint-panel" class="card save-hero reveal" aria-labelledby="project-actions-title">
           <div class="section-head">
             <h2 id="project-actions-title">Save a Checkpoint</h2>
           </div>
@@ -360,18 +316,6 @@
             </div>
             <p class="hint-inline">This project has nested datasets — pick which one Save applies to.</p>
           </label>
-
-          <section id="merge-banner" class="status-box" aria-labelledby="merge-banner-title" hidden>
-            <div class="section-head branch-head">
-              <h3 id="merge-banner-title">Merge in progress</h3>
-              <div class="section-actions">
-                <button id="merge-cancel" class="button button-ghost button-inline" type="button">Cancel Merge</button>
-                <button id="merge-finish" class="button button-primary button-inline" type="button">Finish Merge</button>
-              </div>
-            </div>
-            <p id="merge-summary" class="lede-small"></p>
-            <ul id="merge-conflict-list" class="changed-files-list"></ul>
-          </section>
 
           <section class="status-box" aria-labelledby="changed-files-title">
             <div class="section-head branch-head">
@@ -415,6 +359,18 @@
             Save Checkpoint
           </button>
 
+          <section class="status-box" aria-labelledby="recent-commits-title">
+            <div class="section-head branch-head">
+              <h3 id="recent-commits-title">Recent Commits</h3>
+              <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history <span aria-hidden="true">▸</span></button>
+            </div>
+            <div id="recent-commits-output" class="panel panel-muted panel-compact">
+              Recent saves appear here.
+            </div>
+          </section>
+
+          <details id="last-action-details" class="branch-details">
+            <summary>Details of last action</summary>
           <section class="status-box" aria-labelledby="command-output-title">
             <div class="section-head branch-head">
               <h3 id="command-output-title">Last Action Result</h3>
@@ -422,19 +378,75 @@
             <p class="lede-small">Shows what happened after Save, Get Data, Update, or Publish runs.</p>
             <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
           </section>
+          </details>
+        </section>
+        </div>
+        <div id="project-tools" hidden>
+          <button id="close-tools" class="button button-ghost button-inline" type="button"><span aria-hidden="true">←</span> Back to project</button>
+          <div class="tools-layout">
+          <div class="onboarding-picker project-nav-picker tools-nav" role="tablist" aria-orientation="vertical" aria-label="Project tools">
+            <button type="button" class="onboarding-tile" data-nav-target="files-panel" role="tab" aria-selected="false" aria-controls="files-panel">
+              <span class="onboarding-tile-icon" aria-hidden="true">🗂️</span>
+              <span class="onboarding-tile-label">Files</span>
+            </button>
+            <button type="button" class="onboarding-tile" id="project-nav-tile-sync" data-nav-target="sync-data-section" role="tab" aria-selected="false" aria-controls="sync-data-section" hidden>
+              <span class="onboarding-tile-icon" aria-hidden="true">🔄</span>
+              <span class="onboarding-tile-label">Sync</span>
+            </button>
+            <button type="button" class="onboarding-tile" data-nav-target="time-machine-zone" role="tab" aria-selected="false" aria-controls="time-machine-zone">
+              <span class="onboarding-tile-icon" aria-hidden="true">⏳</span>
+              <span class="onboarding-tile-label">History</span>
+            </button>
+            <button type="button" class="onboarding-tile" data-nav-target="project-health-panel" role="tab" aria-selected="false" aria-controls="project-health-panel">
+              <span class="onboarding-tile-icon" aria-hidden="true">🩺</span>
+              <span class="onboarding-tile-label">Health</span>
+            </button>
+            <button type="button" class="onboarding-tile" data-nav-target="project-setup-zone" role="tab" aria-selected="false" aria-controls="project-setup-zone">
+              <span class="onboarding-tile-icon" aria-hidden="true">🌿</span>
+              <span class="onboarding-tile-label">Branches &amp; Ignore</span>
+            </button>
+            <button type="button" class="onboarding-tile" id="project-nav-tile-console" data-nav-target="power-user-console" role="tab" aria-selected="false" aria-controls="power-user-console" hidden>
+              <span class="onboarding-tile-icon" aria-hidden="true">🖥️</span>
+              <span class="onboarding-tile-label">Console</span>
+            </button>
+          </div>
+            <div class="tools-panels">
+        <section id="power-user-console" class="card reveal" aria-labelledby="power-user-console-title" role="tabpanel" hidden>
+          <div class="section-head">
+            <h2 id="power-user-console-title">Power User Console — Run Any Command</h2>
+          </div>
+          <p id="console-help-text" class="lede-small">
+            Run any command directly against the active project folder, for anything the buttons above don't
+            cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your
+            system. There is no allowlist or safety net, so be as careful as you would be in a real terminal.
+          </p>
 
-          <section class="status-box" aria-labelledby="recent-commits-title">
-            <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent Commits</h3>
+          <label class="field">
+            <span>Active Project Folder</span>
+            <input id="console-project-path" type="text" readonly placeholder="Choose a project above first" />
+          </label>
+
+          <label class="field">
+            <span>Command</span>
+            <div class="field-row">
+              <input id="console-command" type="text" placeholder="git log -1 --oneline" />
+              <button id="console-run" class="button button-primary button-inline" type="button">Run</button>
             </div>
-            <div id="recent-commits-output" class="panel panel-muted panel-compact">
-              Recent saves appear here.
+          </label>
+
+          <pre id="console-output" class="panel panel-code">Run a command to see output here.</pre>
+
+          <section class="status-box" aria-labelledby="console-history-title">
+            <div class="section-head branch-head">
+              <h3 id="console-history-title">Recent Commands</h3>
+            </div>
+            <div id="console-history-output" class="panel panel-muted panel-compact">
+              No commands run yet this session.
             </div>
           </section>
         </section>
 
         <section id="sync-data-section" class="card reveal" aria-labelledby="sync-data-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🔄</span>
           <div class="section-head">
             <h2 id="sync-data-title">Sync</h2>
           </div>
@@ -487,7 +499,6 @@
         </section>
 
         <section id="files-panel" class="card reveal" aria-labelledby="files-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🗂️</span>
           <div class="section-head">
             <h2 id="files-title">Files</h2>
             <div class="section-actions">
@@ -507,7 +518,6 @@
         </section>
 
         <section id="project-health-panel" class="card reveal" aria-labelledby="project-health-panel-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">🩺</span>
           <div class="section-head">
             <h2 id="project-health-panel-title">Project Health Details</h2>
           </div>
@@ -530,9 +540,8 @@
         </section>
 
         <section id="project-setup-zone" class="card reveal" aria-labelledby="setup-zone-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">⚙️</span>
           <div class="section-head">
-            <h2 id="setup-zone-title">Project Setup — Branches &amp; Ignore Rules</h2>
+            <h2 id="setup-zone-title">Branches &amp; Ignore Rules</h2>
           </div>
           <section class="branch-box" aria-labelledby="branch-management-title">
             <div class="section-head branch-head">
@@ -622,9 +631,8 @@
         </section>
 
         <section id="time-machine-zone" class="card reveal" aria-labelledby="time-machine-title" role="tabpanel" hidden>
-          <span class="card-icon-badge" aria-hidden="true">⏳</span>
           <div class="section-head">
-            <h2 id="time-machine-title">Time Machine — Browse &amp; Restore Past Saves</h2>
+            <h2 id="time-machine-title">History — Browse &amp; Restore Past Saves</h2>
           </div>
           <p class="lede-small">
             Browse the full history of this project, restore individual files from any past save point,
@@ -681,6 +689,9 @@
             <div id="tm-action-output" class="panel panel-muted panel-compact" hidden></div>
           </section>
         </section>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
 

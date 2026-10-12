@@ -10,7 +10,7 @@ multi-branch collaboration.
 - Each tutorial has a scientific story, setup, tasks, one intentional failure,
   and clear completion criteria.
 - Keep the app in its default novice-friendly mode unless a step explicitly
-  asks for Project Setup branch actions.
+  asks for Tools → Branches & Ignore branch actions.
 
 ## Learning path
 

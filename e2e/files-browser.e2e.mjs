@@ -35,7 +35,7 @@ test.before(async () => {
   }
   app = await launchApp()
   await app.openProject(projectPath)
-  await app.page.click('[data-nav-target="files-panel"]')
+  await app.page.click('#open-tools')
 })
 
 test.after(async () => {

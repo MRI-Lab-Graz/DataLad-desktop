@@ -51,6 +51,13 @@ test.after(async () => {
   await app?.close()
 })
 
+test('Home shows Save and recent history with no navigation; Tools is closed', async () => {
+  const visible = (id) => app.page.evaluate((elementId) => document.getElementById(elementId).offsetParent !== null, id)
+  assert.equal(await visible('save-project'), true)
+  assert.equal(await visible('recent-commits-output'), true)
+  assert.equal(await visible('project-tools'), false)
+})
+
 test('Add a Remote creates an annex-ready folder copy and publishes the data to it', async () => {
   await app.page.evaluate((path) => {
     document.getElementById('add-remote').open = true
@@ -74,6 +81,7 @@ test('Free up space on the file row removes the local copy now that the backup h
   const dropButton = '[data-data-action="drop"][data-data-path="data.bin"]'
   await app.page.evaluate(() => {
     window.confirm = () => true
+    if (document.getElementById('project-tools').hidden) document.getElementById('open-tools').click() // Tools ▸ toggles
     document.querySelector('[data-nav-target="files-panel"]').click()
   })
   await app.page.waitForSelector(dropButton)
@@ -125,7 +133,10 @@ test('a version marked in git reaches the remote on Publish', async () => {
 })
 
 test('Time Machine marks the datalad run commit and shows its command', async () => {
-  await app.page.evaluate(() => document.querySelector('[data-nav-target="time-machine-zone"]').click())
+  await app.page.evaluate(() => {
+    if (document.getElementById('project-tools').hidden) document.getElementById('open-tools').click() // Tools ▸ toggles
+    document.querySelector('[data-nav-target="time-machine-zone"]').click()
+  })
   await app.page.waitForSelector('.run-chip', { timeout: 30_000 })
   await app.page.evaluate(() => document.querySelector('.tm-commit-item .run-chip').closest('.tm-commit-item').click())
   await app.page.waitForSelector('.tm-run-record pre', { timeout: 30_000 })

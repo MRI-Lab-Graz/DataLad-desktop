@@ -97,3 +97,27 @@ export function computeStatusLine(tree, health) {
 
   return { tone: 'good', label: '✅ Everything is saved and up to date.' }
 }
+
+const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`
+
+/**
+ * The one-click "needs attention" rows on the Home view: only things the
+ * researcher can fix with a single existing action. Empty when all is well.
+ *
+ * @param {{ annexSupported?: boolean, missingContentCount?: number|null, hasUpstream?: boolean, ahead?: number|null, behind?: number|null } | null | undefined} health
+ * @returns {Array<{ kind: 'missing'|'publish'|'update', count: number, label: string, action: string }>}
+ */
+export function computeAttentionRows(health) {
+  const rows = []
+  if (health?.annexSupported && health.missingContentCount > 0) {
+    const count = health.missingContentCount
+    rows.push({ kind: 'missing', count, label: `${plural(count, 'file', 'files')} not downloaded`, action: 'Get all' })
+  }
+  if (health?.hasUpstream && health.ahead > 0) {
+    rows.push({ kind: 'publish', count: health.ahead, label: `${plural(health.ahead, 'save', 'saves')} not published`, action: 'Publish' })
+  }
+  if (health?.hasUpstream && health.behind > 0) {
+    rows.push({ kind: 'update', count: health.behind, label: `${plural(health.behind, 'update', 'updates')} available`, action: 'Update' })
+  }
+  return rows
+}
