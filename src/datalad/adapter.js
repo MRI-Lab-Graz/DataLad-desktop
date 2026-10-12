@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, open, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { basename, isAbsolute, join, sep } from 'node:path'
 import { formatEnvironmentDiagnostics } from './diagnostics.js'
 import { mapCommandError, MERGE_PREFLIGHT_ERRORS } from './errors.js'
@@ -38,6 +38,23 @@ export const CURATED_COMMANDS = new Set([
 const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
 const MAX_SUBDATASET_DEPTH = 8 // symlinked or hostile nesting cannot recurse forever
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i
+export const DIFF_DEFAULT_LINES = 500
+export const DIFF_MAX_LINES = 20_000
+// A diff must never run a program named by repository content (diff.<driver>.command, textconv, GIT_EXTERNAL_DIFF).
+export const DIFF_SAFE_FLAGS = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-renames']
+const UNTRACKED_READ_LIMIT = 1024 * 1024 // an untracked file is shown from its first MiB at most
+const ANNEX_KEY_SIZE = /-s(\d+)--/
+
+function isSafeRelativePath(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.includes('\0') &&
+    !isAbsolute(value) &&
+    !/^[A-Za-z]:/.test(value) &&
+    !value.split(/[\\/]/).includes('..')
+  )
+}
 // Version (tag) and remote names typed by the user: plain ASCII, no ref syntax git would interpret.
 export const SAFE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
 function isSafeName(name) {
@@ -964,6 +981,136 @@ export class DataLadAdapter {
     return {
       projectPath,
       commits
+    }
+  }
+
+  async getFileDiff(projectPath, request = {}) {
+    // Hostile input is refused before any git process starts.
+    const { path, against } = request
+    if (!isSafeRelativePath(path)) {
+      throw new Error(`Invalid file path: ${String(path)}`)
+    }
+    if (against !== 'HEAD' && !(typeof against === 'string' && COMMIT_HASH_PATTERN.test(against))) {
+      throw new Error(`Invalid commit hash format: ${String(against)}`)
+    }
+    await this.#ensureGitProject(projectPath)
+    const requested = Number.parseInt(request.maxLines, 10)
+    const maxLines = Math.min(Math.max(Number.isFinite(requested) && requested > 0 ? requested : DIFF_DEFAULT_LINES, 1), DIFF_MAX_LINES)
+
+    if (against === 'HEAD') {
+      const others = await this.runner.run('git', ['-C', projectPath, 'ls-files', '--others', '--exclude-standard', '-z', '--', path])
+      if (!others.failed && (others.stdout ?? '').length > 0) {
+        return this.#diffUntrackedFile(projectPath, path, maxLines)
+      }
+    }
+
+    const result = await this.runner.run('git', ['-C', projectPath, 'diff', against, ...DIFF_SAFE_FLAGS, '-U3', '--', path])
+    if (result.failed && !(result.stdout ?? '')) {
+      if (against === 'HEAD' && /bad revision|unknown revision|ambiguous argument/i.test(result.stderr ?? '')) {
+        throw new Error('There is nothing to compare with yet: this project has no saves yet.')
+      }
+      throw new Error(`Could not compare ${path}: ${(result.stderr ?? '').trim() || 'unknown error'}`)
+    }
+    return this.#shapeDiff(projectPath, against, path, result.stdout ?? '', maxLines)
+  }
+
+  async #shapeDiff(projectPath, against, path, output, maxLines) {
+    if (output.trim() === '') {
+      return { kind: 'unchanged', status: 'modified', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
+    }
+    const lines = output.split(/\r?\n/)
+    const firstHunk = lines.findIndex((line) => line.startsWith('@@'))
+    const header = (firstHunk === -1 ? lines : lines.slice(0, firstHunk)).join('\n')
+    const status = /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
+    const body = firstHunk === -1 ? [] : lines.slice(firstHunk)
+    while (body.length > 0 && body.at(-1) === '') {
+      body.pop()
+    }
+
+    // A locked annexed file is a symlink (mode 120000) whose target holds the key, and the key holds the size.
+    if (/\b120000\b/.test(header)) {
+      const sizeOf = (marker) => {
+        const line = body.find((candidate) => candidate.startsWith(marker))
+        const match = line ? ANNEX_KEY_SIZE.exec(line) : null
+        return match ? Number(match[1]) : null
+      }
+      return { kind: 'binary', status, patch: '', totalLines: 0, truncated: false, oldSize: sizeOf('-'), newSize: sizeOf('+') }
+    }
+
+    if (/^Binary files .* differ$/m.test(header) || /^GIT binary patch$/m.test(header) || firstHunk === -1) {
+      return {
+        kind: 'binary',
+        status,
+        patch: '',
+        totalLines: 0,
+        truncated: false,
+        oldSize: status === 'added' ? null : await this.#blobSize(projectPath, against, path),
+        newSize: status === 'deleted' ? null : await this.#worktreeSize(projectPath, path)
+      }
+    }
+
+    return {
+      kind: 'text',
+      status,
+      patch: body.slice(0, maxLines).join('\n'),
+      totalLines: body.length,
+      truncated: body.length > maxLines,
+      oldSize: null,
+      newSize: null
+    }
+  }
+
+  async #blobSize(projectPath, rev, path) {
+    const result = await this.runner.run('git', ['-C', projectPath, 'cat-file', '-s', `${rev}:${path}`])
+    const size = Number.parseInt((result.stdout ?? '').trim(), 10)
+    return result.failed || !Number.isFinite(size) ? null : size
+  }
+
+  async #worktreeSize(projectPath, path) {
+    const info = await lstat(join(projectPath, path)).catch(() => null)
+    return info?.isFile() ? info.size : null
+  }
+
+  // An untracked file has no saved version: show its start as all-added lines. Never reads outside the
+  // project (a symlink, or a path through a symlinked folder, is reported as a data file instead).
+  async #diffUntrackedFile(projectPath, path, maxLines) {
+    const data = (size) => ({ kind: 'binary', status: 'added', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: size })
+    const full = join(projectPath, path)
+    const info = await lstat(full).catch(() => null)
+    if (!info) {
+      return { kind: 'unchanged', status: 'added', patch: '', totalLines: 0, truncated: false, oldSize: null, newSize: null }
+    }
+    const [realRoot, realFile] = await Promise.all([realpath(projectPath).catch(() => null), realpath(full).catch(() => null)])
+    if (!info.isFile() || !realRoot || !realFile || !realFile.startsWith(realRoot + sep)) {
+      return data(info.isFile() ? info.size : null)
+    }
+
+    const handle = await open(realFile, 'r')
+    let bytes
+    try {
+      const buffer = Buffer.alloc(Math.min(info.size, UNTRACKED_READ_LIMIT))
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      bytes = buffer.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+    if (bytes.subarray(0, 8000).includes(0)) {
+      return data(info.size)
+    }
+
+    const fileLines = bytes.toString('utf8').split(/\r?\n/)
+    if (fileLines.at(-1) === '') {
+      fileLines.pop()
+    }
+    const body = [`@@ -0,0 +1,${fileLines.length} @@`, ...fileLines.map((line) => `+${line}`)]
+    return {
+      kind: 'text',
+      status: 'added',
+      patch: body.slice(0, maxLines).join('\n'),
+      totalLines: body.length,
+      truncated: body.length > maxLines || info.size > UNTRACKED_READ_LIMIT,
+      oldSize: null,
+      newSize: null
     }
   }
 
