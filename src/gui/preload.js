@@ -29,8 +29,6 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
     ipcRenderer.on('command:progress', listener)
     return () => ipcRenderer.removeListener('command:progress', listener)
   },
-  runConsoleCommand: (payload) => ipcRenderer.invoke('console:runCommand', payload),
-  setConsoleEnabled: (enabled) => ipcRenderer.invoke('console:setEnabled', enabled),
   getGitIdentity: () => ipcRenderer.invoke('identity:get'),
   setGitIdentity: (identity) => ipcRenderer.invoke('identity:set', identity),
   inspectPrism: (projectPath) => ipcRenderer.invoke('prism:inspect', projectPath),

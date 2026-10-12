@@ -3,8 +3,6 @@ import { access, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
-import { buildConsoleCommand } from '../datalad/console-command.js'
-import { createConsoleConsent } from './console-consent.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, inspectProject } from '../datalad/prism-gate.js'
@@ -32,10 +30,6 @@ const uvBaseDir = () => (app.isPackaged ? process.resourcesPath : join(__dirname
 const managedEnvDir = () => join(app.getPath('userData'), 'env')
 
 let activeProjectWatcher = null
-// The console executes arbitrary commands, so the renderer's power-user toggle
-// alone must not be the only gate — a compromised renderer could skip it. The
-// main process tracks the toggle itself and refuses console runs while off.
-let consoleEnabled = false
 const policy = loadPolicy({
   files: policyFiles({ resourcesDir: app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build') })
 })
@@ -132,8 +126,6 @@ async function confirmNative(event, { title, message, detail, confirmLabel }) {
   return response === 1
 }
 
-let consentStore
-const consoleConsent = () => (consentStore ??= createConsoleConsent({ file: join(app.getPath('userData'), 'console-consent.json') }))
 
 // A new project is created or cloned at a path the page typed. Outside every folder the user has
 // opened, that could be anywhere (home, a login-items folder), so the main process asks.
@@ -518,35 +510,6 @@ handle('watch:setActiveProject', async (event, projectPath = null) => {
     activeProjectWatcher = watcher
   }
   return result
-})
-
-handle('console:setEnabled', async (event, enabled) => {
-  consoleEnabled =
-    !policy.consoleDisabled &&
-    (await consoleConsent().allow(Boolean(enabled), () =>
-      confirmNative(event, {
-        title: 'Turn on the command console?',
-        message: 'The console runs any command you type, with your permissions.',
-        detail: 'Only turn it on if you need it. Never paste commands from someone you do not trust.',
-        confirmLabel: 'Turn on the console'
-      })
-    ))
-  return consoleEnabled
-})
-
-handle('console:runCommand', async (event, payload = {}) => {
-  if (policy.consoleDisabled) {
-    throw new Error('The command console has been disabled by your administrator.')
-  }
-  if (!consoleEnabled) {
-    throw new Error('The command console is disabled. Enable power-user mode first.')
-  }
-  requireAuthorizedRoot(payload.projectPath)
-
-  const commandSpec = buildConsoleCommand(payload)
-  return runWithHandle(event, payload.runId, (runOptions) =>
-    consoleRunner.run(commandSpec.command, commandSpec.args, { ...commandSpec.options, ...runOptions })
-  )
 })
 
 // Global git config only (user.name/user.email); setGitIdentity validates its input.

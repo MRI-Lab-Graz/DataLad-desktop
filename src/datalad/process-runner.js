@@ -101,8 +101,8 @@ export class ProcessRunner {
     const { signal, timeoutMs, killGraceMs = DEFAULT_KILL_GRACE_MS, onOutput, onData, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES } = options
 
     // Bare names are looked up on PATH ourselves: Windows would otherwise try the
-    // (dataset-controlled) cwd first. A shell line is the console's business.
-    const bare = !options.shell && !/[\\/]/.test(command)
+    // (dataset-controlled) cwd first.
+    const bare = !/[\\/]/.test(command)
     const exe = bare ? this.#resolve(command) : null
     const notFound = bare && !exe
 
@@ -170,7 +170,7 @@ export class ProcessRunner {
         cwd: options.cwd,
         env: childEnv(options.env),
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: options.shell ?? false,
+        shell: false,
         // POSIX: lead our own process group so cancel/timeout can signal the whole tree.
         detached: process.platform !== 'win32'
       })

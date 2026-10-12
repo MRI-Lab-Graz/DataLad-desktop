@@ -42,7 +42,7 @@ clear provenance, and a controlled path for urgent corrections.
    - If the same file changed on both branches in either merge, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 9. On the release branch, open **Tools → History** and use **Mark As Version** on the submitted state (for example `paper-v1`).
 
-   ![Time Machine: the save history, newest first](../_static/screenshots/06-time-machine.png)
+   ![History: the save history, newest first](../_static/screenshots/06-time-machine.png)
 
 10. Publish updated branches.
 
@@ -56,7 +56,7 @@ clear provenance, and a controlled path for urgent corrections.
 
 - Release branch represents a defensible paper snapshot.
 - Hotfix path is traceable and merged back without divergence.
-- Team can explain exactly which checkpoint underlies submitted results.
+- Team can explain exactly which save underlies submitted results.
 
 ## Debrief
 

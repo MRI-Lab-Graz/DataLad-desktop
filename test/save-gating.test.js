@@ -5,7 +5,7 @@ import { computeSaveGating } from '../src/gui/renderer/save-gating.js'
 test('stays enabled without a message, but warns one will be requested', () => {
   const gating = computeSaveGating({ hasMessage: false, hasSelection: false, hasConflicts: false, hasChanges: false })
   assert.equal(gating.disabled, false)
-  assert.equal(gating.guidance.text, 'Add a checkpoint message, or Save will ask you for one.')
+  assert.equal(gating.guidance.text, 'Add a message, or Save will ask you for one.')
   assert.equal(gating.guidance.warning, true)
 })
 
@@ -47,17 +47,6 @@ test('enabled with a message even when there are no local changes (manual/empty 
 test('conflicts take priority over the missing-selection guidance', () => {
   const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: true, hasChanges: true })
   assert.match(gating.guidance.text, /Resolve conflicts/)
-})
-
-test('messageLabel lets callers swap in git terminology for power users', () => {
-  const gating = computeSaveGating({
-    hasMessage: false,
-    hasSelection: false,
-    hasConflicts: false,
-    hasChanges: false,
-    messageLabel: 'commit message'
-  })
-  assert.equal(gating.guidance.text, 'Add a commit message, or Save will ask you for one.')
 })
 
 test('missing git identity shows a warning hint but keeps Save clickable', () => {
@@ -103,4 +92,9 @@ test('a BIDS project saves everything after a check, with BIDS wording and no se
   const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true, prismMode: 'bids' })
   assert.equal(gating.disabled, false)
   assert.match(gating.guidance.text, /BIDS project: your data is checked before every save/)
+})
+
+test('changes without a selection ask to select changed files (there are no manual paths any more)', () => {
+  const gating = computeSaveGating({ hasMessage: true, hasSelection: false, hasConflicts: false, hasChanges: true })
+  assert.equal(gating.guidance.text, 'Select changed files before saving.')
 })

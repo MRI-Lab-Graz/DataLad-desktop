@@ -81,7 +81,7 @@ export function computeStatusLine(tree, health) {
     const changed = tree.totalChanged
     return {
       tone: 'urgent',
-      label: `⚠️ ${changed} unsaved change${changed === 1 ? '' : 's'} — save a checkpoint when ready.`
+      label: `⚠️ ${changed} unsaved change${changed === 1 ? '' : 's'} — save when ready.`
     }
   }
 

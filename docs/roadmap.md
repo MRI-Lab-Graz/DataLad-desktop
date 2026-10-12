@@ -41,7 +41,7 @@ The near-term roadmap is a single track: stabilize and secure this standalone ap
 - Eliminate stale async responses overwriting the current project view.
 - Add automatic working-tree refresh via filesystem watching, scoped to the active project root, debounced, ignoring `.git`/`.datalad`/`.git/annex` internals and OS noise files, and paused while a command is in flight. This is the proactive counterpart to eliminating stale async responses: instead of only guarding against races, detect real disk changes and refresh without requiring a manual click. No tray/background mode and no scheduled/automatic saves — the app stays a foreground, user-triggered Save tool, just with a live status view.
 - Improve subdataset save semantics so parent and child dataset behavior is unambiguous.
-- Cancellation and a live activity line (latest output line) for long-running actions and the console are implemented (see `docs/superpowers/specs/2026-09-30-command-cancellation-design.md`). Get Data and Publish also show "N of M files" (DataLad prints no progress bar when its output is not a terminal, but it does print one result line per file). Byte-level progress inside one large file remains open: it would mean replacing `datalad get` with `git annex get --json-progress` and losing subdataset handling.
+- Cancellation and a live activity line (latest output line) for long-running actions are implemented (see `docs/superpowers/specs/2026-09-30-command-cancellation-design.md`). Get Data and Publish also show "N of M files" (DataLad prints no progress bar when its output is not a terminal, but it does print one result line per file). Byte-level progress inside one large file remains open: it would mean replacing `datalad get` with `git annex get --json-progress` and losing subdataset handling.
 
 ### Phase 4: Windows-first hardening
 
@@ -82,11 +82,7 @@ Follow-up from this decision (tracked here, not left implicit):
 - Treating filesystem browsing as the primary product model.
 
 These non-goals are about the curated novice-facing action set (Get/Save/Update/Publish), not about
-power-user access in general. An opt-in command console (cwd locked to the project root) is in scope as
-the power-user escape hatch for anything the GUI doesn't cover — it does not grow the curated button set
-or change the default novice workflow. It intentionally has no command allowlist: it runs whatever the
-power user types, exactly as a real terminal would. The execution model is platform-conditional rather
-than identical everywhere: on macOS/Linux it runs as a single process with no shell (shell metacharacters
-are literal text); on Windows it runs through `cmd.exe` like a normal Windows terminal, since Windows
-cannot otherwise launch `.cmd`/`.bat`-shimmed tools (`npm`, `npx`, `yarn`, ...) — meaning shell operators
-(`&`, `|`, `%VAR%`) are live on Windows but not on macOS/Linux for this one feature.
+power-user access in general. Power users have the terminal; whatever they record there, including
+`datalad run` commands, shows up in Tools → History. The command console was removed (it duplicated the
+terminal and was the largest security surface). A small "Run & record" dialog (command, inputs, outputs,
+message) is planned as the one power feature that fits the product.

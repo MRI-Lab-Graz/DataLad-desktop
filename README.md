@@ -15,14 +15,14 @@ Git internals just to keep their project's history safe.
 
 DataLad Desktop puts a simple, visual workflow on top of DataLad (and plain
 Git projects too): open a project, see what changed, write a short note, and
-save a checkpoint. Need data that isn't downloaded yet? One click. Working
+save. Need data that isn't downloaded yet? One click. Working
 across nested sub-projects? The app shows you exactly what changed and where.
 
 ## Why use it?
 
 - **See your changes at a glance** — a working-tree view of what's new,
   modified, or missing, including nested datasets, no Git commands needed.
-- **Save checkpoints with confidence** — pick files, write a message, save.
+- **Save with confidence** — pick files, write a message, save.
   The app warns you before anything risky (like saving over a conflict).
 - **Get data on demand** — large files tracked by git-annex don't have to
   live on your disk until you need them; fetch with one click.

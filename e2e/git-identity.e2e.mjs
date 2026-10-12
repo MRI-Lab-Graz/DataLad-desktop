@@ -75,7 +75,7 @@ test('rejects a bad email, then saving the dialog writes the global config and u
   const before = commitCount()
   await clickSave()
   await app.page.waitForFunction(
-    () => !document.getElementById('save-project').disabled && document.getElementById('save-project').textContent.trim() === 'Save Checkpoint',
+    () => !document.getElementById('save-project').disabled && document.getElementById('save-project').textContent.trim() === 'Save',
     undefined,
     { timeout: 30_000 }
   )

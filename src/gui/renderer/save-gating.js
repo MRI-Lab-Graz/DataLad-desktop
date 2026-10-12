@@ -12,11 +12,9 @@
  * @param {{
  *   hasIdentity?: boolean (git name+email set; defaults to true),
  *   hasMessage: boolean, hasSelection: boolean, hasConflicts: boolean, hasChanges: boolean,
- *   messageLabel?: string,
  *   mergeInProgress?: boolean (a merge is being resolved; defaults to false),
  *   prismMode?: 'gated' | 'conversion' | 'bids' (PRISM or BIDS project: everything is validated and saved together)
- * }} input messageLabel lets callers swap in git terminology ("commit message") for power users
- *   while plain-language users ("checkpoint message") get the default.
+ * }} input
  * @returns {{ disabled: boolean, guidance: { text: string, warning: boolean } }}
  */
 export function computeSaveGating({
@@ -25,7 +23,6 @@ export function computeSaveGating({
   hasConflicts,
   hasChanges,
   hasIdentity = true,
-  messageLabel = 'checkpoint message',
   mergeInProgress = false,
   prismMode
 }) {
@@ -48,7 +45,7 @@ export function computeSaveGating({
   if (hasChanges && !selected) {
     return {
       disabled,
-      guidance: { text: 'Select changed files or add manual paths before saving.', warning: true }
+      guidance: { text: 'Select changed files before saving.', warning: true }
     }
   }
 
@@ -62,7 +59,7 @@ export function computeSaveGating({
   if (!hasMessage) {
     return {
       disabled,
-      guidance: { text: `Add a ${messageLabel}, or Save will ask you for one.`, warning: true }
+      guidance: { text: 'Add a message, or Save will ask you for one.', warning: true }
     }
   }
 

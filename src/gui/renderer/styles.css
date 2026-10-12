@@ -1975,3 +1975,40 @@ select:disabled {
   border-radius: 12px;
   background: var(--teal-soft);
 }
+
+/* With a project open the header shrinks to one row so the work gets the screen. */
+.hero-slim {
+  min-height: 0;
+  padding-right: 18px;
+}
+
+.hero-slim h1,
+.hero-slim .lede {
+  display: none;
+}
+
+.hero-slim .hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+.hero-slim .hero-meta-stack {
+  position: static;
+  align-items: center;
+}
+
+.hero-slim .hero-logo {
+  width: 36px;
+  height: 36px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.continue-button {
+  width: 100%;
+  padding: 18px 20px;
+  font-size: 1.15rem;
+  margin-bottom: 12px;
+}

@@ -1,9 +1,9 @@
-# Tutorial 1: First checkpoint in a small project
+# Tutorial 1: First save in a small project
 
 ## Scenario
 
 You are a single researcher continuing from Tutorial 00. You now inspect local
-changes in the newly created project and save a clean first checkpoint.
+changes in the newly created project and make a clean first save.
 
 **Level:** Beginner · **Time:** 20 to 30 minutes
 
@@ -13,7 +13,7 @@ changes in the newly created project and save a clean first checkpoint.
 - Read working-tree status
 - Select files for Save
 - Write clear Save messages
-- Verify a successful checkpoint
+- Verify a successful save
 
 ## Setup
 
@@ -40,7 +40,7 @@ changes in the newly created project and save a clean first checkpoint.
 6. Write a Save message in this format:
    - `pilot: update participant table and project summary`
 
-   ![The Save a Checkpoint panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
+   ![The Save panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
 
 7. Execute Save.
 8. Re-check status to confirm a clean state for selected files.

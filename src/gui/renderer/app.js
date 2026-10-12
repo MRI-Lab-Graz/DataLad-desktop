@@ -35,6 +35,7 @@ import {
 } from './project-health-chips.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
+import { suggestMessage } from './message-suggestion.js'
 
 const api = window.dataladDesktop
 
@@ -75,7 +76,6 @@ const state = {
   datasets: [],
   datasetsRootPath: null,
   selectedIgnoreScopePaths: new Set(),
-  consoleHistory: [],
   watchRefreshPending: false,
   timeMachineCommits: [],
   timeMachineLimit: 50,
@@ -91,11 +91,9 @@ const state = {
 const BIDS_PROCEDURE = 'text2git'
 
 const MAX_RECENT_PROJECTS = 8
-const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
 const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
 const RECENT_PROJECT_TITLES_STORAGE_KEY = 'dataladDesktop.recentProjectTitles'
-const POWER_USER_MODE_STORAGE_KEY = 'dataladDesktop.powerUserMode'
 const BIDS_AUTO_NEST_STORAGE_KEY = 'dataladDesktop.bidsAutoNest'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
@@ -132,6 +130,11 @@ const elements = {
   onboardingTiles: Array.from(document.querySelectorAll('#onboarding-group .onboarding-tile')),
   projectStrip: document.getElementById('project-strip'),
   projectNavGroup: document.getElementById('project-nav-group'),
+  appHeader: document.getElementById('app-header'),
+  continueProjectButton: document.getElementById('continue-project'),
+  continueProjectName: document.getElementById('continue-project-name'),
+  continueProjectError: document.getElementById('continue-project-error'),
+  useSuggestionButton: document.getElementById('use-suggestion'),
   projectHome: document.getElementById('project-home'),
   projectTools: document.getElementById('project-tools'),
   openToolsButton: document.getElementById('open-tools'),
@@ -141,7 +144,6 @@ const elements = {
   lastActionDetails: document.getElementById('last-action-details'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
-  projectNavTileConsole: document.getElementById('project-nav-tile-console'),
   projectHealthOutput: document.getElementById('project-health-output'),
   projectStatusLine: document.getElementById('project-status-line'),
   lastActionState: document.getElementById('last-action-state'),
@@ -199,7 +201,6 @@ const elements = {
   messageFieldLabel: document.getElementById('message-field-label'),
   projectActionsTitle: document.getElementById('project-actions-title'),
   saveGuidance: document.getElementById('save-guidance'),
-  paths: document.getElementById('paths'),
   checkEnvButton: document.getElementById('check-env'),
   identityOverlay: document.getElementById('identity-overlay'),
   identityForm: document.getElementById('identity-form'),
@@ -232,15 +233,8 @@ const elements = {
   addRemoteBrowse: document.getElementById('add-remote-browse'),
   addRemoteName: document.getElementById('add-remote-name'),
   addRemoteConnect: document.getElementById('add-remote-connect'),
-  powerUserModeToggle: document.getElementById('power-user-mode-toggle'),
   bidsAutoNestToggle: document.getElementById('bids-auto-nest-toggle'),
-  consoleHelpText: document.getElementById('console-help-text'),
-  consoleProjectPath: document.getElementById('console-project-path'),
-  consoleCommand: document.getElementById('console-command'),
-  consoleRunButton: document.getElementById('console-run'),
-  consoleOutput: document.getElementById('console-output'),
   runningCommands: document.getElementById('running-commands'),
-  consoleHistoryOutput: document.getElementById('console-history-output'),
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
   timeMachineDetail: document.getElementById('tm-detail'),
@@ -264,7 +258,6 @@ updateSaveButtonState()
 api.getAppVersion().then((version) => {
   document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = version })
 })
-initPowerUserConsole()
 initBidsAutoNestToggle()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
@@ -321,6 +314,20 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
     return
   }
 
+  await openRecentProject(projectPath)
+})
+
+elements.continueProjectButton.addEventListener('click', async () => {
+  elements.continueProjectError.hidden = true
+  await openRecentProject(state.recentProjects[0])
+  // The status pill lives in the (still hidden) project strip, so a failure must be said here.
+  if (elements.projectStrip.hidden) {
+    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists, for example that the drive is connected.`
+    elements.continueProjectError.hidden = false
+  }
+})
+
+async function openRecentProject(projectPath) {
   setLastActionState('Switching to recent project...', 'idle')
   elements.projectPath.value = projectPath
   elements.commandProjectPath.value = projectPath
@@ -329,7 +336,7 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
   // Setting the header first fires refreshLastCommitMeta/refreshProjectHealth
   // against an as-yet-unauthorized root and races the real authorization.
   await detectProjectType(projectPath)
-})
+}
 
 elements.switchProjectButton.addEventListener('click', () => {
   setOnboardingExpanded(true)
@@ -402,10 +409,6 @@ elements.changedFilesOutput.addEventListener('input', (event) => {
 })
 
 elements.message.addEventListener('input', () => {
-  updateSaveButtonState()
-})
-
-elements.paths.addEventListener('input', () => {
   updateSaveButtonState()
 })
 
@@ -937,9 +940,8 @@ elements.saveProjectButton.addEventListener('click', async () => {
   const message = elements.message.value.trim()
 
   if (!message) {
-    const messageLabel = getMessageTermLabel()
-    elements.commandOutput.textContent = `Add a ${messageLabel} before running Save.`
-    setLastActionState(`Add a ${messageLabel} first.`, 'error')
+    elements.commandOutput.textContent = 'Add a message before running Save.'
+    setLastActionState('Add a message first.', 'error')
     updateSaveButtonState()
     return
   }
@@ -964,7 +966,7 @@ elements.saveProjectButton.addEventListener('click', async () => {
     const prismSavesEverything = Boolean(state.rootProjectPrism) && !state.rootProjectPrism.introducesPrism
     if (latestStatus.totalChanged > 0 && selectedPaths.length === 0 && !prismSavesEverything) {
       elements.commandOutput.textContent =
-        'Select at least one changed file or provide manual paths before saving.'
+        'Select at least one changed file before saving.'
       setLastActionState('Select files to save first.', 'error')
       return
     }
@@ -2431,7 +2433,7 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
     }
 
     state.recentCommits = []
-    renderRecentCommitList(`Could not load recent commits: ${String(error.message)}`)
+    renderRecentCommitList(`Could not load recent saves: ${String(error.message)}`)
     if (includeCommandOutputOnFailure) {
       elements.commandOutput.textContent = String(error.message)
     }
@@ -2659,16 +2661,6 @@ function renderCurrentFileBrowser() {
 
   const query = elements.filesSearchInput.value.trim().toLowerCase()
   elements.filesOutput.innerHTML = renderFileListing(state.fileListing, query)
-}
-
-function parsePaths(text) {
-  if (!text.trim()) {
-    return []
-  }
-  return text
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
 }
 
 function wireFolderPicker(button, input, options) {
@@ -2916,7 +2908,7 @@ function renderRecentCommitList(overrideMessage = null) {
   }
 
   if (!state.recentCommits.length) {
-    elements.recentCommitsOutput.textContent = 'No commits yet in this project.'
+    elements.recentCommitsOutput.textContent = 'No saves yet in this project.'
     return
   }
 
@@ -2944,12 +2936,7 @@ function renderRecentCommitList(overrideMessage = null) {
 }
 
 function gatherSavePaths() {
-  const selectedPaths = [...state.selectedChangedPaths]
-  if (selectedPaths.length > 0) {
-    return selectedPaths
-  }
-
-  return parsePaths(elements.paths.value)
+  return [...state.selectedChangedPaths]
 }
 
 function updateSaveButtonState() {
@@ -2962,7 +2949,6 @@ function updateSaveButtonState() {
     mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
-    messageLabel: getMessageTermLabel(),
     prismMode: state.rootProjectPrism ? (state.rootProjectPrism.kind === 'bids' ? 'bids' : state.rootProjectPrism.introducesPrism ? 'conversion' : 'gated') : undefined
   })
 
@@ -2970,35 +2956,19 @@ function updateSaveButtonState() {
   elements.saveProjectButton.hidden = Boolean(snapshot?.mergeInProgress)
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
+
+  const selectedFiles = (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
+  const suggestion = suggestMessage(selectedFiles)
+  elements.message.placeholder = suggestion || 'Describe what you changed'
+  elements.useSuggestionButton.hidden = !suggestion || Boolean(elements.message.value.trim())
+  elements.useSuggestionButton.dataset.suggestion = suggestion
 }
 
-// Plain-language "checkpoint" terms are the default so non-git users aren't
-// confronted with jargon, but Power User Mode swaps in the git vocabulary
-// (commit) those users already know instead.
-function getMessageTermLabel() {
-  return elements.powerUserModeToggle.checked ? 'commit message' : 'checkpoint message'
-}
-
-function applyWorkTerminology() {
-  const powerUser = elements.powerUserModeToggle.checked
-
-  elements.projectActionsTitle.textContent = powerUser ? 'Commit Changes' : 'Save a Checkpoint'
-  elements.messageFieldLabel.textContent = powerUser ? 'Commit Message' : 'Checkpoint Message'
-  setIdleButtonLabel(elements.saveProjectButton, powerUser ? 'Commit' : 'Save Checkpoint')
-  updateSaveButtonState()
-}
-
-// setButtonBusy captures the current textContent as the idle label the first
-// time it runs, so terminology changes need to go through the same field
-// (dataset.idleLabel) while a save is in flight, rather than clobbering it.
-function setIdleButtonLabel(button, label) {
-  if (button.classList.contains('is-busy')) {
-    button.dataset.idleLabel = label
-    return
-  }
-
-  button.textContent = label
-}
+elements.useSuggestionButton.addEventListener('click', () => {
+  elements.message.value = elements.useSuggestionButton.dataset.suggestion ?? ''
+  elements.message.dispatchEvent(new Event('input'))
+  elements.message.focus()
+})
 
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)
@@ -3072,7 +3042,7 @@ async function buildSaveSummary(projectPath, savedPaths) {
 
     const fileSummary = savedPaths.length > 0 ? `${savedPaths.length} selected file(s)` : 'full dataset scope'
     const hashSummary = commitMeta.commitHash ? ` ${commitMeta.commitHash}` : ''
-    return `Saved ${fileSummary}. Latest commit:${hashSummary}.`
+    return `Saved ${fileSummary}. Latest save:${hashSummary}.`
   } catch {
     return null
   }
@@ -3460,11 +3430,11 @@ function setOnboardingExpanded(expanded) {
 // or switched we land back on Home.
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
+  elements.appHeader.classList.toggle('hero-slim', visible)
   elements.projectNavGroup.hidden = !visible
   if (!visible) {
     clearTimeMachine()
   }
-  updatePowerUserConsoleVisibility()
 }
 
 async function refreshProjectHealth(projectPath) {
@@ -3723,7 +3693,7 @@ async function refreshLastCommitMeta(projectPath) {
   state.commitMetaRequestToken = nextToken
 
   if (!projectPath) {
-    setLastCommitMeta('Select a project to see last commit status.', 'idle')
+    setLastCommitMeta('Select a project to see the last save.', 'idle')
     return
   }
 
@@ -3735,7 +3705,7 @@ async function refreshLastCommitMeta(projectPath) {
 
     if (!lastCommit?.hasCommit) {
       if (lastCommit?.reason === 'no-commits') {
-        setLastCommitMeta('No commits yet in this project.', 'alert')
+        setLastCommitMeta('No saves yet in this project.', 'alert')
         return
       }
 
@@ -3744,7 +3714,7 @@ async function refreshLastCommitMeta(projectPath) {
         return
       }
 
-      setLastCommitMeta('Last commit status unavailable.', 'idle')
+      setLastCommitMeta('Last save status unavailable.', 'idle')
       return
     }
 
@@ -3754,13 +3724,13 @@ async function refreshLastCommitMeta(projectPath) {
     const commitMessage = (lastCommit.message ?? '').trim()
     const commitSubject = (lastCommit.subject ?? '').trim()
     const tooltipSource = commitMessage || commitSubject
-    const tooltip = tooltipSource ? `Last commit message:\n${tooltipSource}` : ''
-    setLastCommitMeta(`Last commit ${relativeAge}${suffix}.`, 'reminder', tooltip)
+    const tooltip = tooltipSource ? `Last save message:\n${tooltipSource}` : ''
+    setLastCommitMeta(`Last saved ${relativeAge}${suffix}.`, 'reminder', tooltip)
   } catch {
     if (state.commitMetaRequestToken !== nextToken) {
       return
     }
-    setLastCommitMeta('Last commit status unavailable.', 'idle')
+    setLastCommitMeta('Last save status unavailable.', 'idle')
   }
 }
 
@@ -3803,7 +3773,7 @@ function buildQuickSaveMessage() {
     String(now.getDate()).padStart(2, '0')
   ].join('-')
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  return `checkpoint ${date} ${time}`
+  return `save ${date} ${time}`
 }
 
 function loadRecentProjects() {
@@ -3925,12 +3895,16 @@ function rememberRecentProject(projectPath) {
 function renderRecentProjects() {
   const currentPath = elements.projectPath.value.trim()
 
+  elements.continueProjectButton.hidden = state.recentProjects.length === 0
   if (state.recentProjects.length === 0) {
     elements.recentProjectsOutput.innerHTML =
       '<p class="hint-inline">No recent projects yet — opened projects will appear here.</p>'
     elements.clearRecentProjectsButton.disabled = true
     return
   }
+
+  const latestPath = state.recentProjects[0]
+  elements.continueProjectName.textContent = projectTitleForPath(latestPath) || projectNameFromPath(latestPath)
 
   const slots = state.recentProjects.map((projectPath) => {
     const displayName = projectTitleForPath(projectPath) || projectNameFromPath(projectPath)
@@ -4028,66 +4002,7 @@ elements.currentProjectTitleInput.addEventListener('input', () => {
   renderRecentProjects()
 })
 
-function initPowerUserConsole() {
-  let powerUserModeEnabled = false
-  try {
-    powerUserModeEnabled = localStorage.getItem(POWER_USER_MODE_STORAGE_KEY) === '1'
-  } catch {
-    powerUserModeEnabled = false
-  }
-
-  elements.powerUserModeToggle.checked = powerUserModeEnabled
-  void api.setConsoleEnabled(powerUserModeEnabled)
-  updatePowerUserConsoleVisibility()
-  applyWorkTerminology()
-  elements.consoleProjectPath.value = elements.commandProjectPath.value
-  elements.consoleHelpText.innerHTML =
-    api.platform === 'win32'
-      ? 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
-        'cover. This runs through the same shell as a normal Windows terminal, so <code>&amp;</code>, ' +
-        '<code>|</code>, <code>%VAR%</code>, and <code>.cmd</code>/<code>.bat</code> tools (<code>npm</code>, ' +
-        '<code>npx</code>, <code>yarn</code>, ...) all work as expected. There is no allowlist or safety net, ' +
-        'so be as careful as you would be in a real terminal.'
-      : 'Run any command directly against the active project folder, for anything the buttons above don’t ' +
-        'cover — <code>datalad</code>, <code>git</code>, <code>git-annex</code>, or any other tool on your ' +
-        'system. Each run is a single process with no shell (no <code>&amp;&amp;</code>, pipes, or ' +
-        '<code>cd</code>), so shell operators are treated as literal text rather than executed.'
-
-  elements.powerUserModeToggle.addEventListener('change', () => {
-    const enabled = elements.powerUserModeToggle.checked
-    void api.setConsoleEnabled(enabled)
-    updatePowerUserConsoleVisibility()
-    applyWorkTerminology()
-    try {
-      localStorage.setItem(POWER_USER_MODE_STORAGE_KEY, enabled ? '1' : '0')
-    } catch {
-      // Ignore storage errors (for example private mode restrictions).
-    }
-  })
-
-  elements.commandProjectPath.addEventListener('input', () => {
-    elements.consoleProjectPath.value = elements.commandProjectPath.value
-  })
-
-  elements.consoleRunButton.addEventListener('click', runConsoleCommand)
-  elements.consoleHistoryOutput.addEventListener('click', (event) => {
-    const target = event.target.closest('[data-console-history-index]')
-    if (!target) {
-      return
-    }
-
-    const index = Number(target.getAttribute('data-console-history-index'))
-    const entry = state.consoleHistory[index]
-    if (!entry) {
-      return
-    }
-
-    elements.consoleCommand.value = entry.commandText
-  })
-}
-
-// Defaults to true when never set — unlike Power User Mode, this is an
-// opt-out, not opt-in, preference.
+// Defaults to true when never set: an opt-out, not opt-in, preference.
 function isBidsAutoNestEnabled() {
   try {
     const stored = localStorage.getItem(BIDS_AUTO_NEST_STORAGE_KEY)
@@ -4106,85 +4021,6 @@ function initBidsAutoNestToggle() {
       // Ignore storage errors (for example private mode restrictions).
     }
   })
-}
-
-function updatePowerUserConsoleVisibility() {
-  const visible = elements.powerUserModeToggle.checked && Boolean(elements.commandProjectPath.value.trim())
-  elements.projectNavTileConsole.hidden = !visible
-  if (!visible && elements.projectNavTileConsole.getAttribute('aria-selected') === 'true') {
-    selectProjectTile(DEFAULT_TOOL)
-  }
-}
-
-async function runConsoleCommand() {
-  const projectPath = elements.commandProjectPath.value.trim()
-  if (!projectPath) {
-    elements.consoleOutput.textContent = 'Choose a project above before running a console command.'
-    return
-  }
-
-  const commandText = elements.consoleCommand.value.trim()
-  if (!commandText) {
-    elements.consoleOutput.textContent = 'Enter a command to run.'
-    return
-  }
-
-  elements.consoleRunButton.disabled = true
-  elements.consoleOutput.textContent = `$ ${commandText}\n\nRunning...`
-  const runId = createRunId()
-  trackRun(runId, 'Console')
-
-  try {
-    const result = await api.runConsoleCommand({ commandText, projectPath, runId })
-    elements.consoleOutput.textContent = renderConsoleResult(commandText, result)
-    rememberConsoleCommand(commandText)
-  } catch (error) {
-    elements.consoleOutput.textContent = `$ ${commandText}\n\nFailed to run command: ${error?.message ?? String(error)}`
-  } finally {
-    untrackRun(runId)
-    elements.consoleRunButton.disabled = false
-  }
-}
-
-function renderConsoleResult(commandText, result) {
-  const statusLine = result.cancelled
-    ? 'Stopped by you'
-    : result.failed
-      ? `Failed (exit ${result.exitCode})`
-      : `Succeeded (exit ${result.exitCode})`
-  const sections = [`$ ${commandText}`, '', statusLine]
-
-  if (result.stdout) {
-    sections.push('', result.stdout.trimEnd())
-  }
-
-  if (result.stderr) {
-    sections.push('', 'stderr:', result.stderr.trimEnd())
-  }
-
-  return sections.join('\n')
-}
-
-function rememberConsoleCommand(commandText) {
-  state.consoleHistory.unshift({ commandText, ranAt: Date.now() })
-  state.consoleHistory.length = Math.min(state.consoleHistory.length, MAX_CONSOLE_HISTORY)
-  renderConsoleHistory()
-}
-
-function renderConsoleHistory() {
-  if (state.consoleHistory.length === 0) {
-    elements.consoleHistoryOutput.textContent = 'No commands run yet this session.'
-    return
-  }
-
-  elements.consoleHistoryOutput.innerHTML = state.consoleHistory
-    .map(
-      (entry, index) =>
-        `<button type="button" class="button button-ghost button-inline console-history-item" data-console-history-index="${index}">` +
-        `${escapeHtml(entry.commandText)}` +
-        '</button>'
-    )
-    .join('')
 }
 
 function renderFileListing(listing, query) {
