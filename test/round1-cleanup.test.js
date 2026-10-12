@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+// LF endings, so slicing on "\n}\n" also works on a Windows (CRLF) checkout.
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const html = read('src/gui/renderer/index.html')
 const app = read('src/gui/renderer/app.js')
 
