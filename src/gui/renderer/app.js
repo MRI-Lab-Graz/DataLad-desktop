@@ -14,6 +14,7 @@ import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { computeSaveGating } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
+import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -82,6 +83,7 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
+  openDiffs: new Map(),
   headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
@@ -365,6 +367,34 @@ elements.changedFilesSelectNoneButton.addEventListener('click', () => {
 })
 
 elements.changedFilesOutput.addEventListener('click', async (event) => {
+  const diffButton = event.target.closest('.show-diff-button')
+  const moreButton = event.target.closest('.diff-more-button')
+  if (diffButton || moreButton) {
+    const projectPath = readProjectPath()
+    const container = (diffButton ?? moreButton).closest('li')?.querySelector('[data-diff-container]')
+    const path = container?.dataset.diffContainer
+    if (!projectPath || !path) {
+      return
+    }
+    if (diffButton && state.openDiffs.has(path)) {
+      state.openDiffs.delete(path)
+      container.hidden = true
+      diffButton.textContent = 'Show changes'
+      diffButton.setAttribute('aria-expanded', 'false')
+      return
+    }
+    if (diffButton) {
+      state.openDiffs.set(path, '')
+      diffButton.textContent = 'Hide changes'
+      diffButton.setAttribute('aria-expanded', 'true')
+    }
+    state.openDiffs.set(
+      path,
+      await loadDiffInto(container, { projectPath, path, against: 'HEAD', ...(moreButton ? { maxLines: DIFF_MAX_LINES } : {}) })
+    )
+    return
+  }
+
   const button = event.target.closest('.discard-file-button')
   if (!button) {
     return
@@ -2859,13 +2889,24 @@ function renderChangedFileItem(entry, isNested = false) {
     ? `<button type="button" class="button button-ghost button-inline discard-file-button" data-discard-path="${escapeHtml(entry.path)}" title="Throw away changes and return this file to the last save point">Discard</button>`
     : ''
 
+  // Show changes: top-level, non-conflicted files only (nested files belong to another repository).
+  const canDiff = !isNested && !entry.isSubmodule && !entry.conflicted
+  const open = state.openDiffs.has(entry.path)
+  const diffButton = canDiff
+    ? `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(entry.path)}" aria-expanded="${open}">${open ? 'Hide changes' : 'Show changes'}</button>`
+    : ''
+  const diffContainer = canDiff
+    ? `<div class="file-diff" data-diff-container="${escapeHtml(entry.path)}"${open ? '' : ' hidden'}>${open ? state.openDiffs.get(entry.path) : ''}</div>`
+    : ''
+
   return (
     '<li class="changed-file-item">' +
     `<label class="changed-file-label">` +
     `<input type="checkbox" class="changed-file-toggle" data-changed-path="${escapeHtml(entry.path)}"${checked} />` +
     `<span class="changed-file-path" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</span>` +
     '</label>' +
-    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}${discardButton}</span>` +
+    `<span>${renderGitStatusBadge(entry.status)}${stagedBadge}${conflictedBadge}${submoduleBadge}${diffButton}${discardButton}</span>` +
+    diffContainer +
     nestedList +
     '</li>'
   )
@@ -2878,6 +2919,7 @@ function renderChangedFilesSelection() {
   const files = state.workingTreeSnapshot?.files ?? []
   if (files.length === 0) {
     elements.changedFilesOutput.textContent = 'No changed files detected.'
+    state.openDiffs.clear()
     elements.changedFilesSelectAllButton.disabled = true
     elements.changedFilesSelectNoneButton.disabled = true
     return
@@ -2899,6 +2941,39 @@ function renderChangedFilesSelection() {
   elements.changedFilesOutput.innerHTML = truncationNote + `<ul class="changed-files-list">${list}</ul>`
   elements.changedFilesSelectAllButton.disabled = false
   elements.changedFilesSelectNoneButton.disabled = false
+  void refreshOpenDiffs()
+}
+
+// Fills one diff container (Home row or History compare entry). Never throws: errors are shown in the container.
+async function loadDiffInto(container, { projectPath, path, against, maxLines = DIFF_DEFAULT_LINES }) {
+  container.dataset.diffAgainst = against
+  container.hidden = false
+  container.innerHTML = loadingPanelHtml('Loading changes…')
+  try {
+    const diff = await api.getFileDiff(projectPath, { path, against, maxLines })
+    container.innerHTML = renderDiffHtml(diff, { path, requestedMax: maxLines })
+  } catch (error) {
+    container.innerHTML = `<p class="hint-inline hint-inline-warning">${escapeHtml(friendlyIpcError(error))}</p>`
+  }
+  return container.innerHTML
+}
+
+function homeDiffContainer(path) {
+  return [...elements.changedFilesOutput.querySelectorAll('[data-diff-container]')].find((node) => node.dataset.diffContainer === path)
+}
+
+// The list is rebuilt whenever status refreshes, so remembered diffs are re-attached and then reloaded.
+async function refreshOpenDiffs() {
+  const projectPath = readProjectPath()
+  const changed = new Set((state.workingTreeSnapshot?.files ?? []).map((entry) => entry.path))
+  for (const path of [...state.openDiffs.keys()]) {
+    const container = homeDiffContainer(path)
+    if (!changed.has(path) || !container || !projectPath) {
+      state.openDiffs.delete(path)
+      continue
+    }
+    state.openDiffs.set(path, await loadDiffInto(container, { projectPath, path, against: 'HEAD' }))
+  }
 }
 
 function renderRecentCommitList(overrideMessage = null) {
