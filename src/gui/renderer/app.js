@@ -131,6 +131,9 @@ const elements = {
   projectStrip: document.getElementById('project-strip'),
   projectNavGroup: document.getElementById('project-nav-group'),
   appHeader: document.getElementById('app-header'),
+  continueProjectButton: document.getElementById('continue-project'),
+  continueProjectName: document.getElementById('continue-project-name'),
+  continueProjectError: document.getElementById('continue-project-error'),
   useSuggestionButton: document.getElementById('use-suggestion'),
   projectHome: document.getElementById('project-home'),
   projectTools: document.getElementById('project-tools'),
@@ -311,6 +314,20 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
     return
   }
 
+  await openRecentProject(projectPath)
+})
+
+elements.continueProjectButton.addEventListener('click', async () => {
+  elements.continueProjectError.hidden = true
+  await openRecentProject(state.recentProjects[0])
+  // The status pill lives in the (still hidden) project strip, so a failure must be said here.
+  if (elements.projectStrip.hidden) {
+    elements.continueProjectError.textContent = `Could not open ${elements.continueProjectName.textContent}. Check that its folder still exists, for example that the drive is connected.`
+    elements.continueProjectError.hidden = false
+  }
+})
+
+async function openRecentProject(projectPath) {
   setLastActionState('Switching to recent project...', 'idle')
   elements.projectPath.value = projectPath
   elements.commandProjectPath.value = projectPath
@@ -319,7 +336,7 @@ elements.recentProjectsOutput.addEventListener('click', async (event) => {
   // Setting the header first fires refreshLastCommitMeta/refreshProjectHealth
   // against an as-yet-unauthorized root and races the real authorization.
   await detectProjectType(projectPath)
-})
+}
 
 elements.switchProjectButton.addEventListener('click', () => {
   setOnboardingExpanded(true)
@@ -3878,12 +3895,16 @@ function rememberRecentProject(projectPath) {
 function renderRecentProjects() {
   const currentPath = elements.projectPath.value.trim()
 
+  elements.continueProjectButton.hidden = state.recentProjects.length === 0
   if (state.recentProjects.length === 0) {
     elements.recentProjectsOutput.innerHTML =
       '<p class="hint-inline">No recent projects yet — opened projects will appear here.</p>'
     elements.clearRecentProjectsButton.disabled = true
     return
   }
+
+  const latestPath = state.recentProjects[0]
+  elements.continueProjectName.textContent = projectTitleForPath(latestPath) || projectNameFromPath(latestPath)
 
   const slots = state.recentProjects.map((projectPath) => {
     const displayName = projectTitleForPath(projectPath) || projectNameFromPath(projectPath)

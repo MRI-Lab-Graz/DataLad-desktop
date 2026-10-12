@@ -76,3 +76,22 @@ test('the message suggestion is wired as a placeholder and a Use suggestion butt
   // The suggestion reaches the message only through the user's click on the button.
   assert.doesNotMatch(app, /message: suggest|\|\| suggestion\b.*message/)
 })
+
+test('the start screen offers one big Continue button for the most recent project', () => {
+  const group = html.slice(html.indexOf('id="onboarding-group"'), html.indexOf('id="open-project-panel"'))
+  assert.match(group, /id="continue-project"[^>]*hidden/)
+  assert.ok(group.indexOf('id="continue-project"') < group.indexOf('class="onboarding-picker'), 'Continue sits above Open/Create')
+  assert.match(group, /id="continue-project-name"/)
+  assert.match(app, /async function openRecentProject\(projectPath\)/)
+  assert.match(app, /continueProjectButton\.addEventListener\('click'/)
+  assert.match(app, /await openRecentProject\(state\.recentProjects\[0\]\)/)
+  const render = app.slice(app.indexOf('function renderRecentProjects'))
+  assert.match(render.slice(0, render.indexOf('\n}\n')), /continueProjectButton\.hidden/)
+})
+
+test('a failed Continue says so under the button, because the status pill is hidden on the start screen', () => {
+  assert.match(html, /id="continue-project-error"[^>]*hidden/)
+  assert.match(app, /continueProjectError\.hidden = true/)
+  assert.match(app, /continueProjectError\.textContent = `Could not open \$\{[^}]+\}\. Check that its folder still exists/)
+  assert.match(app, /projectStrip\.hidden/)
+})
