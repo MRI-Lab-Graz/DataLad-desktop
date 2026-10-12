@@ -72,3 +72,27 @@ test('the diff styles exist for every row type and the changed cells', () => {
 test('a list holding an open diff gets more room than the 220px default', () => {
   assert.match(css, /\.changed-files-list:has\(\.file-diff:not\(\[hidden\]\)\)\s*\{[^}]*max-height:\s*70vh/)
 })
+
+const html = read('src/gui/renderer/index.html')
+
+test('the save detail has a Compare with now button and a result area, hidden until used', () => {
+  const detail = html.slice(html.indexOf('id="tm-detail"'), html.indexOf('id="tm-branch-from-here"'))
+  assert.match(detail, /id="tm-compare"[^>]*>Compare with now</)
+  assert.match(detail, /id="tm-compare-output"[^>]*hidden/)
+})
+
+test('Compare with now lists the files since the selected save and opens each with the shared loader', () => {
+  assert.match(app, /timeMachineCompareButton\.addEventListener\('click'/)
+  const body = fnBody("elements.timeMachineCompareButton.addEventListener('click'")
+  assert.match(body, /api\.listChangesSince\(projectPath, commitHash\)/)
+  assert.match(body, /No differences since this save\./)
+  assert.match(app, /timeMachineCompareOutput\.addEventListener\('click'/)
+  assert.match(fnBody("elements.timeMachineCompareOutput.addEventListener('click'"), /against: commitHash/)
+})
+
+test('the compare list is cleared whenever the selection changes or the detail closes', () => {
+  assert.match(fnBody('function clearCompare'), /timeMachineCompareOutput\.hidden = true/)
+  assert.match(fnBody('function clearTimeMachine'), /clearCompare\(\)/)
+  assert.match(fnBody('async function loadTimeMachineDetail'), /clearCompare\(\)/)
+  assert.match(fnBody("elements.timeMachineCloseDetailButton.addEventListener('click'"), /clearCompare\(\)/)
+})

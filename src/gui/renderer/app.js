@@ -240,6 +240,8 @@ const elements = {
   timeMachineHistoryOutput: document.getElementById('tm-history-output'),
   timeMachineLoadMoreButton: document.getElementById('tm-load-more'),
   timeMachineDetail: document.getElementById('tm-detail'),
+  timeMachineCompareButton: document.getElementById('tm-compare'),
+  timeMachineCompareOutput: document.getElementById('tm-compare-output'),
   timeMachineDetailOutput: document.getElementById('tm-detail-output'),
   timeMachineCloseDetailButton: document.getElementById('tm-close-detail'),
   timeMachineBranchName: document.getElementById('tm-branch-name'),
@@ -1353,7 +1355,73 @@ elements.timeMachineHistoryOutput.addEventListener('keydown', async (event) => {
   await loadTimeMachineDetail(hash)
 })
 
+const COMPARE_FILES_RENDER_LIMIT = 200
+
+elements.timeMachineCompareButton.addEventListener('click', async () => {
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  if (!projectPath || !commitHash) {
+    return
+  }
+  elements.timeMachineCompareOutput.hidden = false
+  elements.timeMachineCompareOutput.innerHTML = loadingPanelHtml('Comparing…')
+  try {
+    const changes = await api.listChangesSince(projectPath, commitHash)
+    if (commitHash !== state.timeMachineSelectedHash) {
+      return // another save was selected meanwhile
+    }
+    if (changes.length === 0) {
+      elements.timeMachineCompareOutput.textContent = 'No differences since this save.'
+      return
+    }
+    const shown = changes.slice(0, COMPARE_FILES_RENDER_LIMIT)
+    const note = changes.length > shown.length ? `<p class="hint-inline">Showing the first ${shown.length} of ${changes.length} files.</p>` : ''
+    elements.timeMachineCompareOutput.innerHTML =
+      '<p class="hint-inline">Files that differ between this save and your files now:</p>' + note +
+      `<ul class="changed-files-list">${shown
+        .map(
+          (change) =>
+            '<li class="changed-file-item">' +
+            `<span class="changed-file-path" title="${escapeHtml(change.path)}">${escapeHtml(change.path)}</span>` +
+            `<span>${renderGitStatusBadge(change.status)}` +
+            `<button type="button" class="button button-ghost button-inline show-diff-button" data-diff-path="${escapeHtml(change.path)}" aria-expanded="false">Show changes</button></span>` +
+            `<div class="file-diff" data-diff-container="${escapeHtml(change.path)}" hidden></div>` +
+            '</li>'
+        )
+        .join('')}</ul>`
+  } catch (error) {
+    elements.timeMachineCompareOutput.textContent = friendlyIpcError(error)
+  }
+})
+
+elements.timeMachineCompareOutput.addEventListener('click', async (event) => {
+  const button = event.target.closest('.show-diff-button') ?? event.target.closest('.diff-more-button')
+  const projectPath = readProjectPath()
+  const commitHash = state.timeMachineSelectedHash
+  const container = button?.closest('li')?.querySelector('[data-diff-container]')
+  const path = container?.dataset.diffContainer
+  if (!button || !projectPath || !commitHash || !path) {
+    return
+  }
+  if (button.classList.contains('show-diff-button')) {
+    const open = button.getAttribute('aria-expanded') === 'true'
+    button.setAttribute('aria-expanded', String(!open))
+    button.textContent = open ? 'Show changes' : 'Hide changes'
+    if (open) {
+      container.hidden = true
+      return
+    }
+  }
+  await loadDiffInto(container, {
+    projectPath,
+    path,
+    against: commitHash,
+    ...(button.classList.contains('diff-more-button') ? { maxLines: DIFF_MAX_LINES } : {})
+  })
+})
+
 elements.timeMachineCloseDetailButton.addEventListener('click', () => {
+  clearCompare()
   state.timeMachineSelectedHash = null
   state.timeMachineDetails = null
   elements.timeMachineDetail.hidden = true
@@ -2471,7 +2539,13 @@ async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure
   }
 }
 
+function clearCompare() {
+  elements.timeMachineCompareOutput.hidden = true
+  elements.timeMachineCompareOutput.innerHTML = ''
+}
+
 function clearTimeMachine() {
+  clearCompare()
   state.timeMachineCommits = []
   state.timeMachineLimit = 50
   state.timeMachineSelectedHash = null
@@ -2564,6 +2638,7 @@ function renderTimeMachineHistory() {
 }
 
 async function loadTimeMachineDetail(commitHash) {
+  clearCompare()
   state.timeMachineSelectedHash = commitHash
   state.timeMachineDetails = null
   renderTimeMachineHistory()
