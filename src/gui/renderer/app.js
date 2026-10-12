@@ -33,6 +33,8 @@ import {
   computeStatusLine,
   computeAttentionRows
 } from './project-health-chips.js'
+import { formatAge } from './relative-age.js'
+import { nextTabIndex } from './tab-keys.js'
 
 const api = window.dataladDesktop
 
@@ -88,7 +90,6 @@ const state = {
 
 const BIDS_PROCEDURE = 'text2git'
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000
 const MAX_RECENT_PROJECTS = 8
 const MAX_CONSOLE_HISTORY = 20
 const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
@@ -2486,7 +2487,7 @@ function renderTimeMachineHistory() {
 
   const rows = commits
     .map((entry) => {
-      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const age = formatAge(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
       const hash = entry.commitHash || 'unknown'
       const subject = entry.subject || '(no subject)'
       const author = entry.author || 'Unknown'
@@ -2498,7 +2499,7 @@ function renderTimeMachineHistory() {
         `aria-pressed="${isSelected ? 'true' : 'false'}">` +
         '<div class="history-item-head">' +
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
-        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        `<span class="history-age">${escapeHtml(age)}</span>` +
         '</div>' +
         `<div class="history-subject">${isRunCommit(subject) ? '<span class="run-chip">recorded run</span> ' : ''}` +
         `${escapeHtml(subject.replace('[DATALAD RUNCMD] ', ''))}</div>` +
@@ -2905,7 +2906,7 @@ function renderRecentCommitList(overrideMessage = null) {
 
   const rows = state.recentCommits
     .map((entry) => {
-      const age = formatAgeFromMilliseconds(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
+      const age = formatAge(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
       const hash = entry.commitHash || 'unknown'
       const subject = entry.subject || '(no subject)'
       const author = entry.author || 'Unknown author'
@@ -2914,7 +2915,7 @@ function renderRecentCommitList(overrideMessage = null) {
         '<li class="history-item">' +
         '<div class="history-item-head">' +
         `<span class="history-hash">${escapeHtml(hash)}</span>` +
-        `<span class="history-age">${escapeHtml(age)} ago</span>` +
+        `<span class="history-age">${escapeHtml(age)}</span>` +
         '</div>' +
         `<div class="history-subject">${escapeHtml(subject)}</div>` +
         `<div class="history-author">${escapeHtml(author)}</div>` +
@@ -3719,13 +3720,13 @@ async function refreshLastCommitMeta(projectPath) {
     }
 
     const ageMs = Math.max(0, Date.now() - Number(lastCommit.timestamp) * 1000)
-    const relativeAge = formatAgeFromMilliseconds(ageMs)
+    const relativeAge = formatAge(ageMs)
     const suffix = lastCommit.commitHash ? ` (${lastCommit.commitHash})` : ''
     const commitMessage = (lastCommit.message ?? '').trim()
     const commitSubject = (lastCommit.subject ?? '').trim()
     const tooltipSource = commitMessage || commitSubject
     const tooltip = tooltipSource ? `Last commit message:\n${tooltipSource}` : ''
-    setLastCommitMeta(`Last commit ${relativeAge} ago${suffix}.`, 'reminder', tooltip)
+    setLastCommitMeta(`Last commit ${relativeAge}${suffix}.`, 'reminder', tooltip)
   } catch {
     if (state.commitMetaRequestToken !== nextToken) {
       return
@@ -3763,30 +3764,6 @@ function setLastCommitMeta(text, tone, tooltip = '') {
   elements.lastCommitMeta.removeAttribute('title')
   elements.lastCommitMeta.removeAttribute('data-tooltip')
   elements.lastCommitMeta.removeAttribute('tabindex')
-}
-
-function formatAgeFromMilliseconds(ageMs) {
-  if (ageMs < 60 * 1000) {
-    return 'just now'
-  }
-
-  if (ageMs < 60 * 60 * 1000) {
-    const minutes = Math.floor(ageMs / (60 * 1000))
-    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
-  }
-
-  if (ageMs < DAY_IN_MS) {
-    const hours = Math.floor(ageMs / (60 * 60 * 1000))
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-  }
-
-  if (ageMs < 7 * DAY_IN_MS) {
-    const days = Math.floor(ageMs / DAY_IN_MS)
-    return `${days} ${days === 1 ? 'day' : 'days'}`
-  }
-
-  const weeks = Math.floor(ageMs / (7 * DAY_IN_MS))
-  return `${weeks} ${weeks === 1 ? 'week' : 'weeks'}`
 }
 
 function buildQuickSaveMessage() {
