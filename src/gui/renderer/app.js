@@ -12,7 +12,7 @@ import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
-import { computeSaveGating, unsavedLeftovers } from './save-gating.js'
+import { collectChangedPaths, computeSaveGating, unsavedLeftovers } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -160,9 +160,6 @@ const elements = {
   pickCreateProjectPathButton: document.getElementById('pick-create-project-path'),
   createProjectButton: document.getElementById('create-project'),
   createProjectOutput: document.getElementById('create-project-output'),
-  datasetSelectField: document.getElementById('dataset-select-field'),
-  datasetSelect: document.getElementById('dataset-select'),
-  refreshDatasetsButton: document.getElementById('refresh-datasets'),
   branchSelect: document.getElementById('branch-select'),
   refreshBranchesButton: document.getElementById('refresh-branches'),
   switchBranchButton: document.getElementById('switch-branch'),
@@ -1192,16 +1189,6 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
   await refreshProjectHealth(projectPath)
 })
 
-elements.refreshDatasetsButton.addEventListener('click', async () => {
-  const projectPath = elements.projectPath.value.trim() || elements.commandProjectPath.value.trim()
-  if (!projectPath) {
-    setLastActionState('Select a project first.', 'error')
-    return
-  }
-
-  await refreshDatasetList(projectPath)
-})
-
 elements.refreshBranchesButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
   if (!projectPath) {
@@ -1570,21 +1557,6 @@ elements.timeMachineDetailOutput.addEventListener('click', async (event) => {
       result.userError?.message ?? 'The file could not be restored from this save point.'
     elements.timeMachineActionOutput.hidden = false
   }
-})
-
-elements.datasetSelect.addEventListener('change', async () => {
-  const selectedDatasetPath = elements.datasetSelect.value
-  if (!selectedDatasetPath) {
-    return
-  }
-
-  elements.commandProjectPath.value = selectedDatasetPath
-  setCurrentProjectHeader(selectedDatasetPath, classificationForPath(selectedDatasetPath))
-  setLastActionState('Active data folder changed.', 'success')
-  await refreshFileBrowser(selectedDatasetPath)
-  await refreshBranchList(selectedDatasetPath)
-  await refreshWorkingTreeStatus(selectedDatasetPath)
-  await refreshRecentCommits(selectedDatasetPath)
 })
 
 elements.refreshFilesButton.addEventListener('click', async () => {
@@ -2058,48 +2030,14 @@ async function refreshDatasetList(projectPath) {
     state.datasetsRootPath = projectPath
     renderIgnoreRulesScope()
 
-    const hasNestedDatasets = datasets.some((dataset) => dataset.relativePath !== '.')
-
-    elements.datasetSelect.innerHTML = ''
-
-    for (const dataset of datasets) {
-      const option = document.createElement('option')
-      option.value = dataset.path
-      option.textContent =
-        dataset.relativePath === '.'
-          ? hasNestedDatasets
-            ? 'Root Folder'
-            : '(main project folder)'
-          : dataset.relativePath
-      elements.datasetSelect.appendChild(option)
-    }
-
-    // With no nested datasets there is nothing to switch between and the
-    // picker just reads as confusing noise for the common single-dataset
-    // case — hide the whole field rather than show a disabled dropdown.
-    // Re-detecting the project (e.g. via Switch Project) picks up nested
-    // datasets added later.
-    elements.datasetSelectField.hidden = !hasNestedDatasets
-    elements.datasetSelect.title = 'Switch between the root dataset and its nested datasets.'
-
-    const activePath = elements.commandProjectPath.value.trim()
-    const hasActivePath = datasets.some((dataset) => dataset.path === activePath)
-    const nextPath = hasActivePath ? activePath : datasets[0]?.path
-
-    if (nextPath) {
-      elements.datasetSelect.value = nextPath
-      elements.commandProjectPath.value = nextPath
-      setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
-      await refreshBranchList(nextPath)
-      await refreshWorkingTreeStatus(nextPath)
-      await refreshRecentCommits(nextPath)
-      updateSaveButtonState()
-      return true
-    }
-
-    await refreshBranchList(projectPath)
-    await refreshWorkingTreeStatus(projectPath)
-    await refreshRecentCommits(projectPath)
+    // Save always acts on the whole project, so the active folder is the root (listDatasets always puts the
+    // root first); nested datasets stay visible as folders and as "subdataset" entries in Files To Save.
+    const nextPath = projectPath
+    elements.commandProjectPath.value = nextPath
+    setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
+    await refreshBranchList(nextPath)
+    await refreshWorkingTreeStatus(nextPath)
+    await refreshRecentCommits(nextPath)
     updateSaveButtonState()
     return true
   } catch (error) {
@@ -2911,7 +2849,7 @@ function renderDismissibleEnvironmentOutput(bodyHtml, label = 'Setup status') {
 }
 
 function syncSelectedChangedPaths(files, preserveSelection) {
-  const availablePaths = new Set(files.map((entry) => entry.path))
+  const availablePaths = collectChangedPaths(files)
 
   if (!preserveSelection) {
     state.selectedChangedPaths = new Set(files.map((entry) => entry.path))

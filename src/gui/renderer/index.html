@@ -205,7 +205,6 @@
               </div>
             </div>
 
-
             <label class="field">
               <span id="create-project-path-label">Location</span>
               <div class="field-row">
@@ -308,15 +307,6 @@
             </div>
           </label>
 
-          <label id="dataset-select-field" class="field" hidden>
-            <span>Project Data Folder</span>
-            <div class="field-row">
-              <select id="dataset-select"></select>
-              <button id="refresh-datasets" class="button button-ghost button-inline" type="button">Refresh</button>
-            </div>
-            <p class="hint-inline">This project has nested datasets — pick which one Save applies to.</p>
-          </label>
-
           <section class="status-box" aria-labelledby="changed-files-title">
             <div class="section-head branch-head">
               <h3 id="changed-files-title">Files To Save</h3>
@@ -342,7 +332,6 @@
 
           <p id="save-guidance" class="hint-inline">Add a message, or Save will ask you for one.</p>
           <button id="use-suggestion" class="button button-ghost button-inline" type="button" hidden>Use suggestion</button>
-
 
           <button
             id="save-project"
