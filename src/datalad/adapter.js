@@ -1114,6 +1114,24 @@ export class DataLadAdapter {
     }
   }
 
+  async listChangesSince(projectPath, commitHash) {
+    if (!(typeof commitHash === 'string' && COMMIT_HASH_PATTERN.test(commitHash))) {
+      throw new Error(`Invalid commit hash format: ${String(commitHash)}`)
+    }
+    await this.#ensureGitProject(projectPath)
+    const result = await this.runner.run('git', ['-C', projectPath, 'diff', commitHash, '--name-status', '-z', ...DIFF_SAFE_FLAGS, '--'])
+    if (result.failed) {
+      throw new Error(`Could not compare with this save: ${(result.stderr ?? '').trim() || 'unknown error'}`)
+    }
+    const fields = (result.stdout ?? '').split('\0').filter(Boolean)
+    const names = { A: 'added', D: 'deleted' }
+    const changes = []
+    for (let index = 0; index + 1 < fields.length; index += 2) {
+      changes.push({ status: names[fields[index]] ?? 'modified', path: fields[index + 1] })
+    }
+    return changes
+  }
+
   async getCommitDetails(projectPath, commitHash) {
     await this.#ensureGitProject(projectPath)
 
@@ -1135,7 +1153,7 @@ export class DataLadAdapter {
       ]),
       this.runner.run('git', [
         '-C', projectPath,
-        'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
+        'diff-tree', '--no-commit-id', '-r', '--name-only', '-z', '--root',
         commitHash
       ])
     ])
@@ -1155,10 +1173,7 @@ export class DataLadAdapter {
       .map((l) => l.trimEnd())
       .filter(Boolean)
 
-    const changedFiles = (nameResult.stdout ?? '')
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
+    const changedFiles = (nameResult.stdout ?? '').split('\0').filter(Boolean)
 
     return {
       commitHash: (longHash ?? commitHash).trim(),

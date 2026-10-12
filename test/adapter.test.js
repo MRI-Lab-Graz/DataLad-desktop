@@ -1691,11 +1691,11 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
   })
   runner.set('git', [
     '-C', '/tmp/project',
-    'diff-tree', '--no-commit-id', '-r', '--name-only', '--root',
+    'diff-tree', '--no-commit-id', '-r', '--name-only', '-z', '--root',
     'abc1234'
   ], {
     exitCode: 0,
-    stdout: 'results.csv\ndata/raw.tsv\n',
+    stdout: 'results.csv\0data/raw.tsv\0my file.csv\0',
     stderr: '',
     failed: false
   })
@@ -1707,7 +1707,7 @@ test('getCommitDetails returns parsed metadata and stat for a valid commit', asy
   assert.equal(details.author, 'Alice')
   assert.equal(details.timestamp, 1_700_000_000)
   assert.ok(details.stat.includes('results.csv'))
-  assert.deepEqual(details.changedFiles, ['results.csv', 'data/raw.tsv'])
+  assert.deepEqual(details.changedFiles, ['results.csv', 'data/raw.tsv', 'my file.csv'])
 })
 
 test('getCommitDetails rejects an invalid commit hash format', async () => {
@@ -2622,4 +2622,28 @@ test('getFileDiff does not read through a symlinked folder that leaves the proje
   const result = await new DataLadAdapter({ runner }).getFileDiff(dir, { path: 'linked/secret.txt', against: 'HEAD' })
   assert.equal(result.kind, 'binary')
   assert.doesNotMatch(JSON.stringify(result), /top secret/)
+})
+
+test('listChangesSince lists files that differ from a save with exact names and statuses', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', ['-C', '/tmp/project', 'diff', 'abc1234', '--name-status', '-z', ...DIFF_FLAGS, '--'], {
+    stdout: 'M\0data/participants.tsv\0A\0my file.csv\0D\0old.txt\0T\0link\0'
+  })
+  const changes = await new DataLadAdapter({ runner }).listChangesSince('/tmp/project', 'abc1234')
+  assert.deepEqual(changes, [
+    { status: 'modified', path: 'data/participants.tsv' },
+    { status: 'added', path: 'my file.csv' },
+    { status: 'deleted', path: 'old.txt' },
+    { status: 'modified', path: 'link' }
+  ])
+})
+
+test('listChangesSince returns an empty list when nothing differs and refuses a bad hash', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/tmp/project', 'rev-parse', '--is-inside-work-tree'], GIT_OK)
+  runner.set('git', ['-C', '/tmp/project', 'diff', 'abc1234', '--name-status', '-z', ...DIFF_FLAGS, '--'], { stdout: '' })
+  const adapter = new DataLadAdapter({ runner })
+  assert.deepEqual(await adapter.listChangesSince('/tmp/project', 'abc1234'), [])
+  await assert.rejects(() => adapter.listChangesSince('/tmp/project', '--output=x'), /invalid commit hash/i)
 })
