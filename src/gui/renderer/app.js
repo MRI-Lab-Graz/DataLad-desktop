@@ -80,6 +80,7 @@ const state = {
   timeMachineSelectedHash: null,
   timeMachineDetails: null,
   timeMachineProjectPath: null,
+  headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
   createProjectBidsCandidate: null
@@ -540,7 +541,8 @@ function showTools(target = DEFAULT_TOOL) {
   elements.projectTools.hidden = false
   selectProjectTile(target)
   if (target === 'time-machine-zone') {
-    loadTimeMachineIfEmpty()
+    // Always refresh: a save on Home since the last visit must show up in the full history.
+    refreshTimeMachineHistory(readProjectPath())
   }
 }
 
@@ -1255,7 +1257,7 @@ elements.createBranchButton.addEventListener('click', async () => {
 
 async function loadTimeMachineIfEmpty() {
   const projectPath = readProjectPath()
-  if (!projectPath || state.timeMachineCommits.length > 0) {
+  if (!projectPath || (state.timeMachineCommits.length > 0 && state.timeMachineProjectPath === projectPath)) {
     return
   }
   await refreshTimeMachineHistory(projectPath)
@@ -3350,6 +3352,11 @@ function setCurrentProjectHeader(projectPath, classification) {
   void refreshLastCommitMeta(projectPath)
   setOnboardingExpanded(!projectPath)
   setProjectDependentSectionsVisible(Boolean(projectPath))
+  // Only a different project sends us Home; re-rendering the same one (e.g. Convert to subdataset) must not close Tools.
+  if (projectPath !== state.headerProjectPath) {
+    state.headerProjectPath = projectPath
+    showHome()
+  }
 
   // Clear the previous project's health snapshot (and re-render) *before*
   // kicking off the new fetch. Without this, other in-flight refreshes for
@@ -3438,9 +3445,7 @@ function setOnboardingExpanded(expanded) {
 function setProjectDependentSectionsVisible(visible) {
   elements.projectStrip.hidden = !visible
   elements.projectNavGroup.hidden = !visible
-  if (visible) {
-    showHome()
-  } else {
+  if (!visible) {
     clearTimeMachine()
   }
   updatePowerUserConsoleVisibility()

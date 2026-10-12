@@ -39,9 +39,21 @@ test('the project tool selection always falls back to Files, never to Save', () 
   assert.match(app, /wireTileGroup\(elements\.projectNavTiles, 'navTarget', \{ required: true \}\)/)
 })
 
-test('opening or switching a project returns to Home', () => {
-  const fn = app.slice(app.indexOf('function setProjectDependentSectionsVisible'))
-  assert.match(fn.slice(0, fn.indexOf('\n}\n')), /showHome\(\)/)
+const fnBody = (name) => {
+  const rest = app.slice(app.indexOf(name))
+  return rest.slice(0, rest.indexOf('\n}\n'))
+}
+
+test('opening a different project returns to Home, but re-rendering the same project keeps Tools open', () => {
+  const header = fnBody('function setCurrentProjectHeader')
+  assert.match(header, /projectPath !== state\.headerProjectPath/)
+  assert.match(header, /showHome\(\)/)
+  assert.doesNotMatch(fnBody('function setProjectDependentSectionsVisible'), /showHome\(\)/)
+})
+
+test('History never shows another project, and Full history refreshes it', () => {
+  assert.match(fnBody('async function loadTimeMachineIfEmpty'), /state\.timeMachineProjectPath === projectPath/)
+  assert.match(fnBody('function showTools'), /refreshTimeMachineHistory\(readProjectPath\(\)\)/)
 })
 
 test('the health status line lives in the project strip and the Health card is gone', () => {
