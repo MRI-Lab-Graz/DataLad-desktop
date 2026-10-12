@@ -35,6 +35,7 @@ import {
 } from './project-health-chips.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
+import { suggestMessage } from './message-suggestion.js'
 
 const api = window.dataladDesktop
 
@@ -130,6 +131,7 @@ const elements = {
   projectStrip: document.getElementById('project-strip'),
   projectNavGroup: document.getElementById('project-nav-group'),
   appHeader: document.getElementById('app-header'),
+  useSuggestionButton: document.getElementById('use-suggestion'),
   projectHome: document.getElementById('project-home'),
   projectTools: document.getElementById('project-tools'),
   openToolsButton: document.getElementById('open-tools'),
@@ -2937,7 +2939,19 @@ function updateSaveButtonState() {
   elements.saveProjectButton.hidden = Boolean(snapshot?.mergeInProgress)
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
+
+  const selectedFiles = (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
+  const suggestion = suggestMessage(selectedFiles)
+  elements.message.placeholder = suggestion || 'Describe what you changed'
+  elements.useSuggestionButton.hidden = !suggestion || Boolean(elements.message.value.trim())
+  elements.useSuggestionButton.dataset.suggestion = suggestion
 }
+
+elements.useSuggestionButton.addEventListener('click', () => {
+  elements.message.value = elements.useSuggestionButton.dataset.suggestion ?? ''
+  elements.message.dispatchEvent(new Event('input'))
+  elements.message.focus()
+})
 
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)

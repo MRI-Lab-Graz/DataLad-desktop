@@ -67,3 +67,12 @@ test('the header is slim while a project is open and the last-save line sits in 
   assert.match(fn.slice(0, fn.indexOf('\n}\n')), /appHeader\.classList\.toggle\('hero-slim', visible\)/)
   assert.match(read('src/gui/renderer/styles.css'), /\.hero-slim h1/)
 })
+
+test('the message suggestion is wired as a placeholder and a Use suggestion button', () => {
+  assert.match(html, /id="use-suggestion"[^>]*hidden/)
+  assert.match(app, /import \{ suggestMessage \} from '\.\/message-suggestion\.js'/)
+  assert.match(app, /elements\.message\.placeholder = suggestion \|\| 'Describe what you changed'/)
+  assert.match(app, /elements\.useSuggestionButton\.addEventListener\('click'/)
+  // The suggestion reaches the message only through the user's click on the button.
+  assert.doesNotMatch(app, /message: suggest|\|\| suggestion\b.*message/)
+})
