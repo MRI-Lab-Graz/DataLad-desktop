@@ -74,6 +74,8 @@ Each control below has a test; the file names are where to verify it.
 
 **Administrator policy**
 - Administrators can pre-trust folders with `trustedRoots` in a `policy.json` placed in an administrator-only system folder that updates do not touch: `%ProgramData%\DataLad Desktop\` on Windows, `/Library/Application Support/DataLad Desktop/` on macOS, `/etc/datalad-desktop/` on Linux (a `policy.json` in the app's `resources` folder is honoured too, but an update replaces that folder). Settings in older policy files that referred to a removed feature are ignored (`src/gui/policy.js`).
+- **Run & record** (Tools → History) runs a command the person types, through `datalad run`, with their permissions and the system shell (`cmd.exe` on Windows). It is not a sandbox. Controls: every run is first shown, with the project and the exact command, in a native dialog drawn by the main process, so the page alone cannot start a command; it works only in an authorized, trusted project; values are bound to their flags (`--message=`, `--input=`, `--output=`) and the command follows `--`; input and output paths must stay inside the project. On Windows `cmd.exe` also looks in the project folder first, so a hostile project could shadow a program name.
+- **Administrators can remove it**: set `DATALAD_DESKTOP_DISABLE_RUN=1`, or put `{"runDisabled": true}` in the system `policy.json`; the button is hidden and the main process refuses. A `policy.json` that exists but cannot be read also disables it (`src/gui/policy.js`, `test/policy.test.js`).
 
 **Managed Python environment (PRISM validator)**
 - The BIDS validator ships inside the same hash-locked environment (`bids-validator-deno`, on the `deno` PyPI wheel, wheels only), so it needs no separate download and runs offline.

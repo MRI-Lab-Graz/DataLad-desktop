@@ -6,14 +6,14 @@ import { join } from 'node:path'
 import { loadPolicy, policyFiles } from '../src/gui/policy.js'
 
 test('loadPolicy has no trusted roots by default', () => {
-  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { trustedRoots: [] })
+  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { trustedRoots: [], runDisabled: false })
 })
 
 test('loadPolicy ignores keys it does not know, such as the old consoleDisabled', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const file = join(dir, 'policy.json')
   await writeFile(file, JSON.stringify({ consoleDisabled: true, trustedRoots: ['/lab/share'] }))
-  assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: ['/lab/share'] })
+  assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: ['/lab/share'], runDisabled: false })
 })
 
 // An update removes the whole install folder, so an admin's policy must live outside it.
@@ -52,6 +52,25 @@ test('loadPolicy: an unreadable policy file contributes no trusted roots', async
   const bad = join(dir, 'bad.json')
   await writeFile(good, JSON.stringify({ trustedRoots: [join(dir, 'share')] }))
   await writeFile(bad, '{ not json')
-  assert.deepEqual(loadPolicy({ env: {}, files: [bad, good] }), { trustedRoots: [join(dir, 'share')] })
+  assert.deepEqual(loadPolicy({ env: {}, files: [bad, good] }), { trustedRoots: [join(dir, 'share')], runDisabled: true })
   assert.deepEqual(loadPolicy({ env: {}, files: [bad] }).trustedRoots, [])
+})
+
+test('loadPolicy: DATALAD_DESKTOP_DISABLE_RUN=1 or runDisabled in policy.json turns Run & record off', async () => {
+  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_RUN: '1' }, files: ['/nonexistent'] }).runDisabled, true)
+  assert.equal(loadPolicy({ env: {}, files: ['/nonexistent'] }).runDisabled, false)
+  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
+  const off = join(dir, 'a.json')
+  const on = join(dir, 'b.json')
+  await writeFile(off, JSON.stringify({ runDisabled: true }))
+  await writeFile(on, JSON.stringify({ runDisabled: false }))
+  assert.equal(loadPolicy({ env: {}, files: [on, '/nonexistent', off] }).runDisabled, true)
+  assert.equal(loadPolicy({ env: {}, files: [on] }).runDisabled, false)
+})
+
+test('loadPolicy fails closed: a policy.json that exists but cannot be read turns Run & record off', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
+  const bad = join(dir, 'bad.json')
+  await writeFile(bad, '{ not json')
+  assert.equal(loadPolicy({ env: {}, files: [bad] }).runDisabled, true)
 })

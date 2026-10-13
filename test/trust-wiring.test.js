@@ -99,7 +99,7 @@ test('every IPC handler is classified', () => {
   const handlers = [...main.matchAll(/handle\('([^']+)'/g)].map((m) => m[1])
   const guarded = ['adapter:ensureBidsMarker', 'adapter:findUnnestedBidsCandidates', 'adapter:untrackPath', 'adapter:resolveConflict', 'prism:inspect', 'adapter:listDatasets', 'adapter:ignoreOsNoiseFiles', 'adapter:readGitignore', 'adapter:addIgnorePatterns', 'adapter:listBranches', 'adapter:getLastCommit', 'adapter:getWorkingTreeStatus', 'adapter:listRecentCommits', 'adapter:getCommitDetails', 'adapter:getFileDiff', 'adapter:listChangesSince', 'adapter:getProjectHealth', 'adapter:clearRepositoryLock', 'adapter:listOwnTags', 'watch:setActiveProject', 'fs:listEntries', 'fs:revealPath', 'adapter:trackRemote']
   const gated = ['adapter:detectProject', 'dialog:pickDirectory', 'adapter:runCommand']
-  const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'app:version', 'env:ensure', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
+  const noFolder = ['adapter:checkEnvironment', 'adapter:cancelCommand', 'env:status', 'app:version', 'env:ensure', 'app:capabilities', 'identity:get', 'identity:set', 'app:getWorkspaceRoot']
   const readOnlyException = ['adapter:inspectBidsCandidate'] // lists marker names in a typed folder before it is authorized; runs no git
   const newEmptyFolder = ['adapter:prepareFolderRemote'] // writes only into an empty folder, confirmed unless picked (own test below)
   assert.deepEqual([...handlers].sort(), [...guarded, ...gated, ...noFolder, ...readOnlyException, ...newEmptyFolder].sort(), 'classify new handlers here')
