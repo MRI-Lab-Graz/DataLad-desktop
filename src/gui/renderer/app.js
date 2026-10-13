@@ -15,6 +15,7 @@ import { renderAnnexBadge } from './file-badges.js'
 import { collectChangedPaths, computeSaveGating, unsavedLeftovers } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
+import { linesOf, defaultRunMessage, computeRunGating } from './run-dialog.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
 import { createLatestWins } from './latest-wins.js'
 import {
@@ -205,6 +206,16 @@ const elements = {
   projectActionsTitle: document.getElementById('project-actions-title'),
   saveGuidance: document.getElementById('save-guidance'),
   checkEnvButton: document.getElementById('check-env'),
+  openRunButton: document.getElementById('open-run'),
+  runOverlay: document.getElementById('run-overlay'),
+  runForm: document.getElementById('run-form'),
+  runCommand: document.getElementById('run-command'),
+  runInputs: document.getElementById('run-inputs'),
+  runOutputs: document.getElementById('run-outputs'),
+  runMessage: document.getElementById('run-message'),
+  runHint: document.getElementById('run-hint'),
+  runSubmit: document.getElementById('run-submit'),
+  runCancel: document.getElementById('run-cancel'),
   identityOverlay: document.getElementById('identity-overlay'),
   identityForm: document.getElementById('identity-form'),
   identityName: document.getElementById('identity-name'),
@@ -682,6 +693,76 @@ elements.identityForm.addEventListener('submit', async (event) => {
   }
   closeIdentityDialog()
   await refreshGitIdentity()
+})
+
+function updateRunGating() {
+  const gating = computeRunGating({
+    command: elements.runCommand.value,
+    message: elements.runMessage.value,
+    clean: state.workingTreeSnapshot?.clean
+  })
+  elements.runSubmit.disabled = gating.disabled
+  elements.runHint.textContent = gating.hint
+}
+
+function openRunDialog() {
+  if (!elements.runOverlay.hidden || !readProjectPath()) {
+    return
+  }
+  for (const field of [elements.runCommand, elements.runInputs, elements.runOutputs, elements.runMessage]) {
+    field.value = ''
+  }
+  elements.runMessage.dataset.edited = ''
+  elements.runOverlay.hidden = false
+  updateRunGating()
+  elements.runCommand.focus()
+}
+
+function closeRunDialog() {
+  elements.runOverlay.hidden = true
+}
+
+elements.openRunButton.addEventListener('click', openRunDialog)
+elements.runCancel.addEventListener('click', closeRunDialog)
+elements.runOverlay.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeRunDialog()
+  }
+})
+elements.runForm.addEventListener('input', (event) => {
+  // Until the person edits the message themselves, it follows the command.
+  if (event.target === elements.runCommand && elements.runMessage.dataset.edited !== 'true') {
+    elements.runMessage.value = defaultRunMessage(elements.runCommand.value)
+  }
+  if (event.target === elements.runMessage) {
+    elements.runMessage.dataset.edited = 'true'
+  }
+  updateRunGating()
+})
+elements.runForm.addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const projectPath = readProjectPath()
+  if (!projectPath || elements.runSubmit.disabled) {
+    return
+  }
+  const result = await runWorkflowCommand(
+    'run',
+    {
+      projectPath,
+      message: elements.runMessage.value.trim(),
+      command: elements.runCommand.value.trim(),
+      inputs: linesOf(elements.runInputs.value),
+      outputs: linesOf(elements.runOutputs.value)
+    },
+    elements.runSubmit
+  )
+  closeRunDialog()
+  if (result?.ok) {
+    await refreshTimeMachineHistory(projectPath)
+  }
+})
+api.getCapabilities().then((capabilities) => {
+  elements.openRunButton.hidden = !capabilities.run
 })
 
 elements.closeSettingsButton.addEventListener('click', () => {
@@ -3108,6 +3189,11 @@ function updateSaveButtonState() {
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 
+  // The Run & record form follows the same status: a change appearing while it is open disables Run.
+  if (!elements.runOverlay.hidden) {
+    updateRunGating()
+  }
+
   // PRISM and BIDS projects are validated and saved as a whole, whatever is ticked, so describe all of it.
   const savesEverything = prismMode === 'gated' || prismMode === 'bids'
   const selectedFiles = savesEverything ? (snapshot?.files ?? []) : (snapshot?.files ?? []).filter((entry) => state.selectedChangedPaths.has(entry.path))
@@ -3339,6 +3425,10 @@ function buildWorkflowStatusLine(result) {
 }
 
 function actionLabel(commandName) {
+  if (commandName === 'run') {
+    return 'Run'
+  }
+
   if (commandName === 'merge') {
     return 'Merge'
   }
