@@ -7,6 +7,7 @@ import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, inspectProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
+import { assertCommandRequest } from '../datalad/schema.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
@@ -333,11 +334,18 @@ handle('adapter:runCommand', async (event, payload) => {
     if (policy.runDisabled) {
       throw new Error('Run & record has been disabled by your administrator.')
     }
+    // Refuse a malformed request before anyone is asked about it, and show what will really run.
+    assertCommandRequest('run', payload.request)
+    const listed = (label, values) => (values?.length ? `\n${label}: ${values.join(', ')}` : '')
     // The command is typed into the page, so the page alone must never be enough to run it: ask, natively.
     const confirmed = await confirmNative(event, {
       title: 'Run this command?',
       message: `In ${payload.request.projectPath}:`,
-      detail: `${payload.request.command}\n\nIt runs with your permissions, through your system shell, and DataLad records it as a save.`,
+      detail:
+        `${payload.request.command}\n\n(${payload.request.command.trim().split('\n').length} line(s), ${payload.request.command.length} characters)` +
+        listed('Reads', payload.request.inputs) +
+        listed('Writes', payload.request.outputs) +
+        '\n\nIt runs with your permissions, through your system shell, and DataLad records it as a save.',
       confirmLabel: 'Run'
     })
     if (!confirmed) {

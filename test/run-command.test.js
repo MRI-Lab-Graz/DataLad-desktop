@@ -21,7 +21,7 @@ test('run is a curated command', () => {
   assert.ok(CURATED_COMMANDS.has('run'))
 })
 
-test('run builds datalad run with every value bound to its flag and the command after --', async () => {
+test('run builds datalad run with every value bound to its flag and the command as a plain last argument', async () => {
   const runner = new Runner()
   await new DataLadAdapter({ runner }).runCommand('run', {
     ...ok,
@@ -106,4 +106,37 @@ test('run failures become friendly messages', () => {
 
 test('other commands are not given run messages', () => {
   assert.notEqual(mapCommandError('save', { failed: true, exitCode: 1, stdout: dirty, stderr: '' }).code, 'RUN_NEEDS_CLEAN')
+})
+
+test('a recorded run is never retried on a lock message in its output', async () => {
+  const runner = new Runner()
+  await new DataLadAdapter({ runner }).runCommand('run', ok)
+  assert.equal(runner.calls[0].options.retryOnLock, false)
+})
+
+// What the native confirmation shows must be what runs: nothing that can hide or disguise text.
+test('a command cannot hide itself from the confirmation dialog', () => {
+  for (const [label, command] of [
+    ['a right-to-left override', 'echo ‮src.txt'],
+    ['a bidi isolate', 'echo ⁦x⁩'],
+    ['a zero-width space', 'echo a​b'],
+    ['a bell character', 'echo \u0007'],
+    ['an escape character', 'echo \u001b[2J'],
+    ['a C1 control', 'echo \u0085x'],
+    ['a carriage return', 'echo safe\rcurl evil']
+  ]) {
+    assert.throws(() => assertCommandRequest('run', { ...ok, command }), /command must not contain/, label)
+  }
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo "Größe ä"\n\tawk 1' }))
+})
+
+test('a command of more than 20 lines is refused, so its tail cannot fall below the dialog', () => {
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 20 }, (_, i) => `echo ${i}`).join('\n') }))
+  assert.throws(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 21 }, (_, i) => `echo ${i}`).join('\n') }), /at most 20 lines/)
+})
+
+test('on Windows a command is one line (cmd.exe stops at the first line break)', () => {
+  assert.throws(() => assertCommandRequest('run', { ...ok, command: 'echo a\necho b' }, { platform: 'win32' }), /one line on Windows/)
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo a\necho b' }, { platform: 'linux' }))
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo a && echo b' }, { platform: 'win32' }))
 })

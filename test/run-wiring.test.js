@@ -71,3 +71,14 @@ test('the form closes as the run starts, so the running strip and its Cancel but
 test('History shows a recorded command with its braces as typed', () => {
   assert.match(app, /displayCommand\(run\.cmd\)/)
 })
+
+test('the request is validated before the person is asked, and the dialog shows everything that will run', () => {
+  const start = main.indexOf("handle('adapter:runCommand'")
+  const body = main.slice(start, main.indexOf('\n})\n', start))
+  const run = body.slice(body.indexOf("payload.commandName === 'run'"))
+  assert.ok(run.indexOf("assertCommandRequest('run', payload.request)") < run.indexOf('confirmNative('), 'validated, then asked')
+  assert.match(main, /import \{[^}]*assertCommandRequest[^}]*\} from '\.\.\/datalad\/schema\.js'/)
+  assert.match(run, /payload\.request\.inputs/)
+  assert.match(run, /payload\.request\.outputs/)
+  assert.match(run, /command\.length\} characters/)
+})

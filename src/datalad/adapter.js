@@ -1642,7 +1642,7 @@ export class DataLadAdapter {
             // the person typed (awk '{print $1}', ${VAR}) is what runs.
             command.replaceAll('{', '{{').replaceAll('}', '}}')
           ],
-          options: { cwd: projectPath }
+          options: { cwd: projectPath, retryOnLock: false }
         }
       }
       case 'update': {

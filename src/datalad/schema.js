@@ -122,12 +122,26 @@ function isProjectRelativePath(value) {
   return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
 }
 
-function assertRunRequest(request) {
+// Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),
+// bidirectional overrides and isolates, zero-width characters, the byte-order mark.
+const RUN_HIDDEN_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/
+const RUN_MAX_LINES = 20
+
+function assertRunRequest(request, platform) {
   if (request.command.trim() === '') {
     throw new Error('Invalid request for run: command must not be empty')
   }
   if (request.command.includes('\0')) {
     throw new Error('Invalid request for run: command must not contain a NUL character')
+  }
+  if (RUN_HIDDEN_CHARACTERS.test(request.command)) {
+    throw new Error('Invalid request for run: command must not contain control or hidden characters')
+  }
+  if (request.command.trim().split('\n').length > RUN_MAX_LINES) {
+    throw new Error(`Invalid request for run: command must have at most ${RUN_MAX_LINES} lines`)
+  }
+  if (platform === 'win32' && request.command.trim().includes('\n')) {
+    throw new Error('Invalid request for run: command must be one line on Windows (cmd.exe stops at the first line break)')
   }
   if (request.command.length > RUN_MAX_COMMAND_LENGTH) {
     throw new Error(`Invalid request for run: command is too long (at most ${RUN_MAX_COMMAND_LENGTH} characters)`)
@@ -154,7 +168,7 @@ function assertRunRequest(request) {
   }
 }
 
-export function assertCommandRequest(commandName, request) {
+export function assertCommandRequest(commandName, request, { platform = process.platform } = {}) {
   const schema = COMMAND_SCHEMAS[commandName]
   if (!schema) {
     throw new Error(`Unsupported command: ${commandName}`)
@@ -214,7 +228,7 @@ export function assertCommandRequest(commandName, request) {
   }
 
   if (commandName === 'run') {
-    assertRunRequest(request)
+    assertRunRequest(request, platform)
   }
 
   for (const pathValue of request.paths ?? []) {
