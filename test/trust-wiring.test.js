@@ -170,7 +170,7 @@ test('every command that writes to a remote is re-checked in main.js', async () 
   const { DataLadAdapter, CURATED_COMMANDS } = await import('../src/datalad/adapter.js')
   const request = {
     projectPath: '/p', paths: ['a'], message: 'm', branchName: 'b', startPoint: 'abc1234', commitHash: 'abc1234',
-    tagName: 't', tagNames: ['t'], remoteName: 'r', url: '/x', targetPath: '/t', source: 's', relativePath: 'rel'
+    tagName: 't', tagNames: ['t'], remoteName: 'r', url: '/x', targetPath: '/t', source: 's', relativePath: 'rel', command: 'echo hi'
   }
   const pushes = []
   const addsRemote = []

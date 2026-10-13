@@ -86,6 +86,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
   disconnectRemote: {
     required: ['projectPath', 'remoteName'],
     optional: []
+  },
+  run: {
+    required: ['projectPath', 'message', 'command'],
+    optional: ['inputs', 'outputs']
   }
 })
 
@@ -102,12 +106,53 @@ const LEADING_DASH_FIELDS = Object.freeze({
   push: ['remoteName'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
-  disconnectRemote: ['remoteName']
+  disconnectRemote: ['remoteName'],
+  run: ['message']
 })
 
 /**
  * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
  */
+
+const RUN_MAX_COMMAND_LENGTH = 10_000
+const RUN_MAX_PATHS = 200
+
+// Paths DataLad is told about: relative, inside the project (DataLad itself accepts "../x" silently).
+function isProjectRelativePath(value) {
+  return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
+}
+
+function assertRunRequest(request) {
+  if (request.command.trim() === '') {
+    throw new Error('Invalid request for run: command must not be empty')
+  }
+  if (request.command.includes('\0')) {
+    throw new Error('Invalid request for run: command must not contain a NUL character')
+  }
+  if (request.command.length > RUN_MAX_COMMAND_LENGTH) {
+    throw new Error(`Invalid request for run: command is too long (at most ${RUN_MAX_COMMAND_LENGTH} characters)`)
+  }
+  for (const field of ['inputs', 'outputs']) {
+    const values = request[field]
+    if (values === undefined) {
+      continue
+    }
+    if (!Array.isArray(values)) {
+      throw new Error(`Invalid request for run: ${field} must be an array`)
+    }
+    if (values.length > RUN_MAX_PATHS) {
+      throw new Error(`Invalid request for run: at most ${RUN_MAX_PATHS} ${field}`)
+    }
+    for (const value of values) {
+      if (typeof value !== 'string' || !value.trim()) {
+        throw new Error(`Invalid request for run: each ${field} entry must be a non-empty string`)
+      }
+      if (!isProjectRelativePath(value)) {
+        throw new Error(`Invalid request for run: ${field} must be paths inside the project`)
+      }
+    }
+  }
+}
 
 export function assertCommandRequest(commandName, request) {
   const schema = COMMAND_SCHEMAS[commandName]
@@ -129,7 +174,7 @@ export function assertCommandRequest(commandName, request) {
   // Text fields must be text: spawn() turns an array into a string, and the main process compares strings.
   for (const field of [...schema.required, ...schema.optional]) {
     const value = request[field]
-    if (field === 'paths' || field === 'tagNames' || value === undefined || value === null) {
+    if (field === 'paths' || field === 'tagNames' || field === 'inputs' || field === 'outputs' || value === undefined || value === null) {
       continue
     }
     if (field === 'force' ? typeof value !== 'boolean' : typeof value !== 'string') {
@@ -166,6 +211,10 @@ export function assertCommandRequest(commandName, request) {
     if (!Array.isArray(request.tagNames) || request.tagNames.length === 0 || request.tagNames.some((n) => typeof n !== 'string')) {
       throw new Error('Invalid request for pushTags: tagNames must be a non-empty array of strings')
     }
+  }
+
+  if (commandName === 'run') {
+    assertRunRequest(request)
   }
 
   for (const pathValue of request.paths ?? []) {

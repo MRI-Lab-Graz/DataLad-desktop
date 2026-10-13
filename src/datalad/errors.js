@@ -43,6 +43,35 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
+  if (commandName === 'run') {
+    const combined = `${stdout}\n${stderr}`
+    const missing = /Input did not match existing file: ([^\]\n]+)/i.exec(combined)
+    if (missing) {
+      return {
+        code: 'RUN_INPUT_MISSING',
+        title: 'An input file was not found',
+        message: `An input file was not found: ${missing[1].trim()}. Check the spelling, or leave the Inputs empty.`,
+        technicalDetails: details
+      }
+    }
+    if (hasPattern(combined, /clean dataset required/)) {
+      return {
+        code: 'RUN_NEEDS_CLEAN',
+        title: 'Please save your changes first',
+        message: 'Save your changes first, then run again, so the recorded result contains only what the command made.',
+        technicalDetails: details
+      }
+    }
+    if (hasPattern(combined, /non-zero exit code|run\(error\)/)) {
+      return {
+        code: 'RUN_COMMAND_FAILED',
+        title: 'Your command stopped with an error',
+        message: 'Your command stopped with an error, so nothing was recorded. Files it already changed are left as unsaved changes: save or discard them.',
+        technicalDetails: details
+      }
+    }
+  }
+
   // datalad prints this particular failure as a create(error) result line on
   // stdout, not stderr, so this one check needs to look at both streams.
   // Guarded on --force not being present: BIDS mode intentionally passes
