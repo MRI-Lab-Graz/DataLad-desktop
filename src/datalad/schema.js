@@ -107,7 +107,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
   disconnectRemote: ['remoteName'],
-  run: ['message']
+  run: ['message', 'command']
 })
 
 /**

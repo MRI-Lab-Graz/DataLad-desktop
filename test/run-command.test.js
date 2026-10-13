@@ -32,7 +32,7 @@ test('run builds datalad run with every value bound to its flag and the command 
     '-C', '/tmp/p', 'run', '--message=Summary',
     '--input=data/a.csv', '--input=raw/*.tsv', '--input=my file.csv',
     '--output=summary.txt',
-    '--', 'python summarize.py'
+    'python summarize.py'
   ])
   assert.equal(runner.calls[0].command, 'datalad')
   assert.deepEqual(runner.calls[0].options.cwd, '/tmp/p')
@@ -41,13 +41,31 @@ test('run builds datalad run with every value bound to its flag and the command 
 test('run without inputs or outputs passes none', async () => {
   const runner = new Runner()
   await new DataLadAdapter({ runner }).runCommand('run', ok)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/p', 'run', '--message=Summary', '--', 'python summarize.py'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/p', 'run', '--message=Summary', 'python summarize.py'])
 })
 
-test('a command or message that looks like an option stays a value', async () => {
+// Measured with real DataLad: after "--" a single string is taken as ONE PROGRAM NAME ("/bin/sh: node s.js: command
+// not found"); without "--" it is a shell command line (pipes, redirects, several words). So the command goes as a
+// plain last argument, and one that starts with "-" (which DataLad would parse as an option) is refused.
+test('the command is one plain last argument (a shell line), never after --', async () => {
   const runner = new Runner()
-  await new DataLadAdapter({ runner }).runCommand('run', { ...ok, command: '--help && echo "q" | wc -l > out.txt' })
-  assert.deepEqual(runner.calls[0].args.slice(-2), ['--', '--help && echo "q" | wc -l > out.txt'])
+  await new DataLadAdapter({ runner }).runCommand('run', { ...ok, command: 'echo "q" | wc -l > out.txt' })
+  assert.equal(runner.calls[0].args.at(-1), 'echo "q" | wc -l > out.txt')
+  assert.equal(runner.calls[0].args.includes('--'), false)
+})
+
+// Measured with real DataLad: plain braces in the command are DataLad placeholders and the run is refused
+// ("tuple index out of range" / "command has an unrecognized placeholder"); doubled braces run literally.
+test('braces in the command are doubled so that what is typed is what runs', async () => {
+  const runner = new Runner()
+  await new DataLadAdapter({ runner }).runCommand('run', { ...ok, command: "awk '{print $1}' t.txt > o.txt; echo ${X}" })
+  assert.equal(runner.calls[0].args.at(-1), "awk '{{print $1}}' t.txt > o.txt; echo ${{X}}")
+})
+
+test('a command or message that looks like an option is refused', () => {
+  assert.throws(() => assertCommandRequest('run', { ...ok, command: '--help' }), /command cannot start with -/)
+  assert.throws(() => assertCommandRequest('run', { ...ok, command: '   -v' }), /command cannot start with -/)
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo -- -x' }))
   assert.throws(() => assertCommandRequest('run', { ...ok, message: '--amend' }), /message cannot start with -/)
 })
 

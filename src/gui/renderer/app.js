@@ -10,7 +10,7 @@ import { escapeHtml } from './escape-html.js'
 import { rowDataActions } from './row-data-actions.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
-import { isRunCommit, parseRunRecord } from './run-record.js'
+import { displayCommand, isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { collectChangedPaths, computeSaveGating, unsavedLeftovers } from './save-gating.js'
 import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
@@ -745,18 +745,16 @@ elements.runForm.addEventListener('submit', async (event) => {
   if (!projectPath || elements.runSubmit.disabled) {
     return
   }
-  const result = await runWorkflowCommand(
-    'run',
-    {
-      projectPath,
-      message: elements.runMessage.value.trim(),
-      command: elements.runCommand.value.trim(),
-      inputs: linesOf(elements.runInputs.value),
-      outputs: linesOf(elements.runOutputs.value)
-    },
-    elements.runSubmit
-  )
+  const request = {
+    projectPath,
+    message: elements.runMessage.value.trim(),
+    command: elements.runCommand.value.trim(),
+    inputs: linesOf(elements.runInputs.value),
+    outputs: linesOf(elements.runOutputs.value)
+  }
+  // Close first: the running strip (progress, Cancel) must not sit behind the dimmed form.
   closeRunDialog()
+  const result = await runWorkflowCommand('run', request, elements.openRunButton)
   if (result?.ok) {
     await refreshTimeMachineHistory(projectPath)
   }
@@ -2737,7 +2735,7 @@ function renderTimeMachineDetail() {
     : run.sidecar
       ? '<div class="tm-run-record"><h4>Produced by a recorded command</h4><p class="hint-inline">The command is stored in the project\'s .datalad/runinfo folder.</p></div>'
       : '<div class="tm-run-record"><h4>Produced by a recorded command</h4>' +
-        `<pre class="panel panel-code">${escapeHtml(run.cmd)}</pre>` +
+        `<pre class="panel panel-code">${escapeHtml(displayCommand(run.cmd))}</pre>` +
         `<p class="hint-inline">Ran in <code>${escapeHtml(run.pwd)}</code>` +
         (run.exit === null ? '' : `, exit code ${run.exit}`) + '.</p>' +
         (run.inputs.length ? `<p class="hint-inline">Inputs: ${run.inputs.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}</p>` : '') +

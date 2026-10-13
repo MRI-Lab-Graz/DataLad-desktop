@@ -52,8 +52,8 @@ error, so nothing was recorded. Files it already changed are left as unsaved cha
 
 | Unit | Responsibility |
 |---|---|
-| `src/datalad/schema.js` | `run` request: required `projectPath`, `message`, `command`; optional `inputs`, `outputs` (arrays of strings). Rejects: empty or non-string command, NUL, command over 10 000 characters, more than 200 inputs/outputs, absolute or `..` input/output paths, message starting with `-`. |
-| `src/datalad/adapter.js` | `run` in `CURATED_COMMANDS`; args `['-C', p, 'run', '--message=<m>', '--input=<i>'..., '--output=<o>'..., '--', '<command>']` (every value bound to its flag, command after `--`). |
+| `src/datalad/schema.js` | `run` request: required `projectPath`, `message`, `command`; optional `inputs`, `outputs` (arrays of strings). Rejects: empty or non-string command, a command starting with `-` (DataLad would parse it as an option), NUL, command over 10 000 characters, more than 200 inputs/outputs, absolute or `..` input/output paths, message starting with `-`. |
+| `src/datalad/adapter.js` | `run` in `CURATED_COMMANDS`; args `['-C', p, 'run', '--message=<m>', '--input=<i>'..., '--output=<o>'..., '<command>']`: the values are bound to their flags; the command is the last plain argument (measured: after `--` DataLad takes a single string as one *program name*, not a shell line). |
 | `src/datalad/errors.js` | the three friendly errors above. |
 | `src/gui/main.js` | in `adapter:runCommand`: for `run`, refuse when the admin switch is on, then **ask in a native dialog** showing project and exact command before anything runs. |
 | `src/gui/policy.js` | `runDisabled` from `policy.json` or `DATALAD_DESKTOP_DISABLE_RUN=1` (as the removed console had). |
@@ -67,8 +67,8 @@ error, so nothing was recorded. Files it already changed are left as unsaved cha
 - Only available for an authorized, trusted project folder (the existing gate on `adapter:runCommand`).
 - **Administrators can remove it**: `DATALAD_DESKTOP_DISABLE_RUN=1` or `{"runDisabled": true}` in the system
   `policy.json`; the button is hidden and the main process refuses. Documented in `SECURITY.md`.
-- Every value is bound to its flag (`--message=`, `--input=`, `--output=`) and the command follows `--`; a
-  message or path that looks like an option cannot become one.
+- Message, input and output values are bound to their flags (`--message=`, `--input=`, `--output=`); a command
+  that starts with `-` is refused, so nothing a person types can become a DataLad option.
 - Honest limit, stated in `SECURITY.md`: the command runs with the user's permissions through the system shell;
   on Windows `cmd.exe` also looks in the project folder first, so a hostile project could shadow a program name.
   The confirmation dialog and folder trust are the controls; this is not a sandbox.

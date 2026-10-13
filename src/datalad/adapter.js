@@ -1636,7 +1636,11 @@ export class DataLadAdapter {
             '-C', projectPath, 'run', `--message=${message}`,
             ...(request.inputs ?? []).map((value) => `--input=${value}`),
             ...(request.outputs ?? []).map((value) => `--output=${value}`),
-            '--', command
+            // Plain last argument: after "--" datalad would take the string as one program name, not a shell line.
+            // schema.js refuses a command starting with "-", which datalad would parse as an option. Braces are
+            // datalad placeholders ({inputs}, ...) and a run with a stray one is refused: double them, so that what
+            // the person typed (awk '{print $1}', ${VAR}) is what runs.
+            command.replaceAll('{', '{{').replaceAll('}', '}}')
           ],
           options: { cwd: projectPath }
         }

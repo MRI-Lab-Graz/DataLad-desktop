@@ -62,3 +62,12 @@ test('the button follows the admin switch and a run is labelled Run', () => {
 test('an open form follows the live project status, so a change appearing while it is open disables Run', () => {
   assert.match(fnBody('function updateSaveButtonState'), /if \(!elements\.runOverlay\.hidden\) \{\s*updateRunGating\(\)/)
 })
+
+test('the form closes as the run starts, so the running strip and its Cancel button are not hidden behind it', () => {
+  const body = fnBody("elements.runForm.addEventListener('submit'")
+  assert.ok(body.indexOf('closeRunDialog()') < body.indexOf("runWorkflowCommand("), 'closed before the run is awaited')
+})
+
+test('History shows a recorded command with its braces as typed', () => {
+  assert.match(app, /displayCommand\(run\.cmd\)/)
+})
