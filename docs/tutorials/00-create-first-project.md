@@ -58,7 +58,9 @@ keeps the first save scientifically auditable.
 
 ## Failure injection
 
-- Try creating into a non-empty folder once.
+- Try creating into a non-empty folder once: click **Switch Project**, open the
+  **Create Project** tile, and enter the same **Location** and **Project name**
+  as before.
 - Confirm the warning and explain what content would have been mixed.
 - Recover by entering a different **Project name** (a new folder) and repeating creation.
 

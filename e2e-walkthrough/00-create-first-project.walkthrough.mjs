@@ -42,9 +42,21 @@ test.after(async () => {
   if (root) await removeTree(root)
 })
 
+test('Tutorial 00 · step 0: first launch asks for name and email', () =>
+  step('Tutorial 00 step 0', async () => {
+    await app.page.waitForSelector('#identity-overlay:not([hidden])', { timeout: 15_000 })
+    await app.page.fill('#identity-name', 'Walk Through')
+    await app.page.fill('#identity-email', 'walk@example.org')
+    await app.page.click('#identity-save')
+    await app.page.waitForSelector('#identity-overlay', { state: 'hidden' })
+  }))
+
+// The identity dialog covers the window at first launch, so a student answers it before reaching Setup.
 test('Tutorial 00 · step 1: Setup → Check Environment', () =>
   step('Tutorial 00 step 1', async () => {
-    await app.page.evaluate(() => document.getElementById('check-env').click())
+    await app.page.click('#open-settings')
+    assert.ok(await app.page.isVisible('#check-env'), 'Setup shows Check Environment')
+    await app.page.click('#check-env')
     await app.page.waitForFunction(() => !document.getElementById('environment-output').hidden && /OK|MISSING/.test(document.getElementById('environment-output').textContent), null, { timeout: SLOW })
     const out = await text('environment-output')
     for (const tool of ['Python', 'DataLad', 'git-annex']) {
@@ -52,22 +64,13 @@ test('Tutorial 00 · step 1: Setup → Check Environment', () =>
     }
   }))
 
-test('Tutorial 00 · step 0: first launch asks for name and email', () =>
-  step('Tutorial 00 step 0', async () => {
-    await app.page.waitForSelector('#identity-overlay:not([hidden])', { timeout: 15_000 })
-    await app.page.fill('#identity-name', 'Walk Through')
-    await app.page.fill('#identity-email', 'walk@example.org')
-    await app.page.evaluate(() => document.getElementById('identity-save').click())
-    await app.page.waitForSelector('#identity-overlay', { state: 'hidden' })
-  }))
-
 test('Tutorial 00 · step 3-4: Create Project', () =>
   step('Tutorial 00 step 3-4', async () => {
-    await app.page.evaluate(() => document.getElementById('settings-card')?.setAttribute('hidden', ''))
+    await app.page.click('#close-settings') // the Setup card sits above the start tiles; a student closes it first
     await app.page.click('#onboarding-tile-create')
     await app.page.fill('#create-project-path', root)
     await app.page.fill('#create-project-name', NAME)
-    await app.page.evaluate(() => document.getElementById('create-project').click())
+    await app.page.click('#create-project')
     await app.page.waitForFunction((p) => document.getElementById('current-project-path').textContent === p, projectPath, { timeout: SLOW })
   }))
 
@@ -85,7 +88,7 @@ test('Tutorial 00 · step 6-7: first save', () =>
     await writeFile(join(projectPath, 'README.md'), 'Purpose: walkthrough pilot.\nOwner: Walk Through\n')
     await app.page.waitForFunction(() => document.getElementById('changed-files-output').textContent.includes('README.md'), null, { timeout: SLOW })
     await app.page.fill('#message', 'init: create project skeleton and first note')
-    await app.page.evaluate(() => document.getElementById('save-project').click())
+    await app.page.click('#save-project')
     await app.page.waitForFunction(() => /Save (completed|failed)/.test(document.getElementById('last-action-state').textContent), null, { timeout: SLOW })
     assert.ok(commitCount() > before, 'a new commit exists')
     assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: projectPath, encoding: 'utf8' }).trim(), '')
@@ -93,12 +96,18 @@ test('Tutorial 00 · step 6-7: first save', () =>
 
 test('Tutorial 00 · failure injection: non-empty folder is refused', () =>
   step('Tutorial 00 failure injection', async () => {
+    const commitsBefore = commitCount()
+    const shownBefore = await text('current-project-path')
     await app.page.click('#switch-project') // back to the start screen
     // the tile toggles; the panel may still be open from step 3-4
     if (!(await app.page.isVisible('#create-project-path'))) await app.page.click('#onboarding-tile-create')
     await app.page.fill('#create-project-path', root)
     await app.page.fill('#create-project-name', NAME)
-    await app.page.evaluate(() => document.getElementById('create-project').click())
+    await app.page.click('#create-project')
     await app.page.waitForFunction(() => document.getElementById('create-project-output').textContent.includes('is not empty'), null, { timeout: SLOW })
     assert.deepEqual(await readdir(root), [NAME], 'no second project was made')
+    assert.equal(commitCount(), commitsBefore, 'the existing project got no new commit')
+    assert.equal(execFileSync('git', ['status', '--porcelain'], { cwd: projectPath, encoding: 'utf8' }).trim(), '')
+    assert.ok((await readdir(projectPath)).includes('README.md'), 'README.md is still there')
+    assert.equal(await text('current-project-path'), shownBefore, 'the open project did not change')
   }))
