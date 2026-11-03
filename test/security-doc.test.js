@@ -125,3 +125,13 @@ test('SECURITY.md documents that file diffs never run repository-named programs,
   assert.match(adapter, /DIFF_SAFE_FLAGS = \['--no-ext-diff', '--no-textconv'/)
   assert.match(adapter, /must never run a program named by repository content/)
 })
+
+test('SECURITY.md documents Run & record: native confirmation, the admin switch, and its honest limit', () => {
+  assert.match(doc, /Run & record/)
+  assert.match(doc, /DATALAD_DESKTOP_DISABLE_RUN/)
+  assert.match(doc, /runDisabled/)
+  assert.match(doc, /native (dialog|confirmation)/i)
+  assert.match(doc, /not a sandbox/i)
+  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
+  assert.match(policy, /DATALAD_DESKTOP_DISABLE_RUN/)
+})

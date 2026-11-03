@@ -5,6 +5,8 @@ import { isAbsolute, join } from 'node:path'
 // administrators can write, and which an update/reinstall of the app does not touch
 // (the install folder is wiped on every update); a policy.json in the app's resources folder is still honoured.
 // trustedRoots: absolute folders an administrator pre-trusts, e.g. a lab share. A file we cannot parse names none.
+// runDisabled: turns Run & record off. The env var suits managed launchers; a policy file that exists but cannot be
+// read is "locked down", never "absent" (fail closed).
 export function policyFiles({ platform = process.platform, env = process.env, resourcesDir }) {
   const system = {
     win32: join(env.ProgramData ?? 'C:\\ProgramData', 'DataLad Desktop', 'policy.json'),
@@ -13,20 +15,23 @@ export function policyFiles({ platform = process.platform, env = process.env, re
   return [system, join(resourcesDir, 'policy.json')]
 }
 
-export function loadPolicy({ files = [] }) {
+export function loadPolicy({ env = process.env, files = [] }) {
+  let runDisabled = env.DATALAD_DESKTOP_DISABLE_RUN === '1'
   const trustedRoots = new Set()
   for (const file of files) {
     let parsed
     try {
       parsed = JSON.parse(readFileSync(file, 'utf8'))
-    } catch {
+    } catch (error) {
+      runDisabled ||= error.code !== 'ENOENT'
       continue // an unreadable file names no trusted roots
     }
+    runDisabled ||= parsed?.runDisabled === true
     for (const root of Array.isArray(parsed?.trustedRoots) ? parsed.trustedRoots : []) {
       if (typeof root === 'string' && isAbsolute(root)) {
         trustedRoots.add(root)
       }
     }
   }
-  return { trustedRoots: [...trustedRoots] }
+  return { trustedRoots: [...trustedRoots], runDisabled }
 }

@@ -2064,3 +2064,14 @@ select:disabled {
 .changed-files-list:has(.file-diff:not([hidden])) {
   max-height: 70vh;
 }
+
+#run-form {
+  max-width: 640px;
+  width: 92vw;
+}
+
+#run-form textarea {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}

@@ -619,3 +619,20 @@ test('ProcessRunner hands every stdout chunk to onData, untouched', async () => 
   })
   assert.equal(chunks.join(''), 'get(ok): a (file)\n')
 })
+
+// `datalad run` runs a command the person typed: it has already run when its stderr mentions a lock, so running it
+// again (the retry meant for git's own transient contention) would repeat its side effects.
+test('ProcessRunner runs a command once when retryOnLock is false, even if its output mentions a lock', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'process-runner-nolock-'))
+  const counterFile = join(dir, 'counter')
+  await writeFile(counterFile, '0')
+  const script =
+    "const fs = require('fs'); const f = process.argv[1]; " +
+    'fs.writeFileSync(f, String(parseInt(fs.readFileSync(f, "utf8"), 10) + 1)); ' +
+    'process.stderr.write("fatal: Unable to create \'/tmp/fake/.git/index.lock\': File exists.\\n"); process.exit(1);'
+
+  const result = await new ProcessRunner().run(process.execPath, ['-e', script, counterFile], { retryOnLock: false })
+
+  assert.equal(result.failed, true)
+  assert.equal(await readFile(counterFile, 'utf8'), '1')
+})

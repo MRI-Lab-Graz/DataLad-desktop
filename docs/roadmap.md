@@ -85,4 +85,5 @@ These non-goals are about the curated novice-facing action set (Get/Save/Update/
 power-user access in general. Power users have the terminal; whatever they record there, including
 `datalad run` commands, shows up in Tools → History. The command console was removed (it duplicated the
 terminal and was the largest security surface). A small "Run & record" dialog (command, inputs, outputs,
-message) is planned as the one power feature that fits the product.
+message; Tools → History) is the one power feature that fits the product: it runs through `datalad run`, shows
+the exact command in a native confirmation first, and can be disabled by an administrator.

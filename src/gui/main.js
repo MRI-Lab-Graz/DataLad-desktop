@@ -7,6 +7,7 @@ import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
 import { gateSave, inspectProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
+import { assertCommandRequest } from '../datalad/schema.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
@@ -110,6 +111,26 @@ const trustGate = () =>
 
 // Native yes/no the renderer cannot answer. E2E drives the real app without a human, so an
 // unpackaged build started by the e2e driver answers yes itself; a packaged app never does.
+// What the page gets back when the person declines the native "Run this command?" question.
+const runDeclinedResult = () => ({
+  ok: false,
+  commandName: 'run',
+  command: 'datalad',
+  args: [],
+  exitCode: null,
+  stdout: '',
+  stderr: '',
+  failed: true,
+  cancelled: true,
+  warnings: [],
+  userError: {
+    code: 'RUN_DECLINED',
+    title: 'Not run',
+    message: 'You chose not to run the command, so nothing was started.',
+    technicalDetails: ''
+  }
+})
+
 async function confirmNative(event, { title, message, detail, confirmLabel }) {
   if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
     return true
@@ -309,6 +330,29 @@ handle('adapter:runCommand', async (event, payload) => {
     }
   }
 
+  if (payload.commandName === 'run') {
+    if (policy.runDisabled) {
+      throw new Error('Run & record has been disabled by your administrator.')
+    }
+    // Refuse a malformed request before anyone is asked about it, and show what will really run.
+    assertCommandRequest('run', payload.request)
+    const listed = (label, values) => (values?.length ? `\n${label}: ${values.join(', ')}` : '')
+    // The command is typed into the page, so the page alone must never be enough to run it: ask, natively.
+    const confirmed = await confirmNative(event, {
+      title: 'Run this command?',
+      message: `In ${payload.request.projectPath}:`,
+      detail:
+        `${payload.request.command}\n\n(${payload.request.command.trim().split('\n').length} line(s), ${payload.request.command.length} characters)` +
+        listed('Reads', payload.request.inputs) +
+        listed('Writes', payload.request.outputs) +
+        '\n\nIt runs with your permissions, through your system shell, and DataLad records it as a save.',
+      confirmLabel: 'Run'
+    })
+    if (!confirmed) {
+      return runDeclinedResult()
+    }
+  }
+
   let request = payload.request
   if (createdEmpty) {
     request = { ...request, force: false } // empty a moment ago: nothing to adopt, and nothing filled in since may be
@@ -356,6 +400,8 @@ handle('adapter:cancelCommand', (_event, runId) => {
 })
 
 handle('app:version', () => app.getVersion())
+
+handle('app:capabilities', () => ({ run: !policy.runDisabled }))
 
 handle('env:status', () => envStatus({ runner: toolRunner, envDir: managedEnvDir() }))
 

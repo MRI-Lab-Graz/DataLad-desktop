@@ -86,6 +86,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
   disconnectRemote: {
     required: ['projectPath', 'remoteName'],
     optional: []
+  },
+  run: {
+    required: ['projectPath', 'message', 'command'],
+    optional: ['inputs', 'outputs']
   }
 })
 
@@ -102,14 +106,69 @@ const LEADING_DASH_FIELDS = Object.freeze({
   push: ['remoteName'],
   createProject: ['procedure'],
   createSubdataset: ['procedure'],
-  disconnectRemote: ['remoteName']
+  disconnectRemote: ['remoteName'],
+  run: ['message', 'command']
 })
 
 /**
  * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
  */
 
-export function assertCommandRequest(commandName, request) {
+const RUN_MAX_COMMAND_LENGTH = 10_000
+const RUN_MAX_PATHS = 200
+
+// Paths DataLad is told about: relative, inside the project (DataLad itself accepts "../x" silently).
+function isProjectRelativePath(value) {
+  return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
+}
+
+// Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),
+// bidirectional overrides and isolates, zero-width characters, the byte-order mark.
+const RUN_HIDDEN_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/
+const RUN_MAX_LINES = 20
+
+function assertRunRequest(request, platform) {
+  if (request.command.trim() === '') {
+    throw new Error('Invalid request for run: command must not be empty')
+  }
+  if (request.command.includes('\0')) {
+    throw new Error('Invalid request for run: command must not contain a NUL character')
+  }
+  if (RUN_HIDDEN_CHARACTERS.test(request.command)) {
+    throw new Error('Invalid request for run: command must not contain control or hidden characters')
+  }
+  if (request.command.trim().split('\n').length > RUN_MAX_LINES) {
+    throw new Error(`Invalid request for run: command must have at most ${RUN_MAX_LINES} lines`)
+  }
+  if (platform === 'win32' && request.command.trim().includes('\n')) {
+    throw new Error('Invalid request for run: command must be one line on Windows (cmd.exe stops at the first line break)')
+  }
+  if (request.command.length > RUN_MAX_COMMAND_LENGTH) {
+    throw new Error(`Invalid request for run: command is too long (at most ${RUN_MAX_COMMAND_LENGTH} characters)`)
+  }
+  for (const field of ['inputs', 'outputs']) {
+    const values = request[field]
+    if (values === undefined) {
+      continue
+    }
+    if (!Array.isArray(values)) {
+      throw new Error(`Invalid request for run: ${field} must be an array`)
+    }
+    if (values.length > RUN_MAX_PATHS) {
+      throw new Error(`Invalid request for run: at most ${RUN_MAX_PATHS} ${field}`)
+    }
+    for (const value of values) {
+      if (typeof value !== 'string' || !value.trim()) {
+        throw new Error(`Invalid request for run: each ${field} entry must be a non-empty string`)
+      }
+      if (!isProjectRelativePath(value)) {
+        throw new Error(`Invalid request for run: ${field} must be paths inside the project`)
+      }
+    }
+  }
+}
+
+export function assertCommandRequest(commandName, request, { platform = process.platform } = {}) {
   const schema = COMMAND_SCHEMAS[commandName]
   if (!schema) {
     throw new Error(`Unsupported command: ${commandName}`)
@@ -129,7 +188,7 @@ export function assertCommandRequest(commandName, request) {
   // Text fields must be text: spawn() turns an array into a string, and the main process compares strings.
   for (const field of [...schema.required, ...schema.optional]) {
     const value = request[field]
-    if (field === 'paths' || field === 'tagNames' || value === undefined || value === null) {
+    if (field === 'paths' || field === 'tagNames' || field === 'inputs' || field === 'outputs' || value === undefined || value === null) {
       continue
     }
     if (field === 'force' ? typeof value !== 'boolean' : typeof value !== 'string') {
@@ -166,6 +225,10 @@ export function assertCommandRequest(commandName, request) {
     if (!Array.isArray(request.tagNames) || request.tagNames.length === 0 || request.tagNames.some((n) => typeof n !== 'string')) {
       throw new Error('Invalid request for pushTags: tagNames must be a non-empty array of strings')
     }
+  }
+
+  if (commandName === 'run') {
+    assertRunRequest(request, platform)
   }
 
   for (const pathValue of request.paths ?? []) {

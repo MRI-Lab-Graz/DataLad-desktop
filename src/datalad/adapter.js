@@ -32,7 +32,8 @@ export const CURATED_COMMANDS = new Set([
   'createTag',
   'pushTags',
   'verify',
-  'addRemote'
+  'addRemote',
+  'run'
 ])
 // What `git init --bare` creates: the only things cleaned up after a failed folder-remote setup.
 const BARE_REPOSITORY_ENTRIES = ['HEAD', 'config', 'description', 'hooks', 'info', 'objects', 'refs', 'branches', 'packed-refs']
@@ -1625,6 +1626,23 @@ export class DataLadAdapter {
             ...(paths.length > 0 ? ['--', ...paths] : [])
           ],
           options: { cwd: projectPath }
+        }
+      }
+      case 'run': {
+        const { projectPath, message, command } = request
+        return {
+          command: 'datalad',
+          args: [
+            '-C', projectPath, 'run', `--message=${message}`,
+            ...(request.inputs ?? []).map((value) => `--input=${value}`),
+            ...(request.outputs ?? []).map((value) => `--output=${value}`),
+            // Plain last argument: after "--" datalad would take the string as one program name, not a shell line.
+            // schema.js refuses a command starting with "-", which datalad would parse as an option. Braces are
+            // datalad placeholders ({inputs}, ...) and a run with a stray one is refused: double them, so that what
+            // the person typed (awk '{print $1}', ${VAR}) is what runs.
+            command.replaceAll('{', '{{').replaceAll('}', '}}')
+          ],
+          options: { cwd: projectPath, retryOnLock: false }
         }
       }
       case 'update': {

@@ -4,6 +4,11 @@ const RUN_PREFIX = '[DATALAD RUNCMD]'
 const RECORD_BLOCK = /=== Do not change lines below ===\n([\s\S]*?)\n\^\^\^ Do not change lines above \^\^\^/
 const list = (value) => (Array.isArray(value) ? value.map(String) : [])
 
+// DataLad records a command's literal braces doubled ("{{print $1}}", see Run & record); show what actually ran.
+export function displayCommand(cmd) {
+  return String(cmd).replaceAll('{{', '{').replaceAll('}}', '}')
+}
+
 export function isRunCommit(subject) {
   return String(subject ?? '').startsWith(RUN_PREFIX)
 }

@@ -583,6 +583,9 @@
             Browse the full history of this project, restore individual files from any past save point,
             or branch from one — nothing changes unless you explicitly restore a file.
           </p>
+          <div class="row-actions">
+            <button id="open-run" class="button button-ghost button-inline" type="button">Run &amp; record…</button>
+          </div>
 
           <section class="status-box" aria-labelledby="tm-history-title">
             <div class="section-head branch-head">
@@ -643,6 +646,36 @@
           </div>
         </div>
       </section>
+    </div>
+
+    <div id="run-overlay" class="global-busy-overlay" hidden>
+      <form id="run-form" class="global-busy-card identity-card" role="dialog" aria-modal="true" aria-labelledby="run-title">
+        <h2 id="run-title">Run &amp; record</h2>
+        <p class="lede-small">Runs in the project folder through your system shell, like a terminal; pipes and redirects work. DataLad records the command, so the result can be repeated.</p>
+        <label class="field">
+          <span>Command</span>
+          <textarea id="run-command" rows="3" spellcheck="false" placeholder="python summarize.py"></textarea>
+        </label>
+        <label class="field">
+          <span>Inputs (optional, one per line)</span>
+          <textarea id="run-inputs" rows="2" spellcheck="false" placeholder="data.csv"></textarea>
+          <p class="hint-inline">Files the command reads. They are downloaded first if they are not on this computer.</p>
+        </label>
+        <label class="field">
+          <span>Outputs (optional, one per line)</span>
+          <textarea id="run-outputs" rows="2" spellcheck="false" placeholder="summary.txt"></textarea>
+          <p class="hint-inline">Files the command writes. Existing ones are made writable first.</p>
+        </label>
+        <label class="field">
+          <span>Message</span>
+          <input id="run-message" type="text" placeholder="What does this run produce?" />
+        </label>
+        <p id="run-hint" class="hint-inline hint-inline-warning" role="status"></p>
+        <div class="row-actions">
+          <button id="run-cancel" class="button button-ghost button-inline" type="button">Cancel</button>
+          <button id="run-submit" class="button button-inline" type="submit">Run &amp; record</button>
+        </div>
+      </form>
     </div>
 
     <div id="identity-overlay" class="global-busy-overlay" hidden>

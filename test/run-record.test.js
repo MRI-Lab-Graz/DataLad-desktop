@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isRunCommit, parseRunRecord } from '../src/gui/renderer/run-record.js'
+import { displayCommand, isRunCommit, parseRunRecord } from '../src/gui/renderer/run-record.js'
 
 const REAL = `[DATALAD RUNCMD] count bytes
 
@@ -46,4 +46,12 @@ test('parseRunRecord returns null for ordinary saves and hand-edited records', (
 test('isRunCommit recognises the run subject prefix', () => {
   assert.equal(isRunCommit('[DATALAD RUNCMD] count bytes'), true)
   assert.equal(isRunCommit('fix typo'), false)
+})
+
+// DataLad stores a command's literal braces doubled ("{{print $1}}"); History shows what actually ran.
+test('displayCommand shows the braces as typed, and leaves a recorded placeholder alone', () => {
+  assert.equal(displayCommand("awk '{{print $1}}' t.txt"), "awk '{print $1}' t.txt")
+  assert.equal(displayCommand('echo ${{X}}'), 'echo ${X}')
+  assert.equal(displayCommand('cp {inputs} {outputs}'), 'cp {inputs} {outputs}')
+  assert.equal(displayCommand('plain command'), 'plain command')
 })

@@ -83,7 +83,10 @@ export class ProcessRunner {
     for (let attempt = 0; ; attempt += 1) {
       const result = await this.#runOnce(command, args, options)
 
+      // retryOnLock: false for a command the person typed (datalad run): it has already run when its output mentions
+      // a lock, so running it again would repeat its side effects (and hide the real error).
       if (
+        options.retryOnLock !== false &&
         result.failed &&
         !result.cancelled &&
         attempt < MAX_LOCK_RETRIES &&
