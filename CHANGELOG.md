@@ -1,6 +1,23 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2, v0.5.3.
+
+## 0.5.3
+
+Easier everyday use: one Save for the whole project, "Show changes", and "Run & record". It also fixes a folder-trust question that appeared for every shared DataLad dataset, and the Windows installer fix from 0.5.2 (that tag was never published as a release, so it is included here).
+
+**Upgrade notes**
+- Save now always saves the whole project, nested datasets included. The nested-dataset picker and the "manual file paths" box are gone, and so is the Power User Console.
+- **Run & record** runs a command you type, on your computer. The app shows the exact command and asks for your confirmation every time. An administrator can turn the feature off completely by setting the environment variable `DATALAD_DESKTOP_DISABLE_RUN=1` (see `SECURITY.md`).
+- Electron is updated to 42.11.18, which fixes a security advisory in the browser engine the app is built on.
+
+- **Run & record** (Tools → History): type a command with its inputs and outputs and a message, and DataLad saves the result together with the exact command, so anyone can repeat it. Needs a project with nothing unsaved. History shows what ran.
+- **Show changes:** on Home, each changed file can show what changed (tables highlight changed cells; big files and binaries are summarized). **Compare with now** in Tools → History does the same for any saved version.
+- **One Save for everything:** Save records changes in the project and in nested datasets, also when you start from a subfolder or select only a file inside a nested dataset, and stays fast with many nested datasets.
+- Wording: the app says "save" and "saved version" everywhere; the header is slimmer once a project is open; the message box suggests a message from the selected files; the start screen offers "Continue with <last project>".
+- Fix: git-annex's own `pre-push` hook (added by current git-annex) no longer triggers the "this folder wants to run code" question for every shared DataLad dataset. A changed or extra hook is still reported.
+- Fix: the Windows installer no longer skips git-annex when its author publishes a new release; it downloads git-annex 10.20260901 from the DataLad mirror, the same pinned file the Windows install script uses.
+- Documentation: screenshots in the Install guide and tutorials 00, 01 and 06; tutorial 06 describes Run & record.
 
 ## 0.5.2
 
