@@ -16,8 +16,10 @@ foundation before any data cleaning or analysis.
 
 ## Setup
 
-1. Choose a path for a new empty folder, for example:
-   - `/path/to/projects/pilot-study-001`
+1. Choose a **location** (an existing parent folder) and a **project name**
+   for the new project. The app creates the project as a new folder inside the
+   location, for example:
+   - location `/path/to/projects`, name `pilot-study-001`
 2. Keep one short project note ready for first Save:
    - study purpose sentence
    - owner or team name
@@ -38,12 +40,15 @@ keeps the first save scientifically auditable.
 
 1. In the app header, click **Setup**, then **Check Environment**.
 2. Confirm Python 3, DataLad, and git-annex report `OK`.
-3. In **Create Project**, choose the new folder path.
+3. Click the **Create Project** tile. Enter the parent folder in **Location**
+   and `pilot-study-001` in **Project name**. The line below the fields shows
+   where the project will be created.
 4. Click **Create Project**.
 
    ![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
 
-5. Verify the project opens and classification is Dataset or Superdataset.
+5. Verify the project opens and the badge reads **DataLad** (or **DataLad + Links** for a project with
+   nested datasets).
 
    ![The new project open, with its classification badge and the Home view with the Tools button](../_static/screenshots/03-project-open.png)
 
@@ -55,7 +60,7 @@ keeps the first save scientifically auditable.
 
 - Try creating into a non-empty folder once.
 - Confirm the warning and explain what content would have been mixed.
-- Recover by selecting an empty folder and repeating creation.
+- Recover by entering a different **Project name** (a new folder) and repeating creation.
 
 ## Completion criteria
 
