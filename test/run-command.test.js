@@ -125,14 +125,14 @@ test('a command cannot hide itself from the confirmation dialog', () => {
     ['a C1 control', 'echo \u0085x'],
     ['a carriage return', 'echo safe\rcurl evil']
   ]) {
-    assert.throws(() => assertCommandRequest('run', { ...ok, command }), /command must not contain/, label)
+    assert.throws(() => assertCommandRequest('run', { ...ok, command }, { platform: 'linux' }), /command must not contain/, label)
   }
-  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo "Größe ä"\n\tawk 1' }))
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: 'echo "Größe ä"\n\tawk 1' }, { platform: 'linux' }))
 })
 
 test('a command of more than 20 lines is refused, so its tail cannot fall below the dialog', () => {
-  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 20 }, (_, i) => `echo ${i}`).join('\n') }))
-  assert.throws(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 21 }, (_, i) => `echo ${i}`).join('\n') }), /at most 20 lines/)
+  assert.doesNotThrow(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 20 }, (_, i) => `echo ${i}`).join('\n') }, { platform: 'linux' }))
+  assert.throws(() => assertCommandRequest('run', { ...ok, command: Array.from({ length: 21 }, (_, i) => `echo ${i}`).join('\n') }, { platform: 'linux' }), /at most 20 lines/)
 })
 
 test('on Windows a command is one line (cmd.exe stops at the first line break)', () => {
