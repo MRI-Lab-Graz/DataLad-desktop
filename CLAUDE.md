@@ -9,5 +9,5 @@
 ## Workflow
 
 - In every chat, start by using the `superpowers` skills (and `ponytail`, see below).
-- Always use TDD (red, green, refactor) for every new feature and function: write the failing test first, then the implementation. Tests run with `npm test` (Node built-in runner).
+- **TDD, all the time, no exceptions:** red, green, refactor for every feature, bug fix, refactor and behaviour change. Write the failing test first and watch it fail for the right reason, then write the minimal code. No production code without a failing test first; a bug gets a reproducing test before its fix. Tests run with `npm test` (Node built-in runner).
 - Before every merge (PR into `main`), always run the `ponytail:ponytail-audit` skill over the changes and handle or consciously decline its findings.
