@@ -15,6 +15,7 @@ const STOCK_ANNEX_HOOKS = {
   'pre-commit': 'git annex pre-commit .',
   'post-checkout': 'git annex smudge --update',
   'post-merge': 'git annex smudge --update',
+  'pre-push': 'if git annex pre-push --help >/dev/null 2>&1; then git annex pre-push; fi',
   'post-receive': 'if git annex post-receive --help >/dev/null 2>&1; then git annex post-receive; fi'
 }
 const isStockAnnexHook = (name, body) =>
