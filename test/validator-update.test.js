@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  BUILD_TIMEOUT_MS,
   PRISM_COOLDOWN_DAYS,
   compareVersions,
   parseVersion,
@@ -377,4 +378,20 @@ test('(m6b) isBusy throwing: failed, never a throw, env unchanged', async () => 
   assert.equal((await updateValidator(deps)).status, 'failed')
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
   assert.equal(await exists(`${envDir}.next`), false)
+})
+
+// uv venv / pip install have no timeout of their own: the build gets a generous one, never the 15 s check default.
+test('the build steps get BUILD_TIMEOUT_MS (20 minutes)', async () => {
+  assert.equal(BUILD_TIMEOUT_MS, 20 * 60 * 1000)
+  const { deps, runner } = await setup()
+  assert.equal((await updateValidator(deps)).status, 'updated')
+  const build = runner.calls.map((c, i) => [c, runner.options[i]]).filter(([c]) => c[0] === '/uv' && (c[1] === 'venv' || c[2] === 'install'))
+  assert.equal(build.length, 2)
+  for (const [, opts] of build) assert.equal(opts.timeoutMs, BUILD_TIMEOUT_MS)
+})
+
+test('a build that times out (exit 124) is offline-like: the version is not remembered as failed', async () => {
+  const { deps, stateFile } = await setup({ runner: updateRunner({ install: { failed: true, exitCode: 124, stdout: '', stderr: 'timed out' } }) })
+  assert.equal((await updateValidator(deps)).status, 'offline')
+  assert.equal(await exists(stateFile), false)
 })

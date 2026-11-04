@@ -48,6 +48,7 @@ export function pickRelease(pypiJson, { now, cooldownDays }) {
 const PYPI_URL = 'https://pypi.org/pypi/prism-validator/json'
 const STATE = 'validator-update.json'
 const COMPILE_TIMEOUT_MS = 120000
+export const BUILD_TIMEOUT_MS = 20 * 60 * 1000
 const LATER = 'It will try again when an even newer version comes out.'
 const DOWNLOAD_FAILED = `The newer version could not be installed, so the current one stays. ${LATER}`
 const NOT_COMPATIBLE = `The new version did not pass the safety test, so the current one stays. ${LATER}`
@@ -135,7 +136,7 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
       '--universal', '--generate-hashes', '--no-header', '--only-binary', ':all:', '--index-url', 'https://pypi.org/simple',
       '--exclude-newer', pick.cutoff, '-o', lockPath, input], { timeoutMs: COMPILE_TIMEOUT_MS, env: UV_ENV })
     if (compiled.failed) return await failed(DOWNLOAD_FAILED, compiled)
-    const built = await ensureEnv({ runner, uvPath, envDir: next, lockPath, platform, source: 'auto-update' })
+    const built = await ensureEnv({ runner, uvPath, envDir: next, lockPath, platform, source: 'auto-update', timeoutMs: BUILD_TIMEOUT_MS })
     if (!built.ready) return await failed(DOWNLOAD_FAILED, built.failure && { ...built.failure, cancelled: built.cancelled })
     const got = parseVersion(built.validatorVersion)
     if (!got || compareVersions(got, to) !== 0) return await failed(DOWNLOAD_FAILED)

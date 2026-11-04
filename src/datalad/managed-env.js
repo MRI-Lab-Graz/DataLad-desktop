@@ -25,7 +25,7 @@ export async function envStatus({ runner, envDir, platform }) {
   return result.failed ? { ready: false, validatorVersion: null } : { ready: true, validatorVersion: firstLine(result.stdout || result.stderr) }
 }
 
-export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform, source }) {
+export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform, source, timeoutMs }) {
   const lock = createHash('sha256').update(await readFile(lockPath)).digest('hex')
   const config = { ...MANAGED_ENV, lock, ...(source && { source }) }
   const marker = await readFile(join(envDir, MARKER), 'utf8').then(JSON.parse, () => null)
@@ -37,7 +37,8 @@ export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOu
 
   // A stale, mismatched or half-built env is never patched: start clean.
   await rm(envDir, { recursive: true, force: true })
-  const opts = { signal, onOutput, env: UV_ENV }
+  // No timeout unless given: the Install button shows progress and has Stop; the auto-update passes one.
+  const opts = { signal, onOutput, env: UV_ENV, ...(timeoutMs && { timeoutMs }) }
   const steps = [
     // --no-config: ignore uv.toml/pyproject.toml found from wherever the app was launched.
     // Hashes make the index untrusted; wheels only, so no package build script ever runs.

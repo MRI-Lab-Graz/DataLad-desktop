@@ -18,7 +18,7 @@ import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from 
 import { createTrustStore } from './trust-store.js'
 import { createTrustGate, describeTrustPrompt, folderState, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
-import { createBusyCounter, createFetchJson, createUpdateChecks, withDefaultTimeout } from './update-runner.js'
+import { createBusyCounter, createFetchJson, createUpdateChecks, runUnlessBusy, withDefaultTimeout } from './update-runner.js'
 import { parseVersion, repairEnvDir, updateValidator } from '../datalad/validator-update.js'
 import { collectNotices, skipNotice } from '../datalad/tool-notices.js'
 
@@ -39,14 +39,15 @@ const policy = loadPolicy({
 })
 // Background update checks, once per start (see update-runner.js). Off by policy = no network request at all.
 const validatorUse = createBusyCounter()
-const updateRunner = withDefaultTimeout(toolRunner)
+// Version checks only: the validator build sets its own (long) timeouts and gets the plain runner.
+const noticeRunner = withDefaultTimeout(toolRunner)
 const fetchJson = createFetchJson({ override: app.isPackaged ? undefined : process.env.DLAD_UPDATE_FEED })
 const updateChecks = createUpdateChecks({
   disabled: policy.updateCheckDisabled,
   guard: ensureGuard,
   update: () =>
     updateValidator({
-      runner: updateRunner,
+      runner: toolRunner,
       uvPath: resolveUv(uvBaseDir()),
       envDir: managedEnvDir(),
       userDataDir: app.getPath('userData'),
@@ -55,7 +56,7 @@ const updateChecks = createUpdateChecks({
       isBusy: validatorUse.isBusy
     }),
   notices: () =>
-    collectNotices({ runner: (command, args, options) => updateRunner.run(command, args, options), fetchJson, userDataDir: app.getPath('userData') })
+    collectNotices({ runner: (command, args, options) => noticeRunner.run(command, args, options), fetchJson, userDataDir: app.getPath('userData') })
 })
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and
@@ -232,7 +233,11 @@ function createMainWindow() {
   })
 
   mainWindow.webContents.once('did-finish-load', () =>
-    setTimeout(() => void updateChecks.start(() => mainWindow.isDestroyed() || mainWindow.webContents.send('updates:changed')), 5000)
+    setTimeout(() => void updateChecks.start(() => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) window.webContents.send('updates:changed')
+      }
+    }), 5000)
   )
   mainWindow.loadURL(APP_RENDERER_URL)
 
@@ -436,7 +441,7 @@ handle('app:capabilities', () => ({ run: !policy.runDisabled }))
 handle('env:status', () => envStatus({ runner: toolRunner, envDir: managedEnvDir() }))
 
 handle('env:ensure', (event, runId) =>
-  ensureGuard.run(async () => {
+  runUnlessBusy(ensureGuard, async () => {
     const uvPath = resolveUv(uvBaseDir())
     const result = await runWithHandle(event, runId, (runOptions) =>
       ensureEnv({
@@ -452,7 +457,7 @@ handle('env:ensure', (event, runId) =>
     }
     const { code, message } = describeEnvFailure({ failure: result.failure, cancelled: result.cancelled, uvPath })
     return { ready: false, cancelled: result.cancelled, code, message, technical: result.failure.stderr }
-  })
+  }, { ready: false, code: 'BUSY', message: 'Another update or install is running. Please try again in a minute.' })
 )
 
 handle('updates:status', () => updateChecks.status())

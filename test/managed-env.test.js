@@ -216,3 +216,17 @@ test('ensureEnv runs every uv step without UV_* index variables', async () => {
     }
   }
 })
+
+test('ensureEnv passes timeoutMs to venv and install only when given (Install button: none)', async () => {
+  for (const timeoutMs of [undefined, 1234]) {
+    const inner = fakeRunner()
+    const seen = []
+    const runner = { run: (command, args, opts) => { if (command === '/uv') seen.push(opts); return inner.run(command, args, opts) } }
+    await ensureEnv({ runner, uvPath: '/uv', envDir: await fresh(), lockPath: await lockFile(), ...(timeoutMs && { timeoutMs }) })
+    assert.equal(seen.length, 2)
+    for (const opts of seen) {
+      if (timeoutMs) assert.equal(opts.timeoutMs, timeoutMs)
+      else assert.equal('timeoutMs' in opts, false)
+    }
+  }
+})

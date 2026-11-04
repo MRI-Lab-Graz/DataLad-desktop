@@ -7,7 +7,12 @@ const FEED_ORIGINS = ['https://pypi.org', 'https://formulae.brew.sh']
 export function feedUrl(url, override) {
   if (!override) return url
   const u = new URL(url)
-  return FEED_ORIGINS.includes(u.origin) ? new URL(u.pathname + u.search, override).toString() : url
+  if (!FEED_ORIGINS.includes(u.origin)) return url
+  // Set the parts, never resolve a string: a path starting with // would otherwise name another host.
+  const o = new URL(override)
+  o.pathname = u.pathname
+  o.search = u.search
+  return o.toString()
 }
 
 export function createFetchJson({ fetch = globalThis.fetch, override } = {}) {
@@ -56,9 +61,24 @@ export function createUpdateChecks({ disabled, guard, update, notices }) {
         onChange()
       }
       await Promise.allSettled([
+        // Lock busy (an Install is running), or update() threw before it started (e.g. bundled uv missing).
         guard.run(update).catch(() => ({ status: 'deferred' })).then(done('validator')),
         notices().catch(() => []).then(done('notices'))
       ])
     }
+  }
+}
+
+// Runs fn under the lock; if the lock is already taken, returns busyResult instead of the lock's error.
+export async function runUnlessBusy(guard, fn, busyResult) {
+  let started = false
+  try {
+    return await guard.run(() => {
+      started = true
+      return fn()
+    })
+  } catch (err) {
+    if (started) throw err
+    return busyResult
   }
 }

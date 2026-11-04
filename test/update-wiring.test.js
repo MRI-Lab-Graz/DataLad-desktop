@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createBusyCounter, createFetchJson, createUpdateChecks, feedUrl, withDefaultTimeout } from '../src/gui/update-runner.js'
+import { createBusyCounter, createFetchJson, createUpdateChecks, feedUrl, runUnlessBusy, withDefaultTimeout } from '../src/gui/update-runner.js'
 
 // LF endings, so slicing on "\n})\n" also works on a Windows (CRLF) checkout.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
@@ -23,6 +23,8 @@ test('feedUrl: no override keeps the URL; an override swaps only the origin of t
     'http://127.0.0.1:4567/api/formula/git-annex.json'
   )
   assert.equal(feedUrl('https://example.org/x', 'http://127.0.0.1:4567'), 'https://example.org/x')
+  // A path starting with // must not turn into a protocol-relative URL pointing at another host.
+  assert.equal(feedUrl('https://pypi.org//evil.example/x?q=1', 'http://127.0.0.1:4567'), 'http://127.0.0.1:4567//evil.example/x?q=1')
 })
 
 test('createFetchJson: timeout signal, plain User-Agent only, rejects non-2xx, parses JSON', async () => {
@@ -102,6 +104,14 @@ test('createUpdateChecks: a busy guard skips the update quietly; errors never es
   assert.deepEqual(checks.status(), { disabled: false, validator: { status: 'deferred' }, notices: [] })
 })
 
+test('runUnlessBusy: a busy lock gives the plain busy result; errors from the work itself still throw', async () => {
+  const BUSY = { ready: false, code: 'BUSY' }
+  const busyGuard = { run: async () => { throw new Error('Installation already running') } }
+  assert.deepEqual(await runUnlessBusy(busyGuard, async () => 'x', BUSY), BUSY)
+  assert.equal(await runUnlessBusy(guard(), async () => 'done', BUSY), 'done')
+  await assert.rejects(runUnlessBusy(guard(), async () => { throw new Error('real') }, BUSY), /real/)
+})
+
 // --- wiring in main.js / preload.js ---
 
 test('updates:status returns the cached status; updates:skip validates tool and version before writing', () => {
@@ -118,8 +128,11 @@ test('the background run is built from the policy switch, the install lock and t
   assert.match(main, /disabled: policy\.updateCheckDisabled/)
   assert.match(main, /guard: ensureGuard/)
   assert.match(main, /isBusy: validatorUse\.isBusy/)
-  assert.match(main, /runner: updateRunner/)
-  assert.match(main, /const updateRunner = withDefaultTimeout\(toolRunner\)/)
+  // The 15 s default is for version checks only; the build has its own timeouts and must get the plain runner.
+  const update = main.slice(main.indexOf('updateValidator({'), main.indexOf('})', main.indexOf('updateValidator({')))
+  assert.match(update, /runner: toolRunner,/)
+  assert.match(main, /const noticeRunner = withDefaultTimeout\(toolRunner\)/)
+  assert.match(main, /collectNotices\(\{ runner: \(command, args, options\) => noticeRunner\.run\(command, args, options\)/)
 })
 
 test('both validator call sites are wrapped by the busy counter', () => {
@@ -133,10 +146,16 @@ test('the feed override is honoured only in an unpackaged app', () => {
 
 test('the run starts after the window loaded, delayed, and the env is repaired before the window exists', () => {
   assert.match(main, /webContents\.once\('did-finish-load', \(\) =>\s*setTimeout\(\(\) => void updateChecks\.start\(/)
-  assert.match(main, /webContents\.send\('updates:changed'\)/)
+  assert.match(main, /BrowserWindow\.getAllWindows\(\)[\s\S]{0,120}webContents\.send\('updates:changed'\)/)
   const ready = main.slice(main.indexOf('app.whenReady()'))
   assert.ok(ready.indexOf('await repairEnvDir({ envDir: managedEnvDir() })') >= 0, 'repair on every start')
   assert.ok(ready.indexOf('repairEnvDir') < ready.indexOf('createMainWindow()'), 'repair before the window')
+})
+
+test('env:ensure answers a busy install lock with a plain message, not a raw error', () => {
+  const body = main.slice(main.indexOf("handle('env:ensure'"), main.indexOf("handle('updates:status'"))
+  assert.match(body, /runUnlessBusy\(\s*ensureGuard,/)
+  assert.match(body, /\{ ready: false, code: 'BUSY', message: 'Another update or install is running\. Please try again in a minute\.' \}/)
 })
 
 test('preload exposes the three update functions', () => {
