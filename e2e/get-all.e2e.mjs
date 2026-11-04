@@ -9,6 +9,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
 
+// CI runners have no git identity; Windows clones make an adjusted-branch commit that needs one.
+// Set on process.env so the adapter's own `datalad get` inherits it too.
+for (const who of ['AUTHOR', 'COMMITTER']) {
+  process.env[`GIT_${who}_NAME`] = 'x'
+  process.env[`GIT_${who}_EMAIL`] = 'x@x.io'
+}
+
 const sh = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 const missing = (dir) => sh('git', ['annex', 'find', '--not', '--in', 'here'], dir).trim().split('\n').filter(Boolean)
 
