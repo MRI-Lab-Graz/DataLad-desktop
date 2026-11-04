@@ -2288,6 +2288,15 @@ test('trackRemote also sets the upstream on the base branch of an adjusted branc
   assert.equal(runner.calls.length, 3)
 })
 
+test('trackRemote reports a failed upstream on the base branch, naming the remote branch', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main', 'main'], { exitCode: 1, failed: true, stderr: 'the requested upstream branch does not exist\n' })
+
+  await assert.rejects(new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), /Could not connect the branch to backup\/main: the requested upstream branch does not exist/)
+})
+
 test('trackRemote refuses an unsafe remote name', async () => {
   await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).trackRemote('/p', '-x'), /remote name/i)
 })
