@@ -28,3 +28,6 @@ native/
 # Local worktrees and per-plan execution scratch
 .worktrees/
 .superpowers/
+
+# Walkthrough failure screenshots
+walkthrough-failures/
