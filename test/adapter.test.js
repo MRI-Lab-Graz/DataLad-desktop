@@ -1087,9 +1087,10 @@ test('getProjectHealth degrades gracefully without an upstream or git-annex', as
   assert.equal(health.missingContentCount, null)
 })
 
-test('runCommand routes get without explicit paths to a bare datalad get', async () => {
+test('runCommand routes get without explicit paths to datalad get on the whole dataset', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'get'], {
+  // a bare `datalad get` is rejected by DataLad 1.6 ("Neither dataset nor target path(s) provided")
+  runner.set('datalad', ['-C', '/tmp/project', 'get', '-d', '.'], {
     exitCode: 0,
     stdout: 'get ok\n',
     stderr: '',
@@ -1100,7 +1101,7 @@ test('runCommand routes get without explicit paths to a bare datalad get', async
   const result = await adapter.runCommand('get', { projectPath: '/tmp/project' })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'get'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'get', '-d', '.'])
 })
 
 test('runCommand routes update through datalad update --merge', async () => {
@@ -2268,12 +2269,32 @@ test('prepareFolderRemote stops at the first failing step', async () => {
   assert.equal(runner.calls.length, 1)
 })
 
-test('trackRemote points the current branch at the remote (adjusted branches track their base)', async () => {
+test('trackRemote points the current branch at the remote', async () => {
   const runner = new FakeRunner()
-  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'main\n' })
   runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+  assert.equal(runner.calls.length, 2) // branch --show-current, then one --set-upstream-to
+})
+
+test('trackRemote also sets the upstream on the base branch of an adjusted branch, where DataLad looks for its push target', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {}) // the checked-out adjusted branch (the app's status)
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main', 'main'], {}) // the base branch (datalad push)
+
+  assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
+  assert.equal(runner.calls.length, 3)
+})
+
+test('trackRemote reports a failed upstream on the base branch, naming the remote branch', async () => {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'adjusted/main(unlocked)\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main', 'main'], { exitCode: 1, failed: true, stderr: 'the requested upstream branch does not exist\n' })
+
+  await assert.rejects(new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), /Could not connect the branch to backup\/main: the requested upstream branch does not exist/)
 })
 
 test('trackRemote refuses an unsafe remote name', async () => {
