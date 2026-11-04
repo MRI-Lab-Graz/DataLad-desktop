@@ -55,8 +55,7 @@ changes in the newly created project and make a clean first save.
 - The app saves the file like any other: it is now part of the project's
   history. Open **Tools → History** and select that save to see which files
   it contains. The app has no button that takes one file out of an earlier
-  save. To keep scratch files out in future, add a rule in the project's
-  ignore rules before they are saved, or leave them unticked as above.
+  save. To keep scratch files out in future, add a rule under **Tools → Branches & Ignore → Ignore Rules** before they are saved, or leave them unticked as above.
 
 ## Completion criteria
 

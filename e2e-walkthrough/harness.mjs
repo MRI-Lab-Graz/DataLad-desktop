@@ -1,5 +1,7 @@
 import { join } from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
+import { rm } from 'node:fs/promises'
+import { resolveTool } from '../src/datalad/resolve-tool.js'
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
@@ -16,7 +18,20 @@ export function stepRunner({ getPage, outDir }) {
   }
 }
 
-const onPath = (cmd) => !spawnSync(cmd, ['--version']).error
+// Same lookup as the app (Homebrew folders, .exe/.com only on Windows).
+const onPath = (cmd) => resolveTool(cmd) !== null
+
+// git-annex leaves read-only objects; make everything writable first (POSIX only; Windows needs no chmod).
+export async function removeTree(dir) {
+  if (process.platform !== 'win32') {
+    try { execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' }) } catch {}
+  }
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 5 })
+  } catch (err) {
+    console.warn(`walkthrough: could not remove ${dir}: ${err.message}`)
+  }
+}
 
 export function requireTools(which = onPath) {
   const missing = ['datalad', 'git-annex', 'git'].filter((t) => !which(t))

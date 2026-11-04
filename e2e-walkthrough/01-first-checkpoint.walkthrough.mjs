@@ -2,12 +2,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { launchApp } from '../e2e/electron-driver.mjs'
 import { createTempRoot } from '../e2e/fixtures.mjs'
-import { requireTools, stepRunner } from './harness.mjs'
+import { removeTree, requireTools, stepRunner } from './harness.mjs'
 
 requireTools()
 
@@ -28,25 +28,21 @@ async function waitForNewCommit(before) {
   for (let i = 0; i < 120 && Number(git('rev-list', '--count', 'HEAD')) === before; i += 1) await new Promise((r) => setTimeout(r, 500))
 }
 
-// git-annex leaves read-only objects; make everything writable first (POSIX only, harmless to skip on Windows).
-async function removeTree(dir) {
-  if (process.platform !== 'win32') {
-    try { execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' }) } catch {}
-  }
-  await rm(dir, { recursive: true, force: true }).catch(() => {})
-}
-
 test.before(async () => {
   root = await createTempRoot()
   project = join(root, 'pilot-study-001')
+  // Setup commands use a throwaway git identity and config, never the user's own ~/.gitconfig.
+  const gitConfig = join(root, 'gitconfig')
+  await writeFile(gitConfig, '[user]\n\tname = Walk Through\n\temail = walk@example.org\n')
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: '1' }
   // "Start from the project created in Tutorial 00", plus the three setup files, saved once.
-  execFileSync('datalad', ['create', '-c', 'text2git', project], { stdio: 'ignore' })
+  execFileSync('datalad', ['create', '-c', 'text2git', project], { env })
   await mkdir(join(project, 'data', 'raw'), { recursive: true })
   await mkdir(join(project, 'analysis'))
   await writeFile(join(project, 'README.md'), 'Purpose: walkthrough pilot.\n')
   await writeFile(join(project, 'data', 'raw', 'participants.tsv'), 'id\tage\nsub-01\t24\nsub-02\t31\n')
   await writeFile(join(project, 'analysis', 'notebook.ipynb'), '{"cells":[],"metadata":{},"nbformat":4,"nbformat_minor":5}\n')
-  execFileSync('datalad', ['save', '-d', project, '-m', 'init: create project skeleton and first note'], { stdio: 'ignore' })
+  execFileSync('datalad', ['save', '-d', project, '-m', 'init: create project skeleton and first note'], { env })
   // Setup step 3 and 4: two edits and one scratch file.
   await writeFile(join(project, 'README.md'), 'Purpose: walkthrough pilot.\nAim: test the participant table.\n')
   await writeFile(join(project, 'data', 'raw', 'participants.tsv'), 'id\tage\nsub-01\t25\nsub-02\t31\n')
@@ -130,9 +126,10 @@ test('Tutorial 01 · failure injection: ticking the scratch file saves it', () =
     await app.page.fill('#message', 'notes: add scratch todo by mistake')
     await app.page.click('#save-project')
     await waitForNewCommit(before)
+    assert.equal(Number(git('rev-list', '--count', 'HEAD')), before + 1)
+    assert.equal(git('log', '-1', '--format=%s'), 'notes: add scratch todo by mistake')
     assert.match(git('ls-files'), /notes\/todo\.txt/, 'the file is now part of the saved history')
     assert.equal(git('status', '--porcelain'), '')
-  
   }))
 
 // Tutorial: "Open Tools → History and select that save to see which files it contains."

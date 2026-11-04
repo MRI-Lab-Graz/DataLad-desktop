@@ -48,7 +48,7 @@ keeps the first save scientifically auditable.
    ![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
 
 5. Verify the project opens and the badge reads **DataLad** (or **DataLad + Links** for a project with
-   nested datasets).
+   a project that links other projects).
 
    ![The new project open, with its classification badge and the Home view with the Tools button](../_static/screenshots/03-project-open.png)
 

@@ -66,15 +66,16 @@ workflow and architecture.
 
 ## Check the manual still works
 
-`npm run walkthrough` plays tutorials 00 and 01 in the real app, like a first-time student. It needs this
-repo, `npm install`, and DataLad + git-annex on your PATH. It works in a throwaway folder with a throwaway
+`npm run walkthrough` plays tutorials 00 and 01 in the real app, like a first-time student. It needs Node 22 or newer (for `node --test` glob expansion; the same holds for
+`npm run test:e2e`), this repo, `npm install`, and DataLad + git-annex on your PATH. It works in a throwaway folder with a throwaway
 git identity, so your own settings and projects are never touched, and it prints one line per step.
 
 - A failed step saves a screenshot to `walkthrough-failures/` (git-ignored).
 - A step marked "todo" is a known app bug the walkthrough records. It is not a failure of the run.
 - `DLAD_APP_EXECUTABLE=<path to the packaged app> npm run walkthrough` tests a built app instead of the
   source. The app always asks for a native confirmation before creating a project in a new folder, and a
-  script cannot click that, so the project-creation step needs the source app.
+  script cannot click that, so the project-creation steps are skipped for a packaged app. On PowerShell:
+  `$env:DLAD_APP_EXECUTABLE="C:\path\DataLad Desktop.exe"; npm run walkthrough`
 - Tutorials 02-06 are not covered yet. `npm test` fails when a new tutorial is added without a walkthrough
   or an explicit "not covered" entry.
 
