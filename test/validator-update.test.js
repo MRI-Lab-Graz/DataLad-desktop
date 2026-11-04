@@ -4,8 +4,13 @@ import {
   PRISM_COOLDOWN_DAYS,
   compareVersions,
   parseVersion,
-  pickRelease
+  compatCheck,
+  pickRelease,
+  updateValidator
 } from '../src/datalad/validator-update.js'
+import { access, mkdir, mkdtemp, readdir, readFile, rename as fsRename, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 
 const file = (time, yanked = false) => ({
   filename: 'x.whl',
@@ -95,4 +100,183 @@ test('a __proto__ key in releases is ignored', () => {
 test('1.20 and 1.20.0 give the same pick in any order', () => {
   const f = [file('2026-10-01T10:00:00Z')]
   assert.equal(pick({ '1.20': f, '1.20.0': f }).version, pick({ '1.20.0': f, '1.20': f }).version)
+})
+
+// --- updateValidator / compatCheck: fake runner, real temp dirs ---
+const ok = (stdout = '') => ({ failed: false, exitCode: 0, stdout, stderr: '' })
+const bad = { failed: true, exitCode: 1, stdout: '', stderr: 'boom' }
+
+// Each env dir holds a VERSION file that `--version` prints; `pip install` writes it into the target env.
+function updateRunner({ compile = true, compat = '{"valid":false,"issues":[]}', newVersion = '1.21.0', installs = newVersion } = {}) {
+  const calls = []
+  return {
+    calls,
+    async run(command, args) {
+      calls.push([command, ...args])
+      if (command === '/uv') {
+        if (args[0] === 'venv') { await mkdir(args.at(-1), { recursive: true }); return ok() }
+        if (args[1] === 'compile') {
+          if (!compile) return bad
+          await writeFile(args[args.indexOf('-o') + 1], `prism-validator==${newVersion} \\\n    --hash=sha256:aa\n`)
+          return ok()
+        }
+        await writeFile(join(args[args.indexOf('--python') + 1], 'VERSION'), `prism-validator ${installs}\n`)
+        return ok()
+      }
+      if (args[0] === '--version') {
+        const v = await readFile(join(dirname(dirname(command)), 'VERSION'), 'utf8').catch(() => null)
+        return v ? ok(v) : bad
+      }
+      return ok(compat)
+    }
+  }
+}
+
+const PYPI = { releases: { '1.20.0': [file('2026-10-07T10:00:00Z')], '1.21.0': [file('2026-10-20T10:00:00Z')] } }
+const CUTOFF = new Date(NOW.getTime() - PRISM_COOLDOWN_DAYS * 86400000).toISOString()
+
+async function setup({ installed = '1.20.0', runner = updateRunner(), ...overrides } = {}) {
+  const base = await mkdtemp(join(tmpdir(), 'upd '))
+  const envDir = join(base, 'env')
+  if (installed) {
+    await mkdir(envDir)
+    await writeFile(join(envDir, 'VERSION'), `prism-validator ${installed}\n`)
+  }
+  const userDataDir = join(base, 'data') // not created: updateValidator must create it
+  const deps = { runner, uvPath: '/uv', envDir, userDataDir, fetchJson: async () => PYPI, now: () => NOW, isBusy: () => false, platform: 'linux', ...overrides }
+  return { deps, runner, envDir, userDataDir, stateFile: join(userDataDir, 'validator-update.json') }
+}
+const exists = (p) => access(p).then(() => true, () => false)
+const versionIn = (dir) => readFile(join(dir, 'VERSION'), 'utf8').then((t) => t.trim())
+const compileCall = (runner) => runner.calls.find((c) => c[2] === 'compile')
+
+test('(a) not installed: nothing is fetched', async () => {
+  let fetched = false
+  const { deps } = await setup({ installed: null, fetchJson: async () => { fetched = true; return PYPI } })
+  assert.deepEqual(await updateValidator(deps), { status: 'not-installed' })
+  assert.equal(fetched, false)
+})
+
+test('(b) up to date: no build', async () => {
+  const { deps, runner } = await setup({ installed: '1.21.0' })
+  assert.equal((await updateValidator(deps)).status, 'current')
+  assert.equal(compileCall(runner), undefined)
+})
+
+test('(c) happy path swaps in the new env and clears leftovers and the failure record', async () => {
+  const { deps, envDir, stateFile } = await setup()
+  await mkdir(join(`${envDir}.old`, 'junk'), { recursive: true }) // from a crashed earlier run
+  await mkdir(join(`${envDir}.next`, 'junk'), { recursive: true })
+  await mkdir(dirname(stateFile), { recursive: true })
+  await writeFile(stateFile, JSON.stringify({ failedVersion: '1.19.0' }))
+  assert.deepEqual(await updateValidator(deps), { status: 'updated', from: '1.20.0', to: '1.21.0' })
+  assert.equal(await versionIn(envDir), 'prism-validator 1.21.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+  assert.equal(await exists(`${envDir}.old`), false)
+  const marker = JSON.parse(await readFile(join(envDir, 'managed-env.json'), 'utf8'))
+  assert.equal(marker.source, 'auto-update')
+  assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, undefined)
+})
+
+test('(d) compile is hash-locked, uses the cutoff, and its temp files are removed; a corrupt record is ignored', async () => {
+  const { deps, runner, stateFile } = await setup()
+  await mkdir(dirname(stateFile), { recursive: true })
+  await writeFile(stateFile, '{bad')
+  assert.equal((await updateValidator(deps)).status, 'updated')
+  const call = compileCall(runner)
+  for (const flag of ['--no-config', '--universal', '--generate-hashes', '--no-header']) assert.ok(call.includes(flag), flag)
+  assert.equal(call[call.indexOf('--python-version') + 1], '3.12')
+  assert.equal(call[call.indexOf('--exclude-newer') + 1], CUTOFF)
+  const lock = call[call.indexOf('-o') + 1]
+  assert.equal(await exists(dirname(lock)), false)
+  const install = runner.calls.find((c) => c[2] === 'install')
+  assert.equal(install[install.indexOf('-r') + 1], lock)
+  assert.ok(install.includes('--require-hashes') && install.includes('--no-deps'))
+})
+
+test('(e) busy: deferred, original env unchanged', async () => {
+  const { deps, envDir } = await setup({ isBusy: () => true })
+  assert.equal((await updateValidator(deps)).status, 'deferred')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+})
+
+test('(f) failed compat check: old env stays, version remembered and not retried', async () => {
+  const { deps, runner, envDir, stateFile } = await setup({ runner: updateRunner({ compat: 'not json' }) })
+  const result = await updateValidator(deps)
+  assert.equal(result.status, 'failed')
+  assert.doesNotMatch(result.reason, /hash|wheel|uv/i)
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+  assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
+  const before = runner.calls.length
+  assert.equal((await updateValidator(deps)).status, 'current')
+  assert.equal(runner.calls.filter((c) => c[0] === '/uv').length, runner.calls.slice(0, before).filter((c) => c[0] === '/uv').length)
+})
+
+test('(f2) failed download: old env stays, version remembered', async () => {
+  const { deps, envDir, stateFile } = await setup({ runner: updateRunner({ compile: false }) })
+  assert.equal((await updateValidator(deps)).status, 'failed')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
+})
+
+test('(g) second rename fails (Windows file in use): old env restored, retried next start', async () => {
+  const rename = async (from, to) => {
+    if (from.endsWith('.next')) throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    return fsRename(from, to)
+  }
+  const { deps, envDir, stateFile } = await setup({ rename })
+  const result = await updateValidator(deps)
+  assert.equal(result.status, 'failed')
+  assert.match(result.reason, /next start/)
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.old`), false)
+  assert.equal(await exists(`${envDir}.next`), false)
+  assert.equal(await exists(stateFile), false) // a busy file is not the version's fault
+})
+
+test('(h) PyPI unreachable: offline, no runner calls beyond the installed check', async () => {
+  const { deps, runner } = await setup({ fetchJson: async () => { throw new Error('ENOTFOUND') } })
+  assert.equal((await updateValidator(deps)).status, 'offline')
+  assert.ok(runner.calls.every((c) => c[0] !== '/uv'))
+})
+
+test('(h2) garbage from PyPI: current, nothing built', async () => {
+  const { deps, runner } = await setup({ fetchJson: async () => 'garbage' })
+  assert.equal((await updateValidator(deps)).status, 'current')
+  assert.ok(runner.calls.every((c) => c[0] !== '/uv'))
+})
+
+test('(i) compatCheck accepts any readable verdict and rejects the rest', async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), 'compat '))
+  const check = (stdout) => compatCheck({ runner: { run: async () => ok(stdout) }, envDir: '/e', platform: 'linux', tmpDir })
+  assert.equal(await check('not json'), false)
+  assert.equal(await check('{"valid":false,"issues":[{"code":"PRISM902"}]}'), false)
+  assert.equal(await check('{"issues":[]}'), false)
+  assert.equal(await check('{"valid":false,"issues":[]}'), true)
+})
+
+test('(i2) compatCheck runs the Save-check arguments on an empty folder', async () => {
+  const tmpDir = await mkdtemp(join(tmpdir(), 'compat '))
+  const runner = updateRunner()
+  await compatCheck({ runner, envDir: '/e', platform: 'win32', tmpDir })
+  const [command, dir, ...rest] = runner.calls[0]
+  assert.equal(command, join('/e', 'Scripts', 'prism-validator.exe'))
+  assert.deepEqual(rest, ['--no-prism', '--bids', '--format', 'json'])
+  assert.deepEqual(await readdir(dir), [])
+})
+
+test('(j) a crash between the renames is repaired: the old env comes back', async () => {
+  const { deps, envDir } = await setup({ installed: null })
+  await mkdir(`${envDir}.old`)
+  await writeFile(join(`${envDir}.old`, 'VERSION'), 'prism-validator 1.21.0\n')
+  assert.equal((await updateValidator(deps)).status, 'current')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.21.0')
+})
+
+test('(k) an env that reports a different version than chosen is rejected', async () => {
+  const { deps, envDir } = await setup({ runner: updateRunner({ installs: '1.20.5' }) })
+  assert.equal((await updateValidator(deps)).status, 'failed')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
 })
