@@ -135,3 +135,17 @@ test('SECURITY.md documents Run & record: native confirmation, the admin switch,
   const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
   assert.match(policy, /DATALAD_DESKTOP_DISABLE_RUN/)
 })
+
+test('SECURITY.md documents the validator auto-update, the update notices and the admin switch, and the code has them', () => {
+  assert.match(doc, /prism-validator/)
+  assert.match(doc, /3 days/)
+  assert.match(doc, /only announced/i)
+  assert.match(doc, /DATALAD_DESKTOP_DISABLE_UPDATE_CHECK/)
+  assert.match(doc, /updateCheckDisabled/)
+  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
+  assert.match(policy, /updateCheckDisabled/)
+  assert.match(policy, /DATALAD_DESKTOP_DISABLE_UPDATE_CHECK/)
+  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8')
+  assert.match(upd, /PRISM_COOLDOWN_DAYS/)
+  assert.match(upd, /--only-binary/)
+})

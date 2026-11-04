@@ -34,7 +34,7 @@ Most researchers should just download the ready-to-run app:
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
 `project.json` is the exception. **BIDS projects** (a `dataset_description.json` and no `project.json`) are checked
 the same way before every save, with the BIDS validator. Both come with the one validator install, so there is no extra install. Files that are annexed but not downloaded do not count as errors. The
-validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically.
+validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically. Once installed, the validator updates itself in the background a few seconds after the app starts (only to releases at least 3 days old, and only if the new one passes a self-check; otherwise the old one stays). The app also shows a notice when DataLad or git-annex have a newer version, with a **Skip this version** button; it never installs those. Administrators can turn all update checks off (`DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1`, see SECURITY.md).
 
 ## First launch: your name and email
 
