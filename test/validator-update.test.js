@@ -10,7 +10,8 @@ import {
   repairEnvDir,
   updateValidator
 } from '../src/datalad/validator-update.js'
-import { access, mkdir, mkdtemp, readdir, readFile, rename as fsRename, writeFile } from 'node:fs/promises'
+import { renameSync } from 'node:fs'
+import { access, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -248,9 +249,9 @@ test('(f3) failed install of the chosen version is still remembered', async () =
 })
 
 test('(g) second rename fails (Windows file in use): old env restored, retried next start', async () => {
-  const rename = async (from, to) => {
+  const rename = (from, to) => {
     if (from.endsWith('.next')) throw Object.assign(new Error('busy'), { code: 'EBUSY' })
-    return fsRename(from, to)
+    return renameSync(from, to)
   }
   const { deps, envDir, stateFile } = await setup({ rename })
   const result = await updateValidator(deps)
@@ -343,10 +344,10 @@ test('(l3) cancelled: current, nothing recorded', async () => {
 
 test('(m1) restore fails too: the verified new env is put in place as a last resort', async () => {
   let nextTries = 0
-  const rename = async (from, to) => {
+  const rename = (from, to) => {
     if (from.endsWith('.next') && nextTries++ === 0) throw Object.assign(new Error('busy'), { code: 'EBUSY' })
     if (from.endsWith('.old')) throw Object.assign(new Error('perm'), { code: 'EPERM' })
-    return fsRename(from, to)
+    return renameSync(from, to)
   }
   const { deps, envDir } = await setup({ rename })
   assert.equal((await updateValidator(deps)).status, 'updated')
@@ -370,9 +371,9 @@ test('(m2) repairEnvDir restores a lone .old and removes a leftover .old', async
 })
 
 test('(m6) first rename fails: failed, env unchanged, .next removed, nothing recorded', async () => {
-  const rename = async (from, to) => {
+  const rename = (from, to) => {
     if (!from.endsWith('.next') && !from.endsWith('.old')) throw Object.assign(new Error('perm'), { code: 'EPERM' })
-    return fsRename(from, to)
+    return renameSync(from, to)
   }
   const { deps, envDir, stateFile } = await setup({ rename })
   const result = await updateValidator(deps)
@@ -431,4 +432,17 @@ test('(o) a Windows file lock during install is not remembered as a bad version'
     await updateValidator(deps)
     assert.equal(await exists(stateFile), false, stderr)
   }
+})
+
+test('(p) the two swap renames run back to back: no event-loop turn for a Save to start in between', async () => {
+  let turned = false
+  const renames = []
+  const rename = (from, to) => {
+    renames.push(turned)
+    if (renames.length === 1) { queueMicrotask(() => (turned = true)); setImmediate(() => (turned = true)) }
+    return renameSync(from, to)
+  }
+  const { deps } = await setup({ rename })
+  assert.equal((await updateValidator(deps)).status, 'updated')
+  assert.deepEqual(renames, [false, false])
 })

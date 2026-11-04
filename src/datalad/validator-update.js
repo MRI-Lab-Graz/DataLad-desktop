@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rename as fsRename, rm, stat, writeFile } from 'node:fs/promises'
+import { renameSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MANAGED_ENV, UV_ENV, describeEnvFailure, ensureEnv, envBin, envStatus } from './managed-env.js'
@@ -64,7 +65,7 @@ const removeDir = (p) => rm(p, { recursive: true, force: true, maxRetries: 3 }).
 
 // Call on every start (also when updates are off). A crash between the two swap renames leaves only
 // <envDir>.old: put it back. Otherwise a leftover .old is just old files. Never throws.
-export async function repairEnvDir({ envDir, rename = fsRename, remove = removeDir }) {
+export async function repairEnvDir({ envDir, rename = renameSync, remove = removeDir }) {
   const old = `${envDir}.old`
   try {
     if (await exists(envDir)) await remove(old)
@@ -96,8 +97,8 @@ function notTheVersionsFault(failure, uvPath) {
 }
 
 // Never throws: always resolves to a status. Builds <envDir>.next, proves it works, then swaps it in.
-// `rename` is injectable so tests can simulate a Windows file lock (EBUSY/EPERM).
-export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, platform = process.platform, rename = fsRename }) {
+// `rename` (synchronous) is injectable so tests can simulate a Windows file lock (EBUSY/EPERM).
+export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, platform = process.platform, rename = renameSync }) {
   const next = `${envDir}.next`
   const old = `${envDir}.old`
   const stateFile = join(userDataDir, STATE)
@@ -154,19 +155,16 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
       await removeDir(next)
       return { status: 'deferred', from, to }
     }
-    try {
-      await rename(envDir, old)
-    } catch {
+    // Synchronous on purpose: no event-loop turn between isBusy() and the renames, so no Save can start in between.
+    const moved = (from, to) => { try { rename(from, to); return true } catch { return false } }
+    if (!moved(envDir, old)) {
       await removeDir(next)
       return { status: 'failed', from, to, reason: IN_USE }
     }
-    try {
-      await rename(next, envDir)
-    } catch {
-      const back = await rename(old, envDir).then(() => true, () => false)
-      // A verified new env beats no env. If both fail, repairEnvDir restores .old next start.
-      const swapped = !back && (await rename(next, envDir).then(() => true, () => false))
-      if (!swapped) {
+    // Restore the old env; failing that, a verified new env beats no env. If both fail, repairEnvDir restores .old next start.
+    if (!moved(next, envDir)) {
+      const restored = moved(old, envDir)
+      if (restored || !moved(next, envDir)) {
         await removeDir(next)
         return { status: 'failed', from, to, reason: IN_USE }
       }
@@ -174,10 +172,8 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     // Prove it from its final place (a venv can hard-code its build path). If not: put the old one back.
     const final = await envStatus({ runner, envDir, platform })
     if (!final.ready || parseVersion(final.validatorVersion) !== got) {
-      const moved = await rename(envDir, next).then(() => true, () => false)
-      if (!moved) await removeDir(envDir)
-      // If this fails, only .old is left and repairEnvDir restores it next start.
-      await rename(old, envDir).catch(() => {})
+      if (!moved(envDir, next)) await removeDir(envDir)
+      moved(old, envDir) // if this fails, only .old is left and repairEnvDir restores it next start
       return await failed(DOWNLOAD_FAILED)
     }
     await removeDir(old)
