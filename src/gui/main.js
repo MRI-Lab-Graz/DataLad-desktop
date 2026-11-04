@@ -18,6 +18,9 @@ import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from 
 import { createTrustStore } from './trust-store.js'
 import { createTrustGate, describeTrustPrompt, folderState, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
+import { createBusyCounter, createFetchJson, createUpdateChecks, withDefaultTimeout } from './update-runner.js'
+import { parseVersion, repairEnvDir, updateValidator } from '../datalad/validator-update.js'
+import { collectNotices, skipNotice } from '../datalad/tool-notices.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -33,6 +36,26 @@ const managedEnvDir = () => join(app.getPath('userData'), 'env')
 let activeProjectWatcher = null
 const policy = loadPolicy({
   files: policyFiles({ resourcesDir: app.isPackaged ? process.resourcesPath : join(__dirname, '..', '..', 'build') })
+})
+// Background update checks, once per start (see update-runner.js). Off by policy = no network request at all.
+const validatorUse = createBusyCounter()
+const updateRunner = withDefaultTimeout(toolRunner)
+const fetchJson = createFetchJson({ override: app.isPackaged ? undefined : process.env.DLAD_UPDATE_FEED })
+const updateChecks = createUpdateChecks({
+  disabled: policy.updateCheckDisabled,
+  guard: ensureGuard,
+  update: () =>
+    updateValidator({
+      runner: updateRunner,
+      uvPath: resolveUv(uvBaseDir()),
+      envDir: managedEnvDir(),
+      userDataDir: app.getPath('userData'),
+      fetchJson,
+      now: () => new Date(),
+      isBusy: validatorUse.isBusy
+    }),
+  notices: () =>
+    collectNotices({ runner: (command, args, options) => updateRunner.run(command, args, options), fetchJson, userDataDir: app.getPath('userData') })
 })
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and
@@ -208,6 +231,9 @@ function createMainWindow() {
     event.preventDefault()
   })
 
+  mainWindow.webContents.once('did-finish-load', () =>
+    setTimeout(() => void updateChecks.start(() => mainWindow.isDestroyed() || mainWindow.webContents.send('updates:changed')), 5000)
+  )
   mainWindow.loadURL(APP_RENDERER_URL)
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -359,13 +385,15 @@ handle('adapter:runCommand', async (event, payload) => {
   }
   if (payload.commandName === 'save') {
     const gate = await runWithHandle(event, payload.runId, (runOptions) =>
-      gateSave({
-        runner: toolRunner,
-        projectPath: request.projectPath,
-        validatorBin: envBin(managedEnvDir(), 'prism-validator'),
-        checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready,
-        ...runOptions
-      })
+      validatorUse.track(() =>
+        gateSave({
+          runner: toolRunner,
+          projectPath: request.projectPath,
+          validatorBin: envBin(managedEnvDir(), 'prism-validator'),
+          checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready,
+          ...runOptions
+        })
+      )
     )
     if (!gate.allow) {
       return gate.result
@@ -388,11 +416,13 @@ handle('adapter:runCommand', async (event, payload) => {
 
 handle('prism:inspect', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
-  return inspectProject({
-    runner: toolRunner,
-    projectPath,
-    checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready
-  })
+  return validatorUse.track(() =>
+    inspectProject({
+      runner: toolRunner,
+      projectPath,
+      checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready
+    })
+  )
 })
 
 handle('adapter:cancelCommand', (_event, runId) => {
@@ -424,6 +454,19 @@ handle('env:ensure', (event, runId) =>
     return { ready: false, cancelled: result.cancelled, code, message, technical: result.failure.stderr }
   })
 )
+
+handle('updates:status', () => updateChecks.status())
+
+handle('updates:skip', async (_event, { tool, version } = {}) => {
+  if (tool !== 'datalad' && tool !== 'git-annex') {
+    throw new Error('Unknown tool.')
+  }
+  if (typeof version !== 'string' || parseVersion(version) !== version) {
+    throw new Error('Invalid version.')
+  }
+  await skipNotice({ userDataDir: app.getPath('userData'), tool, version })
+  return { ok: true }
+})
 
 handle('adapter:listDatasets', async (_event, projectPath) => {
   requireAuthorizedRoot(projectPath)
@@ -666,9 +709,11 @@ async function resolveDialogDefaultPath(requestedPath) {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName(APP_NAME)
   applyAppIcon()
+  // Every start, even with update checks off: undo a swap a crash interrupted, before anything uses the validator.
+  await repairEnvDir({ envDir: managedEnvDir() })
   createMainWindow()
 
   app.on('activate', () => {
