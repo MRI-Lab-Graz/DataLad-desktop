@@ -228,12 +228,22 @@ test('(f) failed compat check: old env stays, version remembered and not retried
   assert.equal(runner.calls.filter((c) => c[0] === '/uv').length, runner.calls.slice(0, before).filter((c) => c[0] === '/uv').length)
 })
 
-test('(f2) failed download: old env stays, version remembered', async () => {
+test('(f2) failed resolve: old env stays, NOT remembered (a dependency inside the cooldown may resolve later), retried', async () => {
   const { deps, runner, envDir, stateFile } = await setup({ runner: updateRunner({ compile: bad }) })
-  assert.equal((await updateValidator(deps)).status, 'failed')
+  const result = await updateValidator(deps)
+  assert.equal(result.status, 'failed')
+  assert.match(result.reason, /could not be prepared yet.*next time the app starts/)
   const call = compileCall(runner)
   assert.equal(await exists(dirname(call[call.indexOf('-o') + 1])), false)
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(stateFile), false)
+  await updateValidator(deps)
+  assert.equal(runner.calls.filter((c) => c[2] === 'compile').length, 2)
+})
+
+test('(f3) failed install of the chosen version is still remembered', async () => {
+  const { deps, stateFile } = await setup({ runner: updateRunner({ install: bad }) })
+  assert.equal((await updateValidator(deps)).status, 'failed')
   assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
 })
 

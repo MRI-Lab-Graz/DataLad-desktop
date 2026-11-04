@@ -7,7 +7,7 @@ import { isAbsolute, join } from 'node:path'
 // trustedRoots: absolute folders an administrator pre-trusts, e.g. a lab share. A file we cannot parse names none.
 // runDisabled: turns Run & record off. The env var suits managed launchers; a policy file that exists but cannot be
 // read is "locked down", never "absent" (fail closed).
-// updateCheckDisabled: turns the update checks (validator and app) off; env var DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1,
+// updateCheckDisabled: turns the update checks (the prism-validator update and the DataLad/git-annex notices) off; env var DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1,
 // same fail-closed rule as runDisabled.
 export function policyFiles({ platform = process.platform, env = process.env, resourcesDir }) {
   const system = {

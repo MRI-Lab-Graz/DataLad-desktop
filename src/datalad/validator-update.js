@@ -52,6 +52,7 @@ export const BUILD_TIMEOUT_MS = 20 * 60 * 1000
 const LATER = 'It will try again when an even newer version comes out.'
 const DOWNLOAD_FAILED = `The newer version could not be installed, so the current one stays. ${LATER}`
 const NOT_COMPATIBLE = `The new version did not pass the safety test, so the current one stays. ${LATER}`
+const NOT_PREPARED = 'The new version could not be prepared yet. It will be tried again next time the app starts.'
 const NEXT_START = 'It will try again next start.'
 const IN_USE = `The update could not finish because the validator was in use. ${NEXT_START}`
 const DISK = `There isn't enough disk space, or the app isn't allowed to write to its data folder. ${NEXT_START}`
@@ -135,7 +136,13 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     const compiled = await runner.run(uvPath, ['pip', 'compile', '--no-config', '--python-version', MANAGED_ENV.python,
       '--universal', '--generate-hashes', '--no-header', '--only-binary', ':all:', '--index-url', 'https://pypi.org/simple',
       '--exclude-newer', pick.cutoff, '-o', lockPath, input], { timeoutMs: COMPILE_TIMEOUT_MS, env: UV_ENV })
-    if (compiled.failed) return await failed(DOWNLOAD_FAILED, compiled)
+    if (compiled.failed) {
+      // A dependency still inside the cooldown can fail the resolve now and resolve later: never remember this version as bad.
+      const transient = notTheVersionsFault(compiled, uvPath)
+      if (transient) { await removeDir(next); return transient.status === 'failed' ? { ...transient, from, to } : transient }
+      await removeDir(next)
+      return { status: 'failed', from, to, reason: NOT_PREPARED }
+    }
     const built = await ensureEnv({ runner, uvPath, envDir: next, lockPath, platform, source: 'auto-update', timeoutMs: BUILD_TIMEOUT_MS })
     if (!built.ready) return await failed(DOWNLOAD_FAILED, built.failure && { ...built.failure, cancelled: built.cancelled })
     const got = parseVersion(built.validatorVersion)
