@@ -6,6 +6,13 @@ import { join } from 'node:path'
 // (shipped as a resource); changing that file or `python` makes ensureEnv reinstall.
 export const MANAGED_ENV = { python: '3.12' }
 
+// Merged over process.env by the runner. An undefined value drops the variable: Node omits undefined env values
+// when it spawns (on Windows its case-insensitive de-dup keeps the first key, and these all-uppercase keys come first).
+// These variables could swap the package index, loosen the resolve, or change where Python is downloaded from
+// (hashes still guard the content; this keeps the source fixed too).
+export const UV_ENV = Object.fromEntries(['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS',
+  'UV_PRERELEASE', 'UV_CONSTRAINT', 'UV_OVERRIDE', 'UV_INSECURE_HOST', 'UV_PYTHON_INSTALL_MIRROR'].map((k) => [k, undefined]))
+
 const MARKER = 'managed-env.json'
 const exe = (name, platform) => (platform === 'win32' ? `${name}.exe` : name)
 const sameConfig = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -21,22 +28,25 @@ export async function envStatus({ runner, envDir, platform }) {
   return result.failed ? { ready: false, validatorVersion: null } : { ready: true, validatorVersion: firstLine(result.stdout || result.stderr) }
 }
 
-export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform }) {
+export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform, source, timeoutMs }) {
   const lock = createHash('sha256').update(await readFile(lockPath)).digest('hex')
-  const config = { ...MANAGED_ENV, lock }
+  const config = { ...MANAGED_ENV, lock, ...(source && { source }) }
   const marker = await readFile(join(envDir, MARKER), 'utf8').then(JSON.parse, () => null)
-  if (marker && sameConfig(marker, config)) {
+  // An auto-updated env came from a newer generated lock; Install must not roll it back to the shipped pin.
+  if (marker && (sameConfig(marker, config) || (marker.source === 'auto-update' && marker.python === MANAGED_ENV.python))) {
     const status = await envStatus({ runner, envDir, platform })
     if (status.ready) return status
   }
 
   // A stale, mismatched or half-built env is never patched: start clean.
   await rm(envDir, { recursive: true, force: true })
-  const opts = { signal, onOutput }
+  // No timeout unless given: the Install button shows progress and has Stop; the auto-update passes one.
+  const opts = { signal, onOutput, env: UV_ENV, ...(timeoutMs && { timeoutMs }) }
   const steps = [
     // --no-config: ignore uv.toml/pyproject.toml found from wherever the app was launched.
     // Hashes make the index untrusted; wheels only, so no package build script ever runs.
-    ['venv', ['venv', '--no-config', '--python', config.python, envDir]],
+    // --relocatable: the auto-update builds in env.next and renames it to env; entry points must not hard-code the path.
+    ['venv', ['venv', '--no-config', '--relocatable', '--python', config.python, envDir]],
     ['install', ['pip', 'install', '--no-config', '--python', envDir, '--index-url', 'https://pypi.org/simple',
       '--require-hashes', '--only-binary', ':all:', '--no-deps', '-r', lockPath]]
   ]
@@ -60,7 +70,7 @@ const FAILURES = [
     "The PRISM validator isn't available yet. Please try again later or contact your PRISM administrator."],
   ['OFFLINE', /dns error|failed to fetch|connection (refused|reset|timed out)|network|proxy/i,
     "Couldn't download. Check your internet connection (a university proxy can block this) and try again."],
-  ['DISK', /no space left|permission denied|os error (13|28)/i,
+  ['DISK', /no space left|permission denied|os error (5|13|28|32)\b|access is denied|used by another process/i,
     "There isn't enough disk space, or the app isn't allowed to write to its data folder."]
 ]
 

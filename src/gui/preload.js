@@ -36,6 +36,13 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   getCapabilities: () => ipcRenderer.invoke('app:capabilities'),
   getManagedEnvStatus: () => ipcRenderer.invoke('env:status'),
   ensureManagedEnv: (runId) => ipcRenderer.invoke('env:ensure', runId),
+  getUpdateStatus: () => ipcRenderer.invoke('updates:status'),
+  skipUpdateNotice: ({ tool, version }) => ipcRenderer.invoke('updates:skip', { tool, version }),
+  onUpdatesChanged: (callback) => {
+    const listener = () => callback()
+    ipcRenderer.on('updates:changed', listener)
+    return () => ipcRenderer.removeListener('updates:changed', listener)
+  },
   listDatasets: (projectPath) => ipcRenderer.invoke('adapter:listDatasets', projectPath),
   ignoreOsNoiseFiles: (projectPath) => ipcRenderer.invoke('adapter:ignoreOsNoiseFiles', projectPath),
   readGitignore: (projectPath, relativeDatasetPath) =>

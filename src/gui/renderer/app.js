@@ -7,6 +7,7 @@ import {
   computeSyncActionsQuietMessage
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
+import { describeUpdates } from './update-notice.js'
 import { rowDataActions } from './row-data-actions.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
@@ -232,6 +233,8 @@ const elements = {
   globalBusyBarFill: document.getElementById('global-busy-bar-fill'),
   environmentOutput: document.getElementById('environment-output'),
   prismEnvStatus: document.getElementById('prism-env-status'),
+  prismUpdateStatus: document.getElementById('prism-update-status'),
+  updateNotice: document.getElementById('update-notice'),
   prismEnvInstall: document.getElementById('prism-env-install'),
   prismEnvCancel: document.getElementById('prism-env-cancel'),
   prismEnvTechnical: document.getElementById('prism-env-technical'),
@@ -770,6 +773,45 @@ elements.runForm.addEventListener('submit', async (event) => {
 api.getCapabilities().then((capabilities) => {
   elements.openRunButton.hidden = !capabilities.run
 })
+
+// Update notices: text only (textContent), errors leave the strip hidden.
+async function refreshUpdateNotice() {
+  try {
+    const { lines, refreshEnv } = describeUpdates(await api.getUpdateStatus())
+    if (refreshEnv) refreshPrismEnvStatus().catch(() => {})
+    elements.updateNotice.replaceChildren(
+      ...lines.map((line) => {
+        const row = document.createElement('div')
+        row.className = 'update-row'
+        const text = document.createElement('span')
+        text.textContent = line.text
+        row.append(text)
+        if (line.skip) {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.className = 'button button-ghost button-inline'
+          button.textContent = 'Skip this version'
+          button.addEventListener('click', async () => {
+            try {
+              await api.skipUpdateNotice(line.skip)
+            } catch {}
+            refreshUpdateNotice()
+          })
+          row.append(button)
+        }
+        return row
+      })
+    )
+    elements.updateNotice.hidden = lines.length === 0
+    const validatorLine = lines.find((line) => !line.skip && line.text.startsWith('prism-validator'))
+    elements.prismUpdateStatus.hidden = !validatorLine
+    elements.prismUpdateStatus.textContent = validatorLine?.text ?? ''
+  } catch {
+    elements.updateNotice.hidden = true
+  }
+}
+refreshUpdateNotice()
+api.onUpdatesChanged(refreshUpdateNotice)
 
 elements.closeSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = true

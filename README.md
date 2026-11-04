@@ -57,6 +57,8 @@ Everything else — macOS and Windows script installs, the macOS/Windows warning
 folder trust question, PRISM projects, running from source, network shares — is in the
 **[Install guide](https://datalad-desktop.readthedocs.io/en/latest/install.html)**.
 
+The app tells you when DataLad or git-annex have a newer version (it never installs those). If you installed the PRISM validator, the app also keeps it up to date in the background, using only releases that are at least 3 days old. Administrators can turn all of this off, see [SECURITY.md](SECURITY.md).
+
 ## Documentation
 
 **[datalad-desktop.readthedocs.io](https://datalad-desktop.readthedocs.io/)** has the tutorials, researcher

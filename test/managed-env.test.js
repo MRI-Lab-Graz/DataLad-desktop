@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   MANAGED_ENV,
+  UV_ENV,
   createEnsureGuard,
   describeEnvFailure,
   ensureEnv,
@@ -78,7 +79,8 @@ test('ensureEnv creates the venv, installs pinned packages, verifies, and writes
   const lockPath = await lockFile()
   const result = await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath })
   assert.deepEqual(result, { ready: true, validatorVersion: 'prism-validator 1.2.3' })
-  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--no-config', '--python', '3.12', envDir])
+  // --relocatable: the auto-update builds at env.next and renames it; entry points must not hard-code that path.
+  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--no-config', '--relocatable', '--python', '3.12', envDir])
   // No config discovery, explicit index, hashes required, wheels only (no build scripts run).
   assert.deepEqual(runner.calls[1], [
     '/uv', 'pip', 'install', '--no-config', '--python', envDir,
@@ -140,6 +142,13 @@ test('describeEnvFailure maps known stderr to plain-language codes', () => {
   assert.equal(d('something odd').code, 'UNKNOWN')
 })
 
+// Windows antivirus / indexer locks are not the version's fault.
+const LOCKED = ['error: Access is denied. (os error 5)', 'failed to remove file: os error 32',
+  'The process cannot access the file because it is being used by another process.', 'file used by another process']
+test('describeEnvFailure: Windows file locks count as DISK', () => {
+  for (const stderr of LOCKED) assert.equal(d(stderr).code, 'DISK', stderr)
+})
+
 test('a spawn failure (127) names the bundled uv path; cancel is its own code', () => {
   const blocked = d('spawn EACCES', { exitCode: 127 })
   assert.equal(blocked.code, 'UV_BLOCKED')
@@ -155,4 +164,86 @@ test('createEnsureGuard refuses a second concurrent run but allows one after it 
   release('ok')
   assert.equal(await first, 'ok')
   assert.equal(await guard.run(async () => 'again'), 'again')
+})
+
+const markerOf = async (envDir) => JSON.parse(await readFile(join(envDir, 'managed-env.json'), 'utf8'))
+
+test('ensureEnv writes source into the marker when given', async () => {
+  const envDir = await fresh()
+  await ensureEnv({ runner: fakeRunner(), uvPath: '/uv', envDir, lockPath: await lockFile(), source: 'auto-update' })
+  assert.equal((await markerOf(envDir)).source, 'auto-update')
+})
+
+test('ensureEnv keeps a working auto-updated env even when its lock differs from the shipped one', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner()
+  const result = await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.deepEqual(result, { ready: true, validatorVersion: 'prism-validator 1.2.3' })
+  assert.equal(runner.calls.some((c) => c[0] === '/uv'), false)
+})
+
+test('ensureEnv still reinstalls a differing lock when the marker has no source', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other' }))
+  const runner = fakeRunner()
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})
+
+test('ensureEnv reinstalls an auto-updated env built for another Python', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.11', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner()
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})
+
+test('ensureEnv reinstalls when an auto-update marker is present but the validator does not run', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner({ failStep: 'verify' })
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})
+
+// UV_* variables could add or swap the package index; hashes protect the content, this keeps the source fixed.
+test('ensureEnv runs every uv step without UV_* index variables', async () => {
+  const envDir = await fresh()
+  const inner = fakeRunner()
+  const seen = []
+  const runner = { run: (command, args, opts) => { if (command === '/uv') seen.push(opts); return inner.run(command, args, opts) } }
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(seen.length, 2)
+  for (const opts of seen) {
+    for (const key of ['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS']) {
+      assert.ok(key in opts.env && opts.env[key] === undefined, key)
+    }
+  }
+})
+
+test('ensureEnv passes timeoutMs to venv and install only when given (Install button: none)', async () => {
+  for (const timeoutMs of [undefined, 1234]) {
+    const inner = fakeRunner()
+    const seen = []
+    const runner = { run: (command, args, opts) => { if (command === '/uv') seen.push(opts); return inner.run(command, args, opts) } }
+    await ensureEnv({ runner, uvPath: '/uv', envDir: await fresh(), lockPath: await lockFile(), ...(timeoutMs && { timeoutMs }) })
+    assert.equal(seen.length, 2)
+    for (const opts of seen) {
+      if (timeoutMs) assert.equal(opts.timeoutMs, timeoutMs)
+      else assert.equal('timeoutMs' in opts, false)
+    }
+  }
+})
+
+// Each could change where packages come from or how they are checked; undefined = not passed to uv at all.
+test('UV_ENV clears the uv variables that change the index, the resolve or the Python download', () => {
+  for (const key of ['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS',
+    'UV_PRERELEASE', 'UV_CONSTRAINT', 'UV_OVERRIDE', 'UV_INSECURE_HOST', 'UV_PYTHON_INSTALL_MIRROR']) {
+    assert.ok(key in UV_ENV && UV_ENV[key] === undefined, key)
+  }
 })
