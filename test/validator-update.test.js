@@ -54,3 +54,45 @@ test('pickRelease returns null for malformed input', () => {
     assert.equal(pickRelease(bad, { now: NOW, cooldownDays: 3 }), null)
   }
 })
+
+const pick = (releases) => pickRelease({ releases }, { now: NOW, cooldownDays: 3 })
+
+test('pickRelease never throws on a huge file list', () => {
+  const files = Array.from({ length: 200_000 }, () => file('2026-10-01T10:00:00Z'))
+  assert.equal(pick({ '1.0.0': files })?.version, '1.0.0')
+})
+
+test('cooldown ignores yanked files', () => {
+  const old = '2026-10-01T10:00:00Z'
+  const young = '2026-11-03T12:00:00Z'
+  assert.equal(pick({ '1.0.0': [file(old, true), file(young)] }), null)
+  assert.equal(pick({ '1.0.0': [file(old, true), file(old), file(young, true)] })?.version, '1.0.0')
+})
+
+test('pickRelease rejects non-object releases', () => {
+  assert.equal(pick([['1.0.0']]), null)
+  assert.equal(pick('1.0.0'), null)
+})
+
+test('huge version parts are skipped, parseVersion caps its scan', () => {
+  const huge = '1.' + '9'.repeat(30)
+  assert.equal(pick({ [huge]: [file('2026-10-01T10:00:00Z')] }), null)
+  assert.equal(parseVersion('v' + huge), null)
+  assert.equal(parseVersion(' '.repeat(500) + '1.2.3'), null)
+})
+
+test('cooldown boundary is inclusive to the millisecond', () => {
+  const exact = new Date(NOW.getTime() - 3 * 86400000)
+  assert.equal(pick({ '1.0.0': [file(exact.toISOString())] })?.version, '1.0.0')
+  assert.equal(pick({ '1.0.0': [file(new Date(exact.getTime() + 1).toISOString())] }), null)
+})
+
+test('a __proto__ key in releases is ignored', () => {
+  const json = JSON.parse('{"releases":{"__proto__":[{"upload_time_iso_8601":"2026-10-01T10:00:00Z"}]}}')
+  assert.equal(pickRelease(json, { now: NOW, cooldownDays: 3 }), null)
+})
+
+test('1.20 and 1.20.0 give the same pick in any order', () => {
+  const f = [file('2026-10-01T10:00:00Z')]
+  assert.equal(pick({ '1.20': f, '1.20.0': f }).version, pick({ '1.20.0': f, '1.20': f }).version)
+})
