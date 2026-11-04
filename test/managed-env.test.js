@@ -156,3 +156,30 @@ test('createEnsureGuard refuses a second concurrent run but allows one after it 
   assert.equal(await first, 'ok')
   assert.equal(await guard.run(async () => 'again'), 'again')
 })
+
+const markerOf = async (envDir) => JSON.parse(await readFile(join(envDir, 'managed-env.json'), 'utf8'))
+
+test('ensureEnv writes source into the marker when given', async () => {
+  const envDir = await fresh()
+  await ensureEnv({ runner: fakeRunner(), uvPath: '/uv', envDir, lockPath: await lockFile(), source: 'auto-update' })
+  assert.equal((await markerOf(envDir)).source, 'auto-update')
+})
+
+test('ensureEnv keeps a working auto-updated env even when its lock differs from the shipped one', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner()
+  const result = await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.deepEqual(result, { ready: true, validatorVersion: 'prism-validator 1.2.3' })
+  assert.equal(runner.calls.some((c) => c[0] === '/uv'), false)
+})
+
+test('ensureEnv still reinstalls a differing lock when the marker has no source', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other' }))
+  const runner = fakeRunner()
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})

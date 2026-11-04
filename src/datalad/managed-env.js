@@ -21,11 +21,12 @@ export async function envStatus({ runner, envDir, platform }) {
   return result.failed ? { ready: false, validatorVersion: null } : { ready: true, validatorVersion: firstLine(result.stdout || result.stderr) }
 }
 
-export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform }) {
+export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOutput, platform, source }) {
   const lock = createHash('sha256').update(await readFile(lockPath)).digest('hex')
-  const config = { ...MANAGED_ENV, lock }
+  const config = { ...MANAGED_ENV, lock, ...(source && { source }) }
   const marker = await readFile(join(envDir, MARKER), 'utf8').then(JSON.parse, () => null)
-  if (marker && sameConfig(marker, config)) {
+  // An auto-updated env came from a newer generated lock; Install must not roll it back to the shipped pin.
+  if (marker && (sameConfig(marker, config) || marker.source === 'auto-update')) {
     const status = await envStatus({ runner, envDir, platform })
     if (status.ready) return status
   }
