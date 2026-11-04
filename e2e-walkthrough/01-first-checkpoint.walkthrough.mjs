@@ -78,7 +78,10 @@ test('Tutorial 01 · step 3: changed files are listed', () =>
 test('Tutorial 01 · step 3: Show changes shows the edit', () =>
   step('Tutorial 01 step 3 diff', async () => {
     await app.page.click(`${rowFor('data/raw/participants.tsv')} .show-diff-button`)
-    await app.page.waitForFunction((sel) => /25/.test(document.querySelector(sel)?.textContent ?? ''), `${rowFor('data/raw/participants.tsv')} [data-diff-container]`, { timeout: SLOW })
+    const changed = `${rowFor('data/raw/participants.tsv')} .diff-cell-changed`
+    await app.page.waitForSelector(changed, { timeout: SLOW })
+    const cells = await app.page.evaluate((sel) => [...document.querySelectorAll(sel)].map((n) => n.textContent), changed)
+    assert.deepEqual(cells, ['24', '25'], 'the changed cell goes from 24 to 25')
   }))
 
 test('Tutorial 01 · step 4-5: save only the research files', () =>
@@ -129,4 +132,16 @@ test('Tutorial 01 · failure injection: ticking the scratch file saves it', () =
     await waitForNewCommit(before)
     assert.match(git('ls-files'), /notes\/todo\.txt/, 'the file is now part of the saved history')
     assert.equal(git('status', '--porcelain'), '')
+  
+  }))
+
+// Tutorial: "Open Tools → History and select that save to see which files it contains."
+test('Tutorial 01 · failure injection: History lists the scratch file in the new save', { todo: 'app bug: Tools → History tile does not reload an already-loaded list, so a save made since the last visit is missing (only showTools(\'time-machine-zone\') refreshes)' }, () =>
+  step('Tutorial 01 failure injection history', async () => {
+    // Tools -> History: select that save and see which files it contains.
+    await app.page.click('#open-tools')
+    await app.page.click('[data-nav-target="time-machine-zone"]')
+    await app.page.waitForSelector('.tm-commit-item:has-text("notes: add scratch todo by mistake")', { timeout: 15_000 })
+    await app.page.click(`.tm-commit-item:has-text("notes: add scratch todo by mistake")`)
+    await app.page.waitForFunction(() => document.getElementById('tm-detail-output').textContent.includes('notes/todo.txt'), null, { timeout: 15_000 })
   }))
