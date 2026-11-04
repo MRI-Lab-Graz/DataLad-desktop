@@ -53,8 +53,9 @@ test('opening a different project returns to Home, but re-rendering the same pro
   assert.doesNotMatch(fnBody('function setProjectDependentSectionsVisible'), /showHome\(\)/)
 })
 
-test('History never shows another project, and Full history refreshes it', () => {
-  assert.match(fnBody('async function loadTimeMachineIfEmpty'), /state\.timeMachineProjectPath === projectPath/)
+test('History never shows another project, and every visit refreshes it', () => {
+  assert.match(fnBody('async function loadTimeMachine'), /refreshTimeMachineHistory\(projectPath\)/)
+  assert.doesNotMatch(fnBody('async function loadTimeMachine'), /length > 0/)
   assert.match(fnBody('function showTools'), /refreshTimeMachineHistory\(readProjectPath\(\)\)/)
 })
 

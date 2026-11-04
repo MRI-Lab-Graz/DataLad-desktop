@@ -133,7 +133,7 @@ test('Tutorial 01 · failure injection: ticking the scratch file saves it', () =
   }))
 
 // Tutorial: "Open Tools → History and select that save to see which files it contains."
-test('Tutorial 01 · failure injection: History lists the scratch file in the new save', { todo: 'app bug: Tools → History tile does not reload an already-loaded list, so a save made since the last visit is missing (only showTools(\'time-machine-zone\') refreshes)' }, () =>
+test('Tutorial 01 · failure injection: History lists the scratch file in the new save', () =>
   step('Tutorial 01 failure injection history', async () => {
     // Tools -> History: select that save and see which files it contains.
     await app.page.click('#open-tools')

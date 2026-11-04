@@ -1398,9 +1398,10 @@ elements.createBranchButton.addEventListener('click', async () => {
   await refreshBranchList(projectPath)
 })
 
-async function loadTimeMachineIfEmpty() {
+// Always refresh: a save made since the last visit must show up in the history.
+async function loadTimeMachine() {
   const projectPath = readProjectPath()
-  if (!projectPath || (state.timeMachineCommits.length > 0 && state.timeMachineProjectPath === projectPath)) {
+  if (!projectPath) {
     return
   }
   await refreshTimeMachineHistory(projectPath)
@@ -1408,7 +1409,7 @@ async function loadTimeMachineIfEmpty() {
 
 elements.projectNavTiles
   .find((tile) => tile.dataset.navTarget === 'time-machine-zone')
-  ?.addEventListener('click', loadTimeMachineIfEmpty)
+  ?.addEventListener('click', loadTimeMachine)
 
 elements.timeMachineLoadMoreButton.addEventListener('click', async () => {
   const projectPath = readProjectPath()
