@@ -243,6 +243,7 @@
             <p id="current-project-title" class="strip-label">Current Project</p>
             <input
               id="current-project-title-input"
+              aria-labelledby="current-project-title"
               class="project-strip-title-input"
               type="text"
               placeholder="Add a project title"
@@ -359,7 +360,7 @@
               <h3 id="command-output-title">Last Action Result</h3>
             </div>
             <p class="lede-small">Shows what happened after Save, Get Data, Update, or Publish runs.</p>
-            <div id="command-output" class="panel panel-muted">Run an action to see status and details.</div>
+            <div id="command-output" class="panel panel-muted" aria-live="polite">Run an action to see status and details.</div>
           </section>
           </details>
         </section>

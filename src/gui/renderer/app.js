@@ -37,6 +37,7 @@ import {
 } from './project-health-chips.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
+import { trapFocus } from './dialog-focus.js'
 import { suggestMessage } from './message-suggestion.js'
 
 const api = window.dataladDesktop
@@ -662,6 +663,9 @@ async function refreshGitIdentity() {
   updateSaveButtonState()
 }
 
+const identityFocus = trapFocus(elements.identityOverlay)
+const runFocus = trapFocus(elements.runOverlay)
+
 function openIdentityDialog() {
   if (!elements.identityOverlay.hidden) {
     return
@@ -669,12 +673,14 @@ function openIdentityDialog() {
   elements.identityName.value = state.gitIdentity?.name ?? ''
   elements.identityEmail.value = state.gitIdentity?.email ?? ''
   elements.identityError.textContent = ''
+  identityFocus.remember()
   elements.identityOverlay.hidden = false
   ;(elements.identityName.value ? elements.identityEmail : elements.identityName).focus()
 }
 
 function closeIdentityDialog() {
   elements.identityOverlay.hidden = true
+  identityFocus.restore()
 }
 
 elements.identityOpenButton.addEventListener('click', openIdentityDialog)
@@ -713,6 +719,7 @@ function openRunDialog() {
     field.value = ''
   }
   elements.runMessage.dataset.edited = ''
+  runFocus.remember()
   elements.runOverlay.hidden = false
   updateRunGating()
   elements.runCommand.focus()
@@ -720,6 +727,7 @@ function openRunDialog() {
 
 function closeRunDialog() {
   elements.runOverlay.hidden = true
+  runFocus.restore()
 }
 
 elements.openRunButton.addEventListener('click', openRunDialog)

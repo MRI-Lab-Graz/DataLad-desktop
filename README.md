@@ -66,7 +66,7 @@ workflow and architecture.
 
 ## Check the manual still works
 
-`npm run walkthrough` plays tutorials 00 and 01 in the real app, like a first-time student. It needs Node 22 or newer (for `node --test` glob expansion; the same holds for
+`npm run walkthrough` plays tutorials 00 and 01 in the real app, like a first-time student, and runs a few accessibility checks (dialog focus, screen-reader announcements, colour contrast). It needs Node 22 or newer (for `node --test` glob expansion; the same holds for
 `npm run test:e2e`), this repo, `npm install`, and DataLad + git-annex on your PATH. It works in a throwaway folder with a throwaway
 git identity, so your own settings and projects are never touched, and it prints one line per step.
 
