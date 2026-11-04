@@ -30,27 +30,33 @@ changes in the newly created project and make a clean first save.
 ## Walkthrough tasks
 
 1. Open the project in DataLad Desktop.
-2. Confirm project classification badge (Git, Dataset, or Superdataset).
+2. Confirm project classification badge next to the project name: **Git**, **DataLad**, or **DataLad + Links**. A project made in Tutorial 00 reads **DataLad**..
 3. Review changed and untracked files in the working-tree list.
    Click **Show changes** under a file to see exactly what changed in it before you save.
 
    ![The Files view, with changed items badged](../_static/screenshots/05-files.png)
 
-4. Select only research-relevant files for Save.
-5. Leave scratch notes unselected.
+4. Every changed file starts ticked. Keep the ticks on the research files
+   (`README.md`, `data/raw/participants.tsv`).
+5. Untick the scratch note `notes/todo.txt`.
 6. Write a Save message in this format:
    - `pilot: update participant table and project summary`
 
    ![The Save panel: pick files, write a message, save](../_static/screenshots/04-save-checkpoint.png)
 
 7. Execute Save.
-8. Re-check status to confirm a clean state for selected files.
+8. Re-check the list of changed files. The saved files are gone from it, and
+   only `notes/todo.txt` is left. Open **Tools → History** to see your new
+   save at the top.
 
 ## Failure injection
 
-- Intentionally include `notes/todo.txt` in Save once.
-- Recover by making a second Save that removes the scratch content from tracked
-  history according to your project policy.
+- Tick `notes/todo.txt` and Save it once, as if by mistake.
+- The app saves the file like any other: it is now part of the project's
+  history. Open **Tools → History** and select that save to see which files
+  it contains. The app has no button that takes one file out of an earlier
+  save. To keep scratch files out in future, add a rule in the project's
+  ignore rules before they are saved, or leave them unticked as above.
 
 ## Completion criteria
 

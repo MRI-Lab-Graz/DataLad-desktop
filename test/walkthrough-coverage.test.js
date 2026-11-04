@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 
 // Tutorials without a walkthrough yet; each walkthrough task removes its own number.
-const NOT_COVERED = ['01', '02', '03', '04', '05', '06']
+const NOT_COVERED = ['02', '03', '04', '05', '06']
 
 const nums = (names, suffix) => names.filter((n) => /^\d\d-/.test(n) && n.endsWith(suffix)).map((n) => n.slice(0, 2))
 
