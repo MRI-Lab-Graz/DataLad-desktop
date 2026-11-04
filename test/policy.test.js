@@ -6,14 +6,14 @@ import { join } from 'node:path'
 import { loadPolicy, policyFiles } from '../src/gui/policy.js'
 
 test('loadPolicy has no trusted roots by default', () => {
-  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { trustedRoots: [], runDisabled: false })
+  assert.deepEqual(loadPolicy({ env: {}, files: ['/nonexistent/policy.json'] }), { trustedRoots: [], runDisabled: false, updateCheckDisabled: false })
 })
 
 test('loadPolicy ignores keys it does not know, such as the old consoleDisabled', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const file = join(dir, 'policy.json')
   await writeFile(file, JSON.stringify({ consoleDisabled: true, trustedRoots: ['/lab/share'] }))
-  assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: ['/lab/share'], runDisabled: false })
+  assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: ['/lab/share'], runDisabled: false, updateCheckDisabled: false })
 })
 
 // An update removes the whole install folder, so an admin's policy must live outside it.
@@ -52,7 +52,7 @@ test('loadPolicy: an unreadable policy file contributes no trusted roots', async
   const bad = join(dir, 'bad.json')
   await writeFile(good, JSON.stringify({ trustedRoots: [join(dir, 'share')] }))
   await writeFile(bad, '{ not json')
-  assert.deepEqual(loadPolicy({ env: {}, files: [bad, good] }), { trustedRoots: [join(dir, 'share')], runDisabled: true })
+  assert.deepEqual(loadPolicy({ env: {}, files: [bad, good] }), { trustedRoots: [join(dir, 'share')], runDisabled: true, updateCheckDisabled: true })
   assert.deepEqual(loadPolicy({ env: {}, files: [bad] }).trustedRoots, [])
 })
 
@@ -73,4 +73,17 @@ test('loadPolicy fails closed: a policy.json that exists but cannot be read turn
   const bad = join(dir, 'bad.json')
   await writeFile(bad, '{ not json')
   assert.equal(loadPolicy({ env: {}, files: [bad] }).runDisabled, true)
+})
+
+test('loadPolicy: DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1 or updateCheckDisabled in policy.json turns update checks off', async () => {
+  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' }, files: ['/nonexistent'] }).updateCheckDisabled, true)
+  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' }, files: ['/nonexistent'] }).updateCheckDisabled, false)
+  assert.equal(loadPolicy({ env: {}, files: ['/nonexistent'] }).updateCheckDisabled, false)
+  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
+  const off = join(dir, 'a.json')
+  const bad = join(dir, 'bad.json')
+  await writeFile(off, JSON.stringify({ updateCheckDisabled: true }))
+  await writeFile(bad, '{ not json')
+  assert.equal(loadPolicy({ env: {}, files: [off] }).updateCheckDisabled, true)
+  assert.equal(loadPolicy({ env: {}, files: [bad] }).updateCheckDisabled, true)
 })
