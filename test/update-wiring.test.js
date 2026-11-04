@@ -163,3 +163,22 @@ test('preload exposes the three update functions', () => {
   assert.match(preload, /skipUpdateNotice: \(\{ tool, version \}\) => ipcRenderer\.invoke\('updates:skip', \{ tool, version \}\)/)
   assert.match(preload, /onUpdatesChanged: \(callback\) => \{[\s\S]*?ipcRenderer\.on\('updates:changed', listener\)[\s\S]*?return \(\) => ipcRenderer\.removeListener\('updates:changed', listener\)/)
 })
+
+test('createUpdateChecks: dropNotice removes a skipped notice from the status', async () => {
+  const checks = createUpdateChecks({
+    disabled: false,
+    guard: guard(),
+    update: async () => ({ status: 'current' }),
+    notices: async () => [
+      { tool: 'datalad', latest: '2.0', message: 'a' },
+      { tool: 'git-annex', latest: '2.0', message: 'b' }
+    ]
+  })
+  await checks.start(() => {})
+  checks.dropNotice('datalad', '2.0')
+  assert.deepEqual(checks.status().notices.map((n) => n.tool), ['git-annex'])
+})
+
+test('updates:skip handler drops the notice from the cached status', () => {
+  assert.match(handler('updates:skip'), /updateChecks\.dropNotice\(tool, version\)/)
+})

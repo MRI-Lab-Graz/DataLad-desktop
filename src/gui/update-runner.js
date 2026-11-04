@@ -53,6 +53,10 @@ export function createUpdateChecks({ disabled, guard, update, notices }) {
   let started = false
   return {
     status: () => status,
+    // After a Skip: the cached status must stop showing that notice too.
+    dropNotice(tool, version) {
+      status.notices = status.notices.filter((n) => !(n.tool === tool && n.latest === version))
+    },
     async start(onChange) {
       if (disabled || started) return
       started = true

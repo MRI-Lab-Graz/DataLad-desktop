@@ -15,7 +15,8 @@ const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 // `identity: false` launches against an empty global git config, like a fresh Windows machine.
 // `trustedPaths`: folders the app already trusts at launch, like a user who confirmed them before. A packaged app
 // never auto-answers its trust dialog (only an unpackaged one started by this driver does), so its tests need this.
-export async function launchApp({ identity = true, env = {}, trustedPaths = [] } = {}) {
+// `userDataDir`: reuse an existing profile folder (to restart the app on the same profile) instead of a fresh temp one.
+export async function launchApp({ identity = true, env = {}, trustedPaths = [], userDataDir: reuseDir } = {}) {
   // Setting this to '' (rather than deleting it) does NOT reliably clear it
   // on Windows: empty-string env vars get dropped when child_process builds
   // the Windows environment block, so the parent's truthy value (if any)
@@ -28,6 +29,8 @@ export async function launchApp({ identity = true, env = {}, trustedPaths = [] }
   // No human to click the app's native confirmations (a new project outside opened folders);
   // an unpackaged app honours this, a packaged one never does.
   childEnv.DATALAD_DESKTOP_E2E_CONFIRM = '1'
+  // Tests must never reach the real PyPI or build a real environment; a test turns the check on with '0'.
+  childEnv.DATALAD_DESKTOP_DISABLE_UPDATE_CHECK = '1'
 
   // Without this, the app launches against the real per-machine profile
   // (localStorage, settings.json), so anything a developer toggled while
@@ -35,7 +38,7 @@ export async function launchApp({ identity = true, env = {}, trustedPaths = [] }
   // into every later e2e run on that machine and changes behaviour out from
   // under the tests. A fresh --user-data-dir per launch makes every
   // run hermetic regardless of what's been clicked around locally before.
-  const userDataDir = await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
+  const userDataDir = reuseDir ?? await mkdtemp(join(tmpdir(), 'dlad-e2e-userdata-'))
 
   // Same idea for git: never read or write the developer's real ~/.gitconfig (the
   // app now manages user.name/user.email there). CI runners have no identity, so by

@@ -48,6 +48,8 @@
         </p>
       </header>
 
+      <div id="update-notice" class="update-notice" role="status" aria-live="polite" hidden></div>
+
       <section id="settings-card" class="card reveal reveal-1" aria-labelledby="settings-title" hidden>
         <span class="card-icon-badge" aria-hidden="true">⚙️</span>
         <div class="section-head">
@@ -90,6 +92,7 @@
           <h3 class="setup-section-title">PRISM Validator</h3>
           <p class="lede-small">Checks that your data follows the PRISM and BIDS structure. Installed privately for this app.</p>
           <p id="prism-env-status" class="lede-small"></p>
+          <p id="prism-update-status" class="lede-small" hidden></p>
           <div class="row-actions">
             <button id="prism-env-install" class="button button-ghost button-inline" type="button">Install</button>
             <button id="prism-env-cancel" class="button button-ghost button-inline" type="button" hidden>Cancel</button>

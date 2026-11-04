@@ -470,6 +470,7 @@ handle('updates:skip', async (_event, { tool, version } = {}) => {
     throw new Error('Invalid version.')
   }
   await skipNotice({ userDataDir: app.getPath('userData'), tool, version })
+  updateChecks.dropNotice(tool, version)
   return { ok: true }
 })
 
