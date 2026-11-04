@@ -152,6 +152,7 @@ test('SECURITY.md documents the validator auto-update, the update notices and th
 
 test('SECURITY.md lists the update network requests, and the code uses those hosts and fixed settings', () => {
   assert.match(doc, /formulae\.brew\.sh/)
+  assert.match(doc, /`formulae\.brew\.sh` \(git-annex, and DataLad when it came from Homebrew\)/)
   assert.doesNotMatch(doc, /Nothing runs while a Save/)
   assert.match(doc, /never swaps a new version in while a Save or validation is running/)
   assert.match(doc, /only the 3-day cooldown/i)

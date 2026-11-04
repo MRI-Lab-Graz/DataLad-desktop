@@ -16,7 +16,7 @@ The app is not offline-only. It talks to the network in these cases, and only th
 
 - `git`, `git-annex` and `datalad` contact the remotes you choose (clone, update, push).
 - The PRISM validator environment is installed on first use through the bundled `uv`, from PyPI (hash-locked, see below). `uv` may also download a Python build from GitHub.
-- Once per start, unless an administrator turned update checks off, the app asks PyPI (`prism-validator` when it is installed, and `datalad`) and `formulae.brew.sh` (git-annex) for the latest version number. An automatic validator update downloads from PyPI through the bundled `uv`.
+- Once per start, unless an administrator turned update checks off, the app asks PyPI (`prism-validator` when it is installed, and `datalad`) and `formulae.brew.sh` (git-annex, and DataLad when it came from Homebrew) for the latest version number. An automatic validator update downloads from PyPI through the bundled `uv`.
 - The Windows installer downloads Git for Windows, Python 3.12, git-annex and the DataLad packages (every download hash-checked or hash-locked).
 
 ## Controls
@@ -92,7 +92,7 @@ Each control below has a test; the file names are where to verify it.
 
 **Updates** (`src/datalad/validator-update.js`, `src/datalad/tool-notices.js`, `src/gui/update-runner.js`)
 - `prism-validator` updates itself only if you already installed it (Setup, PRISM Validator). About 5 seconds after the window loads, in the background, the app asks PyPI for the newest stable release that is at least 3 days old (`PRISM_COOLDOWN_DAYS`; the age is judged by the computer's clock). It resolves a hash-locked package list with the bundled `uv` (`--only-binary :all:`, the fixed index `https://pypi.org/simple`, `--exclude-newer` at the cutoff so dependencies obey the same cooldown, `UV_*` index variables removed). The new environment is built beside the old one, and the new version's code runs as you during a self-check: it must start, report exactly the chosen version, and produce a report the Save check can read. Only after that is it swapped in. On any failure the current one keeps working (restored at the next start if a swap was interrupted); a version that failed for its own reasons is not retried until a newer one exists. The app never swaps a new version in while a Save or validation is running; it throws that build away and tries again at the next start. It shares the lock of the Install button, and each build step stops after 20 minutes.
-- DataLad and git-annex are only announced: a notice says a newer version exists (PyPI for DataLad, the Homebrew formula listing for git-annex), with a Skip this version button remembered per tool. Nothing is downloaded or installed.
+- DataLad and git-annex are only announced: a notice says a newer version exists (PyPI for DataLad, the Homebrew formula listing for git-annex and for a DataLad installed with Homebrew; no notice for the DataLad the app's own installer put in its `datalad-env` folder), with a Skip this version button remembered per tool. Nothing is downloaded or installed.
 - Administrators can turn all update checks off with the environment variable `DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1` or `"updateCheckDisabled": true` in `policy.json` (same places as `runDisabled`). A policy file that exists but cannot be read also turns them off. When off, the app makes no network request for updates (`src/gui/policy.js`).
 
 **Build and release** (`.github/workflows/`)

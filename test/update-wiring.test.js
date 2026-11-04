@@ -22,6 +22,10 @@ test('feedUrl: no override keeps the URL; an override swaps only the origin of t
     feedUrl('https://formulae.brew.sh/api/formula/git-annex.json', 'http://127.0.0.1:4567/'),
     'http://127.0.0.1:4567/api/formula/git-annex.json'
   )
+  assert.equal(
+    feedUrl('https://formulae.brew.sh/api/formula/datalad.json', 'http://127.0.0.1:4567'),
+    'http://127.0.0.1:4567/api/formula/datalad.json'
+  )
   assert.equal(feedUrl('https://example.org/x', 'http://127.0.0.1:4567'), 'https://example.org/x')
   // A path starting with // must not turn into a protocol-relative URL pointing at another host.
   assert.equal(feedUrl('https://pypi.org//evil.example/x?q=1', 'http://127.0.0.1:4567'), 'http://127.0.0.1:4567//evil.example/x?q=1')
