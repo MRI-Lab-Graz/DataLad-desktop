@@ -149,3 +149,16 @@ test('SECURITY.md documents the validator auto-update, the update notices and th
   assert.match(upd, /PRISM_COOLDOWN_DAYS/)
   assert.match(upd, /--only-binary/)
 })
+
+test('SECURITY.md lists the update network requests, and the code uses those hosts and fixed settings', () => {
+  assert.match(doc, /formulae\.brew\.sh/)
+  assert.doesNotMatch(doc, /Nothing runs while a Save/)
+  assert.match(doc, /never swaps a new version in while a Save or validation is running/)
+  assert.match(doc, /only the 3-day cooldown/i)
+  const notices = readFileSync(new URL('../src/datalad/tool-notices.js', import.meta.url), 'utf8')
+  assert.match(notices, /formulae\.brew\.sh/)
+  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8')
+  assert.match(upd, /PRISM_COOLDOWN_DAYS = 3\b/)
+  assert.match(upd, /--exclude-newer/)
+  assert.match(upd, /https:\/\/pypi\.org\/simple/)
+})
