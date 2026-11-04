@@ -171,6 +171,15 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
         return { status: 'failed', from, to, reason: IN_USE }
       }
     }
+    // Prove it from its final place (a venv can hard-code its build path). If not: put the old one back.
+    const final = await envStatus({ runner, envDir, platform })
+    if (!final.ready || parseVersion(final.validatorVersion) !== got) {
+      const moved = await rename(envDir, next).then(() => true, () => false)
+      if (!moved) await removeDir(envDir)
+      // If this fails, only .old is left and repairEnvDir restores it next start.
+      await rename(old, envDir).catch(() => {})
+      return await failed(DOWNLOAD_FAILED)
+    }
     await removeDir(old)
     await writeFile(stateFile, '{}').catch(() => {})
     return { status: 'updated', from, to }

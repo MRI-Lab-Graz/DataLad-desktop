@@ -405,3 +405,22 @@ test('a build that times out (exit 124) is offline-like: the version is not reme
   assert.equal((await updateValidator(deps)).status, 'offline')
   assert.equal(await exists(stateFile), false)
 })
+
+// --- final fix wave ---
+test('(n) the swapped-in env does not start from its final place: original restored, version remembered', async () => {
+  const inner = updateRunner()
+  let envChecks = 0
+  const runner = { ...inner, run: async (command, args, opts) => {
+    if (args[0] === '--version' && !command.includes('.next') && ++envChecks === 2) return bad // post-swap check
+    return inner.run(command, args, opts)
+  } }
+  const { deps, envDir, stateFile } = await setup({ runner })
+  const result = await updateValidator(deps)
+  assert.equal(result.status, 'failed')
+  assert.equal(result.to, '1.21.0')
+  assert.equal(envChecks, 2)
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+  assert.equal(await exists(`${envDir}.old`), false)
+  assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
+})

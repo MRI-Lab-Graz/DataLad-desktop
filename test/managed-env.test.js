@@ -78,7 +78,8 @@ test('ensureEnv creates the venv, installs pinned packages, verifies, and writes
   const lockPath = await lockFile()
   const result = await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath })
   assert.deepEqual(result, { ready: true, validatorVersion: 'prism-validator 1.2.3' })
-  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--no-config', '--python', '3.12', envDir])
+  // --relocatable: the auto-update builds at env.next and renames it; entry points must not hard-code that path.
+  assert.deepEqual(runner.calls[0], ['/uv', 'venv', '--no-config', '--relocatable', '--python', '3.12', envDir])
   // No config discovery, explicit index, hashes required, wheels only (no build scripts run).
   assert.deepEqual(runner.calls[1], [
     '/uv', 'pip', 'install', '--no-config', '--python', envDir,

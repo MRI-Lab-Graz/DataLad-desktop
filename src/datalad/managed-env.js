@@ -42,7 +42,8 @@ export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOu
   const steps = [
     // --no-config: ignore uv.toml/pyproject.toml found from wherever the app was launched.
     // Hashes make the index untrusted; wheels only, so no package build script ever runs.
-    ['venv', ['venv', '--no-config', '--python', config.python, envDir]],
+    // --relocatable: the auto-update builds in env.next and renames it to env; entry points must not hard-code the path.
+    ['venv', ['venv', '--no-config', '--relocatable', '--python', config.python, envDir]],
     ['install', ['pip', 'install', '--no-config', '--python', envDir, '--index-url', 'https://pypi.org/simple',
       '--require-hashes', '--only-binary', ':all:', '--no-deps', '-r', lockPath]]
   ]
