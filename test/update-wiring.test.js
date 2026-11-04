@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createBusyCounter, createFetchJson, createUpdateChecks, feedUrl, runUnlessBusy, withDefaultTimeout } from '../src/gui/update-runner.js'
+import { createAppUpdateChecks, createBusyCounter, createFetchJson, createUpdateChecks, feedUrl, runUnlessBusy } from '../src/gui/update-runner.js'
 
 // LF endings, so slicing on "\n})\n" also works on a Windows (CRLF) checkout.
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
@@ -45,12 +45,49 @@ test('createFetchJson: timeout signal, plain User-Agent only, rejects non-2xx, p
   await assert.rejects(fetchJson('https://pypi.org/bad'))
 })
 
-test('withDefaultTimeout: 15 s unless the caller passes its own', async () => {
-  const seen = []
-  const runner = withDefaultTimeout({ run: async (c, a, o) => seen.push(o) })
-  await runner.run('x', [])
-  await runner.run('x', [], { timeoutMs: 120000, env: { A: '1' } })
-  assert.deepEqual(seen, [{ timeoutMs: 15000 }, { timeoutMs: 120000, env: { A: '1' } }])
+// --- createAppUpdateChecks: what main.js wires together ---
+async function appChecks({ isPackaged = false, disabled = false } = {}) {
+  const seen = { fetched: [] }
+  const runner = { run: async (c, a, o) => (seen.ran = [c, a, o]) }
+  const checks = createAppUpdateChecks({
+    disabled,
+    guard: { run: (fn) => fn() },
+    isBusy: () => 'busy?',
+    runner,
+    paths: () => ({ uvPath: '/uv', envDir: '/env', userDataDir: '/data' }),
+    isPackaged,
+    feedOverride: 'http://127.0.0.1:9',
+    fetch: async (url) => { seen.fetched.push(url); return { ok: true, json: async () => ({}) } },
+    update: async (deps) => { seen.update = deps; await deps.fetchJson('https://pypi.org/pypi/prism-validator/json'); return { status: 'current' } },
+    notices: async (deps) => { seen.notices = deps; await deps.runner('git-annex', ['version'], { timeoutMs: 15000 }); return [] }
+  })
+  await checks.start(() => {})
+  return { seen, runner, checks }
+}
+
+test('createAppUpdateChecks: the build gets the plain runner (its own long timeouts), paths, busy check and a clock', async () => {
+  const { seen, runner } = await appChecks()
+  const { fetchJson, now, ...rest } = seen.update
+  assert.deepEqual(rest, { runner, uvPath: '/uv', envDir: '/env', userDataDir: '/data', isBusy: rest.isBusy })
+  assert.equal(rest.runner, runner)
+  assert.equal(rest.isBusy(), 'busy?')
+  assert.ok(now() instanceof Date)
+  assert.equal(typeof fetchJson, 'function')
+})
+
+test('createAppUpdateChecks: notices get a runner function that passes options through unchanged', async () => {
+  const { seen } = await appChecks()
+  assert.equal(seen.notices.userDataDir, '/data')
+  assert.equal(seen.notices.fetchJson, seen.update.fetchJson)
+  assert.deepEqual(seen.ran, ['git-annex', ['version'], { timeoutMs: 15000 }])
+})
+
+test('createAppUpdateChecks: the feed override only in an unpackaged app; disabled means nothing runs', async () => {
+  assert.deepEqual((await appChecks()).seen.fetched, ['http://127.0.0.1:9/pypi/prism-validator/json'])
+  assert.deepEqual((await appChecks({ isPackaged: true })).seen.fetched, ['https://pypi.org/pypi/prism-validator/json'])
+  const off = await appChecks({ disabled: true })
+  assert.deepEqual(off.seen, { fetched: [] })
+  assert.equal(off.checks.status().disabled, true)
 })
 
 test('createBusyCounter: busy while any tracked call runs, also when it throws', async () => {
@@ -128,24 +165,17 @@ test('updates:status returns the cached status; updates:skip validates tool and 
   assert.match(skip, /return \{ ok: true \}/)
 })
 
-test('the background run is built from the policy switch, the install lock and the busy counter', () => {
-  assert.match(main, /disabled: policy\.updateCheckDisabled/)
-  assert.match(main, /guard: ensureGuard/)
-  assert.match(main, /isBusy: validatorUse\.isBusy/)
-  // The 15 s default is for version checks only; the build has its own timeouts and must get the plain runner.
-  const update = main.slice(main.indexOf('updateValidator({'), main.indexOf('})', main.indexOf('updateValidator({')))
-  assert.match(update, /runner: toolRunner,/)
-  assert.match(main, /const noticeRunner = withDefaultTimeout\(toolRunner\)/)
-  assert.match(main, /collectNotices\(\{ runner: \(command, args, options\) => noticeRunner\.run\(command, args, options\)/)
+test('main.js builds the background run from the policy switch, the install lock, the busy counter and isPackaged', () => {
+  const call = main.slice(main.indexOf('createAppUpdateChecks({'), main.indexOf('\n})', main.indexOf('createAppUpdateChecks({')))
+  assert.match(call, /disabled:\s*policy\.updateCheckDisabled\b/)
+  assert.match(call, /guard:\s*ensureGuard\b/)
+  assert.match(call, /isBusy:\s*validatorUse\.isBusy\b/)
+  assert.match(call, /isPackaged:\s*app\.isPackaged\b/)
 })
 
 test('both validator call sites are wrapped by the busy counter', () => {
   assert.match(handler('adapter:runCommand'), /validatorUse\.track\(\(\) =>\s*gateSave\(/)
   assert.match(handler('prism:inspect'), /validatorUse\.track\(\(\) =>\s*inspectProject\(/)
-})
-
-test('the feed override is honoured only in an unpackaged app', () => {
-  assert.match(main, /createFetchJson\(\{ override: app\.isPackaged \? undefined : process\.env\.DLAD_UPDATE_FEED \}\)/)
 })
 
 test('the run starts after the window loaded, delayed, and the env is repaired before the window exists', () => {

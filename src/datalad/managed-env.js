@@ -6,9 +6,12 @@ import { join } from 'node:path'
 // (shipped as a resource); changing that file or `python` makes ensureEnv reinstall.
 export const MANAGED_ENV = { python: '3.12' }
 
-// Merged over process.env by the runner; an undefined value is not passed to the child at all. These variables
-// could add or swap the package index (hashes still guard the content; this keeps the source fixed too).
-export const UV_ENV = Object.fromEntries(['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS'].map((k) => [k, undefined]))
+// Merged over process.env by the runner. An undefined value drops the variable: Node omits undefined env values
+// when it spawns (on Windows its case-insensitive de-dup keeps the first key, and these all-uppercase keys come first).
+// These variables could swap the package index, loosen the resolve, or change where Python is downloaded from
+// (hashes still guard the content; this keeps the source fixed too).
+export const UV_ENV = Object.fromEntries(['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS',
+  'UV_PRERELEASE', 'UV_CONSTRAINT', 'UV_OVERRIDE', 'UV_INSECURE_HOST', 'UV_PYTHON_INSTALL_MIRROR'].map((k) => [k, undefined]))
 
 const MARKER = 'managed-env.json'
 const exe = (name, platform) => (platform === 'win32' ? `${name}.exe` : name)

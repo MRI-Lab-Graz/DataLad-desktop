@@ -87,3 +87,14 @@ test('loadPolicy: DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1 or updateCheckDisabled 
   assert.equal(loadPolicy({ env: {}, files: [off] }).updateCheckDisabled, true)
   assert.equal(loadPolicy({ env: {}, files: [bad] }).updateCheckDisabled, true)
 })
+
+// Only a JSON true turns the checks off (same rule as runDisabled); odd files never throw and name no roots.
+test('loadPolicy: updateCheckDisabled must be true itself; null and [] policy files are harmless', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'policy-'))
+  for (const [name, text, disabled] of [['str', '{"updateCheckDisabled":"true"}', false], ['one', '{"updateCheckDisabled":1}', false],
+    ['null', 'null', false], ['array', '[]', false], ['yes', '{"updateCheckDisabled":true}', true]]) {
+    const file = join(dir, `${name}.json`)
+    await writeFile(file, text)
+    assert.deepEqual(loadPolicy({ env: {}, files: [file] }), { trustedRoots: [], runDisabled: false, updateCheckDisabled: disabled }, name)
+  }
+})

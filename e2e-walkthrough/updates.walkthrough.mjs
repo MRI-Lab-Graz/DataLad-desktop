@@ -12,6 +12,7 @@ requireTools()
 const BODIES = {
   '/pypi/datalad/json': { info: { version: '99.0.0' } },
   '/api/formula/git-annex.json': { versions: { stable: '99.0.0' } },
+  '/api/formula/datalad.json': { versions: { stable: '99.0.0' } }, // a DataLad from Homebrew is compared with Homebrew
   '/pypi/prism-validator/json': { info: { version: '0.0.1' }, releases: {} }
 }
 let requests = 0
@@ -109,9 +110,17 @@ test('a real click on Skip this version removes that row', () =>
 
 test('with updates disabled nothing is shown and nothing is requested', () =>
   step('Update disabled', async () => {
+    const WAIT = 8_000
     requests = 0
     await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' } })
-    await new Promise((r) => setTimeout(r, 8_000))
+    await new Promise((r) => setTimeout(r, WAIT))
     assert.equal(await visible(), false)
     assert.equal(requests, 0)
+
+    // Positive control: the same launch with the switch on makes requests within the same wait, so zero above is not just a slow start.
+    await app.close()
+    app = null
+    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
+    await new Promise((r) => setTimeout(r, WAIT))
+    assert.ok(requests > 0, 'with the switch off the same wait sees a request')
   }))

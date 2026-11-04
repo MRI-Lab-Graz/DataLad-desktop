@@ -52,3 +52,14 @@ test('notice text keeps its line breaks (white-space: pre-line on the text span)
   assert.match(css, /\.update-row span\s*\{[^}]*white-space:\s*pre-line/)
   assert.match(app, /text\.textContent = line\.text/)
 })
+
+// After an update the Setup, PRISM Validator line ("Ready (1.20.0)") must not keep showing the old version.
+test('an updated validator asks for the Setup status line to be refreshed; nothing else does', () => {
+  assert.equal(describeUpdates({ disabled: false, validator: { status: 'updated', from: '1', to: '2' }, notices: [] }).refreshEnv, true)
+  for (const status of ['failed', 'retry', 'current']) {
+    assert.ok(!describeUpdates({ disabled: false, validator: { status }, notices: [] }).refreshEnv, status)
+  }
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const body = app.slice(app.indexOf('async function refreshUpdateNotice'), app.indexOf('refreshUpdateNotice()\napi.onUpdatesChanged'))
+  assert.match(body, /if \(refreshEnv\) refreshPrismEnvStatus\(\)\.catch\(/)
+})

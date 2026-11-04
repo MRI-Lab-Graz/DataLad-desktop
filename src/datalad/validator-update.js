@@ -66,10 +66,11 @@ const exists = (p) => stat(p).then(() => true, () => false)
 const removeDir = (p) => rm(p, { recursive: true, force: true, maxRetries: 3 }).catch(() => {})
 
 // Call on every start (also when updates are off). A crash between the two swap renames leaves only
-// <envDir>.old: put it back. Otherwise a leftover .old is just old files. Never throws.
+// <envDir>.old: put it back. Otherwise a leftover .old is just old files, a leftover .next a half build. Never throws.
 export async function repairEnvDir({ envDir, rename = renameSync, remove = removeDir }) {
   const old = `${envDir}.old`
   try {
+    await remove(`${envDir}.next`)
     if (await exists(envDir)) await remove(old)
     else if (await exists(old)) await rename(old, envDir)
   } catch {}
@@ -129,7 +130,6 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
       return { status: 'failed', from, to, reason }
     }
 
-    await removeDir(next)
     tmp = await mkdtemp(join(tmpdir(), 'prism-update-'))
     const input = join(tmp, 'in.txt')
     const lockPath = join(tmp, 'requirements.txt')
@@ -154,7 +154,7 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
       return { status: 'deferred', from, to }
     }
     // Synchronous on purpose: no event-loop turn between isBusy() and the renames, so no Save can start in between.
-    const moved = (from, to) => { try { rename(from, to); return true } catch { return false } }
+    const moved = (a, b) => { try { rename(a, b); return true } catch { return false } }
     if (!moved(envDir, old)) {
       await removeDir(next)
       return retry(IN_USE)

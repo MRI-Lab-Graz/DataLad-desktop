@@ -4,7 +4,8 @@ export function describeUpdates(status) {
   if (!status || status.disabled) return { lines: [] }
   const lines = []
   const validator = status.validator
-  if (validator?.status === 'updated') {
+  const refreshEnv = validator?.status === 'updated' // the Setup status line still shows the old version
+  if (refreshEnv) {
     lines.push({ text: `prism-validator was updated from ${validator.from} to ${validator.to}.` })
   } else if (validator?.status === 'failed') {
     lines.push({ text: 'prism-validator has a newer version that could not be installed. The current one keeps working.' })
@@ -12,5 +13,5 @@ export function describeUpdates(status) {
   for (const n of status.notices ?? []) {
     lines.push({ text: n.message, skip: { tool: n.tool, version: n.latest } })
   }
-  return { lines }
+  return refreshEnv ? { lines, refreshEnv } : { lines }
 }

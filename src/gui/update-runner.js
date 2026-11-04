@@ -1,5 +1,7 @@
 // Plumbing for the background update checks in main.js. The logic lives in
 // src/datalad/validator-update.js and src/datalad/tool-notices.js.
+import { collectNotices } from '../datalad/tool-notices.js'
+import { updateValidator } from '../datalad/validator-update.js'
 
 const FEED_ORIGINS = ['https://pypi.org', 'https://formulae.brew.sh']
 
@@ -25,11 +27,6 @@ export function createFetchJson({ fetch = globalThis.fetch, override } = {}) {
     return res.json()
   }
 }
-
-// A version check that hangs must not hold the install lock forever.
-export const withDefaultTimeout = (runner, timeoutMs = 15000) => ({
-  run: (command, args, options = {}) => runner.run(command, args, { ...options, timeoutMs: options.timeoutMs ?? timeoutMs })
-})
 
 // Counts Save checks / validations in flight, so the validator is never swapped under one.
 export function createBusyCounter() {
@@ -71,6 +68,19 @@ export function createUpdateChecks({ disabled, guard, update, notices }) {
       ])
     }
   }
+}
+
+// What main.js runs once per start. The build gets the plain runner (it sets its own long timeouts); the version
+// checks in collectNotices set their own 15 s timeout. The feed override is for e2e only: never in a packaged app.
+export function createAppUpdateChecks({ disabled, guard, isBusy, runner, paths, isPackaged, feedOverride, fetch,
+  update = updateValidator, notices = collectNotices }) {
+  const fetchJson = createFetchJson({ fetch, override: isPackaged ? undefined : feedOverride })
+  return createUpdateChecks({
+    disabled,
+    guard,
+    update: () => update({ runner, ...paths(), fetchJson, now: () => new Date(), isBusy }),
+    notices: () => notices({ runner: (command, args, options) => runner.run(command, args, options), fetchJson, userDataDir: paths().userDataDir })
+  })
 }
 
 // Runs fn under the lock; if the lock is already taken, returns busyResult instead of the lock's error.

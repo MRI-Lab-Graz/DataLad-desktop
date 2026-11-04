@@ -454,3 +454,11 @@ test('(p) the two swap renames run back to back: no event-loop turn for a Save t
   assert.equal((await updateValidator(deps)).status, 'updated')
   assert.deepEqual(renames, [false, false])
 })
+
+test('(q) repairEnvDir also removes a leftover .next (a build a crash interrupted)', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'repair '))
+  const envDir = join(base, 'env')
+  await mkdir(join(`${envDir}.next`, 'bin'), { recursive: true })
+  await repairEnvDir({ envDir })
+  assert.equal(await exists(`${envDir}.next`), false)
+})

@@ -18,9 +18,9 @@ import { findExecVectors, findRemoteVectors, localPath, localRemotePaths } from 
 import { createTrustStore } from './trust-store.js'
 import { createTrustGate, describeTrustPrompt, folderState, isEmptyOrMissing } from './trust-gate.js'
 import { createLatestLineThrottle, createRunRegistry } from './run-registry.js'
-import { createBusyCounter, createFetchJson, createUpdateChecks, runUnlessBusy, withDefaultTimeout } from './update-runner.js'
-import { parseVersion, repairEnvDir, updateValidator } from '../datalad/validator-update.js'
-import { collectNotices, skipNotice } from '../datalad/tool-notices.js'
+import { createAppUpdateChecks, createBusyCounter, runUnlessBusy } from './update-runner.js'
+import { parseVersion, repairEnvDir } from '../datalad/validator-update.js'
+import { skipNotice } from '../datalad/tool-notices.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -39,24 +39,14 @@ const policy = loadPolicy({
 })
 // Background update checks, once per start (see update-runner.js). Off by policy = no network request at all.
 const validatorUse = createBusyCounter()
-// Version checks only: the validator build sets its own (long) timeouts and gets the plain runner.
-const noticeRunner = withDefaultTimeout(toolRunner)
-const fetchJson = createFetchJson({ override: app.isPackaged ? undefined : process.env.DLAD_UPDATE_FEED })
-const updateChecks = createUpdateChecks({
+const updateChecks = createAppUpdateChecks({
   disabled: policy.updateCheckDisabled,
   guard: ensureGuard,
-  update: () =>
-    updateValidator({
-      runner: toolRunner,
-      uvPath: resolveUv(uvBaseDir()),
-      envDir: managedEnvDir(),
-      userDataDir: app.getPath('userData'),
-      fetchJson,
-      now: () => new Date(),
-      isBusy: validatorUse.isBusy
-    }),
-  notices: () =>
-    collectNotices({ runner: (command, args, options) => noticeRunner.run(command, args, options), fetchJson, userDataDir: app.getPath('userData') })
+  isBusy: validatorUse.isBusy,
+  runner: toolRunner,
+  paths: () => ({ uvPath: resolveUv(uvBaseDir()), envDir: managedEnvDir(), userDataDir: app.getPath('userData') }),
+  isPackaged: app.isPackaged,
+  feedOverride: process.env.DLAD_UPDATE_FEED
 })
 // fs:* handlers only operate inside roots the user has legitimated: the
 // workspace the app started in, folders picked via the native dialog, and

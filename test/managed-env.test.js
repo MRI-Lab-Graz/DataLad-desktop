@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   MANAGED_ENV,
+  UV_ENV,
   createEnsureGuard,
   describeEnvFailure,
   ensureEnv,
@@ -236,5 +237,13 @@ test('ensureEnv passes timeoutMs to venv and install only when given (Install bu
       if (timeoutMs) assert.equal(opts.timeoutMs, timeoutMs)
       else assert.equal('timeoutMs' in opts, false)
     }
+  }
+})
+
+// Each could change where packages come from or how they are checked; undefined = not passed to uv at all.
+test('UV_ENV clears the uv variables that change the index, the resolve or the Python download', () => {
+  for (const key of ['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS',
+    'UV_PRERELEASE', 'UV_CONSTRAINT', 'UV_OVERRIDE', 'UV_INSECURE_HOST', 'UV_PYTHON_INSTALL_MIRROR']) {
+    assert.ok(key in UV_ENV && UV_ENV[key] === undefined, key)
   }
 })

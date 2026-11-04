@@ -769,7 +769,8 @@ api.getCapabilities().then((capabilities) => {
 // Update notices: text only (textContent), errors leave the strip hidden.
 async function refreshUpdateNotice() {
   try {
-    const { lines } = describeUpdates(await api.getUpdateStatus())
+    const { lines, refreshEnv } = describeUpdates(await api.getUpdateStatus())
+    if (refreshEnv) refreshPrismEnvStatus().catch(() => {})
     elements.updateNotice.replaceChildren(
       ...lines.map((line) => {
         const row = document.createElement('div')
