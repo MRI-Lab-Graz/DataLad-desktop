@@ -91,7 +91,7 @@
 
 **Interfaces:**
 - Consumes: Task 1 functions; `ensureEnv` (with the `source` parameter from Task 3), `envStatus`, `envBin`, `MANAGED_ENV` from `src/datalad/managed-env.js`; `interpretReport` from `src/datalad/prism-gate.js`; a `runner` with `run(command, args, options) -> { failed, exitCode, stdout, stderr }` (`ProcessRunner`).
-- Produces: `export async function updateValidator(deps): Promise<{ status: 'updated' | 'current' | 'not-installed' | 'deferred' | 'failed' | 'offline', from?: string, to?: string, reason?: string }>` where `deps = { runner, uvPath, envDir, userDataDir, fetchJson: (url) => Promise<unknown>, now: () => Date, isBusy: () => boolean, platform?: string }`.
+- Produces: `export async function updateValidator(deps): Promise<{ status: 'updated' | 'current' | 'not-installed' | 'deferred' | 'failed' | 'retry', from?: string, to?: string, reason?: string }>` where `deps = { runner, uvPath, envDir, userDataDir, fetchJson: (url) => Promise<unknown>, now: () => Date, isBusy: () => boolean, platform?: string }`.
 - Produces (internal, exported for tests): `compatCheck({ runner, envDir, platform, tmpDir }): Promise<boolean>` — runs the new env's validator as the Save check does (`[emptyDir, '--no-prism', '--bids', '--format', 'json']`) on an empty temp folder and returns true only if `interpretReport(stdout).verdict` is not `'unknown'`.
 - Produces: persisted state file `join(userDataDir, 'validator-update.json')` = `{ failedVersion?: string }`.
 

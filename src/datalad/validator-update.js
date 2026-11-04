@@ -53,8 +53,10 @@ export const BUILD_TIMEOUT_MS = 20 * 60 * 1000
 const LATER = 'It will try again when an even newer version comes out.'
 const DOWNLOAD_FAILED = `The newer version could not be installed, so the current one stays. ${LATER}`
 const NOT_COMPATIBLE = `The new version did not pass the safety test, so the current one stays. ${LATER}`
-const NOT_PREPARED = 'The new version could not be prepared yet. It will be tried again next time the app starts.'
 const NEXT_START = 'It will try again next start.'
+const NOT_PREPARED = `The new version could not be prepared yet. ${NEXT_START}`
+const OFFLINE = `Could not reach the internet. ${NEXT_START}`
+const CANCELLED = `The update was stopped. ${NEXT_START}`
 const IN_USE = `The update could not finish because the validator was in use. ${NEXT_START}`
 const DISK = `There isn't enough disk space, or the app isn't allowed to write to its data folder. ${NEXT_START}`
 const BLOCKED = `The update helper could not start. Security software may have blocked it. ${NEXT_START}`
@@ -85,24 +87,24 @@ export async function compatCheck({ runner, envDir, platform, tmpDir }) {
   }
 }
 
-// Failures that are not the version's fault: do not remember the version, try again next start.
+// Failures that are not the version's fault: the reason for a silent 'retry' (nothing remembered), else null.
 function notTheVersionsFault(failure, uvPath) {
-  if (failure.exitCode === 124) return { status: 'offline' } // compile timeout
+  if (failure.exitCode === 124) return OFFLINE // timeout
   const { code } = describeEnvFailure({ failure, cancelled: failure.cancelled, uvPath })
-  if (code === 'OFFLINE') return { status: 'offline' }
-  if (code === 'CANCELLED') return { status: 'current' }
-  if (code === 'DISK') return { status: 'failed', reason: DISK }
-  if (code === 'UV_BLOCKED') return { status: 'failed', reason: BLOCKED }
-  return null
+  return { OFFLINE, CANCELLED, DISK, UV_BLOCKED: BLOCKED }[code] ?? null
 }
 
 // Never throws: always resolves to a status. Builds <envDir>.next, proves it works, then swaps it in.
+// 'retry' = not the version's fault (offline, timeout, cancelled, disk/locked, blocked helper, failed resolve, file in use):
+// silent, nothing remembered. 'failed' = the version's own fault (install error, wrong version, safety test, broken after
+// the swap): remembered and shown once.
 // `rename` (synchronous) is injectable so tests can simulate a Windows file lock (EBUSY/EPERM).
 export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, platform = process.platform, rename = renameSync }) {
   const next = `${envDir}.next`
   const old = `${envDir}.old`
   const stateFile = join(userDataDir, STATE)
   let tmp
+  let retry = (reason) => ({ status: 'retry', reason })
   try {
     await repairEnvDir({ envDir, rename })
     const status = await envStatus({ runner, envDir, platform })
@@ -110,17 +112,18 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     const from = parseVersion(status.validatorVersion)
 
     let pypi
-    try { pypi = await fetchJson(PYPI_URL) } catch { return { status: 'offline' } }
+    try { pypi = await fetchJson(PYPI_URL) } catch { return { status: 'retry', from, reason: OFFLINE } }
     const pick = pickRelease(pypi, { now: now(), cooldownDays: PRISM_COOLDOWN_DAYS })
     if (!pick || !from || compareVersions(from, pick.version) >= 0) return { status: 'current' }
     const state = await readFile(stateFile, 'utf8').then(JSON.parse).catch(() => null)
     if (state?.failedVersion === pick.version) return { status: 'current' }
     const to = pick.version
+    retry = (reason) => ({ status: 'retry', from, to, reason })
 
     const failed = async (reason, failure) => {
       await removeDir(next)
       const transient = failure && notTheVersionsFault(failure, uvPath)
-      if (transient) return transient.status === 'failed' ? { ...transient, from, to } : transient
+      if (transient) return retry(transient)
       await mkdir(userDataDir, { recursive: true })
       await writeFile(stateFile, JSON.stringify({ failedVersion: to }))
       return { status: 'failed', from, to, reason }
@@ -137,13 +140,8 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     const compiled = await runner.run(uvPath, ['pip', 'compile', '--no-config', '--python-version', MANAGED_ENV.python,
       '--universal', '--generate-hashes', '--no-header', '--only-binary', ':all:', '--index-url', 'https://pypi.org/simple',
       '--exclude-newer', pick.cutoff, '-o', lockPath, input], { timeoutMs: COMPILE_TIMEOUT_MS, env: UV_ENV })
-    if (compiled.failed) {
-      // A dependency still inside the cooldown can fail the resolve now and resolve later: never remember this version as bad.
-      const transient = notTheVersionsFault(compiled, uvPath)
-      if (transient) { await removeDir(next); return transient.status === 'failed' ? { ...transient, from, to } : transient }
-      await removeDir(next)
-      return { status: 'failed', from, to, reason: NOT_PREPARED }
-    }
+    // A dependency still inside the cooldown can fail the resolve now and resolve later: never remember this version as bad.
+    if (compiled.failed) return retry(notTheVersionsFault(compiled, uvPath) ?? NOT_PREPARED)
     const built = await ensureEnv({ runner, uvPath, envDir: next, lockPath, platform, source: 'auto-update', timeoutMs: BUILD_TIMEOUT_MS })
     if (!built.ready) return await failed(DOWNLOAD_FAILED, built.failure && { ...built.failure, cancelled: built.cancelled })
     const got = parseVersion(built.validatorVersion)
@@ -159,14 +157,14 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     const moved = (from, to) => { try { rename(from, to); return true } catch { return false } }
     if (!moved(envDir, old)) {
       await removeDir(next)
-      return { status: 'failed', from, to, reason: IN_USE }
+      return retry(IN_USE)
     }
     // Restore the old env; failing that, a verified new env beats no env. If both fail, repairEnvDir restores .old next start.
     if (!moved(next, envDir)) {
       const restored = moved(old, envDir)
       if (restored || !moved(next, envDir)) {
         await removeDir(next)
-        return { status: 'failed', from, to, reason: IN_USE }
+        return retry(IN_USE)
       }
     }
     // Prove it from its final place (a venv can hard-code its build path). If not: put the old one back.
@@ -181,7 +179,7 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     return { status: 'updated', from, to }
   } catch {
     await removeDir(next)
-    return { status: 'failed', reason: UNEXPECTED }
+    return retry(UNEXPECTED)
   } finally {
     if (tmp) await removeDir(tmp)
   }

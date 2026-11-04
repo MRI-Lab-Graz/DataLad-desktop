@@ -26,8 +26,8 @@ test('notices carry a skip target', () => {
   assert.deepEqual(lines, [{ text: notice.message, skip: { tool: 'datalad', version: '99.0.0' } }])
 })
 
-test('current, offline and deferred validator states say nothing', () => {
-  for (const status of ['current', 'offline', 'deferred']) {
+test('current, retry, deferred and unknown validator states say nothing', () => {
+  for (const status of ['current', 'retry', 'deferred', 'offline', 'anything-new']) {
     assert.deepEqual(describeUpdates({ disabled: false, validator: { status }, notices: [] }), { lines: [] })
   }
 })

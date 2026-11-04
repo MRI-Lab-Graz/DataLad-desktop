@@ -141,6 +141,7 @@ function updateRunner({ compile, install, compat = '{"valid":false,"issues":[]}'
 }
 
 const PYPI = { releases: { '1.20.0': [file('2026-10-07T10:00:00Z')], '1.21.0': [file('2026-10-20T10:00:00Z')] } }
+const OFFLINE_REASON = 'Could not reach the internet. It will try again next start.'
 const CUTOFF = new Date(NOW.getTime() - PRISM_COOLDOWN_DAYS * 86400000).toISOString()
 
 async function setup({ installed = '1.20.0', runner = updateRunner(), ...overrides } = {}) {
@@ -229,11 +230,11 @@ test('(f) failed compat check: old env stays, version remembered and not retried
   assert.equal(runner.calls.filter((c) => c[0] === '/uv').length, runner.calls.slice(0, before).filter((c) => c[0] === '/uv').length)
 })
 
-test('(f2) failed resolve: old env stays, NOT remembered (a dependency inside the cooldown may resolve later), retried', async () => {
+test('(f2) failed resolve: silent retry, old env stays, NOT remembered (a dependency inside the cooldown may resolve later)', async () => {
   const { deps, runner, envDir, stateFile } = await setup({ runner: updateRunner({ compile: bad }) })
   const result = await updateValidator(deps)
-  assert.equal(result.status, 'failed')
-  assert.match(result.reason, /could not be prepared yet.*next time the app starts/)
+  assert.equal(result.status, 'retry')
+  assert.equal(result.to, '1.21.0')
   const call = compileCall(runner)
   assert.equal(await exists(dirname(call[call.indexOf('-o') + 1])), false)
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
@@ -255,7 +256,7 @@ test('(g) second rename fails (Windows file in use): old env restored, retried n
   }
   const { deps, envDir, stateFile } = await setup({ rename })
   const result = await updateValidator(deps)
-  assert.equal(result.status, 'failed')
+  assert.equal(result.status, 'retry')
   assert.match(result.reason, /next start/)
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
   assert.equal(await exists(`${envDir}.old`), false)
@@ -265,7 +266,7 @@ test('(g) second rename fails (Windows file in use): old env restored, retried n
 
 test('(h) PyPI unreachable: offline, no runner calls beyond the installed check', async () => {
   const { deps, runner } = await setup({ fetchJson: async () => { throw new Error('ENOTFOUND') } })
-  assert.equal((await updateValidator(deps)).status, 'offline')
+  assert.equal((await updateValidator(deps)).status, 'retry')
   assert.ok(runner.calls.every((c) => c[0] !== '/uv'))
 })
 
@@ -312,11 +313,11 @@ test('(k) an env that reports a different version than chosen is rejected', asyn
 const fail = (stderr, exitCode = 1, extra = {}) => ({ failed: true, exitCode, stdout: '', stderr, ...extra })
 const compiles = (runner) => runner.calls.filter((c) => c[2] === 'compile').length
 
-test('(l) offline while downloading: offline, nothing recorded, retried next call', async () => {
+test('(l) offline while downloading: silent retry, nothing recorded, retried next call', async () => {
   for (const runner of [updateRunner({ compile: fail('dns error: failed to lookup') }), updateRunner({ install: fail('connection reset by peer') }),
     updateRunner({ compile: fail('uv timed out after 120000ms', 124) })]) {
     const { deps, envDir, stateFile } = await setup({ runner })
-    assert.deepEqual(await updateValidator(deps), { status: 'offline' })
+    assert.deepEqual(await updateValidator(deps), { status: 'retry', from: '1.20.0', to: '1.21.0', reason: OFFLINE_REASON })
     assert.equal(await exists(stateFile), false)
     assert.equal(await exists(`${envDir}.next`), false)
     assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
@@ -325,21 +326,28 @@ test('(l) offline while downloading: offline, nothing recorded, retried next cal
   }
 })
 
-test('(l2) disk full or blocked helper: failed with a plain reason, nothing recorded', async () => {
+test('(l2) disk full or blocked helper: silent retry with a plain reason, nothing recorded', async () => {
   for (const runner of [updateRunner({ install: fail('No space left on device (os error 28)') }), updateRunner({ compile: fail('', 127) })]) {
     const { deps, stateFile } = await setup({ runner })
     const result = await updateValidator(deps)
-    assert.equal(result.status, 'failed')
+    assert.equal(result.status, 'retry')
     assert.match(result.reason, /next start/)
     assert.doesNotMatch(result.reason, /hash|wheel|\buv\b/i)
     assert.equal(await exists(stateFile), false)
   }
 })
 
-test('(l3) cancelled: current, nothing recorded', async () => {
-  const { deps, stateFile } = await setup({ runner: updateRunner({ compile: fail('', 130, { cancelled: true }) }) })
-  assert.deepEqual(await updateValidator(deps), { status: 'current' })
-  assert.equal(await exists(stateFile), false)
+test('(l3) cancelled: silent retry, nothing recorded', async () => {
+  for (const runner of [updateRunner({ compile: fail('', 130, { cancelled: true }) }), updateRunner({ install: fail('', 130, { cancelled: true }) })]) {
+    const { deps, stateFile } = await setup({ runner })
+    assert.equal((await updateValidator(deps)).status, 'retry')
+    assert.equal(await exists(stateFile), false)
+  }
+})
+
+test('(l4) the fetch failing (offline) is a silent retry', async () => {
+  const { deps } = await setup({ fetchJson: async () => { throw new Error('ENOTFOUND') } })
+  assert.deepEqual(await updateValidator(deps), { status: 'retry', from: '1.20.0', reason: OFFLINE_REASON })
 })
 
 test('(m1) restore fails too: the verified new env is put in place as a last resort', async () => {
@@ -370,23 +378,23 @@ test('(m2) repairEnvDir restores a lone .old and removes a leftover .old', async
   await repairEnvDir({ envDir: join(base, 'nothing') }) // nothing there: no throw
 })
 
-test('(m6) first rename fails: failed, env unchanged, .next removed, nothing recorded', async () => {
+test('(m6) first rename fails: retry, env unchanged, .next removed, nothing recorded', async () => {
   const rename = (from, to) => {
     if (!from.endsWith('.next') && !from.endsWith('.old')) throw Object.assign(new Error('perm'), { code: 'EPERM' })
     return renameSync(from, to)
   }
   const { deps, envDir, stateFile } = await setup({ rename })
   const result = await updateValidator(deps)
-  assert.equal(result.status, 'failed')
+  assert.equal(result.status, 'retry')
   assert.match(result.reason, /next start/)
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
   assert.equal(await exists(`${envDir}.next`), false)
   assert.equal(await exists(stateFile), false)
 })
 
-test('(m6b) isBusy throwing: failed, never a throw, env unchanged', async () => {
+test('(m6b) isBusy throwing: silent retry, never a throw, env unchanged', async () => {
   const { deps, envDir } = await setup({ isBusy: () => { throw new Error('x') } })
-  assert.equal((await updateValidator(deps)).status, 'failed')
+  assert.equal((await updateValidator(deps)).status, 'retry')
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
   assert.equal(await exists(`${envDir}.next`), false)
 })
@@ -401,9 +409,9 @@ test('the build steps get BUILD_TIMEOUT_MS (20 minutes)', async () => {
   for (const [, opts] of build) assert.equal(opts.timeoutMs, BUILD_TIMEOUT_MS)
 })
 
-test('a build that times out (exit 124) is offline-like: the version is not remembered as failed', async () => {
+test('a build that times out (exit 124) is a silent retry: the version is not remembered as failed', async () => {
   const { deps, stateFile } = await setup({ runner: updateRunner({ install: { failed: true, exitCode: 124, stdout: '', stderr: 'timed out' } }) })
-  assert.equal((await updateValidator(deps)).status, 'offline')
+  assert.equal((await updateValidator(deps)).status, 'retry')
   assert.equal(await exists(stateFile), false)
 })
 
@@ -429,7 +437,7 @@ test('(n) the swapped-in env does not start from its final place: original resto
 test('(o) a Windows file lock during install is not remembered as a bad version', async () => {
   for (const stderr of ['Access is denied. (os error 5)', 'os error 32', 'being used by another process']) {
     const { deps, stateFile } = await setup({ runner: updateRunner({ install: fail(stderr) }) })
-    await updateValidator(deps)
+    assert.equal((await updateValidator(deps)).status, 'retry', stderr)
     assert.equal(await exists(stateFile), false, stderr)
   }
 })
