@@ -15,7 +15,8 @@ const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), '..')
 // `identity: false` launches against an empty global git config, like a fresh Windows machine.
 // `trustedPaths`: folders the app already trusts at launch, like a user who confirmed them before. A packaged app
 // never auto-answers its trust dialog (only an unpackaged one started by this driver does), so its tests need this.
-// `userDataDir`: reuse an existing profile folder (to restart the app on the same profile) instead of a fresh temp one.
+// `userDataDir`: reuse an existing profile folder (to restart the app on the same profile) instead of a fresh temp one;
+// it overwrites that folder's gitconfig (and trusted-folders.json when trustedPaths is given) and never deletes anything.
 export async function launchApp({ identity = true, env = {}, trustedPaths = [], userDataDir: reuseDir } = {}) {
   // Setting this to '' (rather than deleting it) does NOT reliably clear it
   // on Windows: empty-string env vars get dropped when child_process builds

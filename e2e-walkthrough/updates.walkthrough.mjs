@@ -18,7 +18,7 @@ let requests = 0
 let server
 let feed
 let app
-let userDataDir
+const profiles = []
 const step = stepRunner({
   getPage: () => app?.page,
   outDir: join(fileURLToPath(new URL('..', import.meta.url)), 'walkthrough-failures')
@@ -44,18 +44,30 @@ test.before(async () => {
   feed = `http://127.0.0.1:${server.address().port}`
 })
 
+// A failed test must not leave its Electron process behind (it would hang the runner).
+test.afterEach(async () => {
+  await app?.close()
+  app = null
+})
+
 test.after(async () => {
   await app?.close()
   server?.closeAllConnections()
   await new Promise((resolve) => server?.close(resolve))
-  if (userDataDir) await removeTree(userDataDir)
+  for (const dir of profiles) await removeTree(dir)
 })
+
+async function launch(options) {
+  app = await launchApp(options)
+  profiles.push(app.userDataDir)
+  return app
+}
 
 test('a newer DataLad shows a notice; Skip this version hides it, also after a restart', () =>
   step('Update notice skip', async () => {
     const env = { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' }
-    app = await launchApp({ env })
-    userDataDir = app.userDataDir
+    await launch({ env })
+    const { userDataDir } = app
     await waitForDatalad()
 
     // Keyboard: Tab reaches the Skip button, Enter presses it.
@@ -75,32 +87,30 @@ test('a newer DataLad shows a notice; Skip this version hides it, also after a r
       { timeout: 10_000 }
     )
 
-    // A real mouse click on the next notice, if one is left (git-annex), is covered by the same button.
-    await app.close()
-    app = await launchApp({ env, userDataDir })
-    await app.page.waitForFunction(() => !document.getElementById('update-notice').hidden, undefined, { timeout: 40_000 }).catch(() => {})
-    assert.ok(!(await rows()).some((t) => /DataLad/i.test(t) && t.includes('99.0.0')), 'the skipped DataLad notice stays gone')
     await app.close()
     app = null
+    await launch({ env, userDataDir })
+    // Not vacuous: if the DataLad row came back, the strip would turn visible, the wait would end and the assertion below would fail.
+    await app.page.waitForFunction(() => !document.getElementById('update-notice').hidden, undefined, { timeout: 40_000 }).catch(() => {})
+    assert.ok(!(await rows()).some((t) => /DataLad/i.test(t) && t.includes('99.0.0')), 'the skipped DataLad notice stays gone')
   }))
 
 test('a real click on Skip this version removes that row', () =>
   step('Update notice click', async () => {
-    app = await launchApp({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
-    const before = userDataDir
-    userDataDir = app.userDataDir
-    await removeTree(before)
+    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
     await waitForDatalad()
-    await app.page.getByRole('button', { name: 'Skip this version' }).first().click()
-    await app.page.waitForFunction(() => document.querySelectorAll('#update-notice .update-row').length < 2 || document.getElementById('update-notice').hidden, undefined, { timeout: 10_000 })
-    await app.close()
-    app = null
+    await app.page.locator('#update-notice .update-row', { hasText: 'DataLad' }).first().getByRole('button', { name: 'Skip this version' }).click()
+    await app.page.waitForFunction(
+      () => ![...document.querySelectorAll('#update-notice .update-row')].some((r) => /DataLad/i.test(r.textContent) && r.textContent.includes('99.0.0')),
+      undefined,
+      { timeout: 10_000 }
+    )
   }))
 
 test('with updates disabled nothing is shown and nothing is requested', () =>
   step('Update disabled', async () => {
     requests = 0
-    app = await launchApp({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' } })
+    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' } })
     await new Promise((r) => setTimeout(r, 8_000))
     assert.equal(await visible(), false)
     assert.equal(requests, 0)

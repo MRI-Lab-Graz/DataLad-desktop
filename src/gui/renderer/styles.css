@@ -2095,6 +2095,10 @@ select:disabled {
   padding: 0.25rem 0;
 }
 
+.update-row span {
+  white-space: pre-line;
+}
+
 .update-notice .button:focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
