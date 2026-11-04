@@ -67,7 +67,7 @@ const FAILURES = [
     "The PRISM validator isn't available yet. Please try again later or contact your PRISM administrator."],
   ['OFFLINE', /dns error|failed to fetch|connection (refused|reset|timed out)|network|proxy/i,
     "Couldn't download. Check your internet connection (a university proxy can block this) and try again."],
-  ['DISK', /no space left|permission denied|os error (13|28)/i,
+  ['DISK', /no space left|permission denied|os error (5|13|28|32)\b|access is denied|used by another process/i,
     "There isn't enough disk space, or the app isn't allowed to write to its data folder."]
 ]
 

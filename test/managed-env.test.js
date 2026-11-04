@@ -141,6 +141,13 @@ test('describeEnvFailure maps known stderr to plain-language codes', () => {
   assert.equal(d('something odd').code, 'UNKNOWN')
 })
 
+// Windows antivirus / indexer locks are not the version's fault.
+const LOCKED = ['error: Access is denied. (os error 5)', 'failed to remove file: os error 32',
+  'The process cannot access the file because it is being used by another process.', 'file used by another process']
+test('describeEnvFailure: Windows file locks count as DISK', () => {
+  for (const stderr of LOCKED) assert.equal(d(stderr).code, 'DISK', stderr)
+})
+
 test('a spawn failure (127) names the bundled uv path; cancel is its own code', () => {
   const blocked = d('spawn EACCES', { exitCode: 127 })
   assert.equal(blocked.code, 'UV_BLOCKED')

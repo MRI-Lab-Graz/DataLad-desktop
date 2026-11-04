@@ -424,3 +424,11 @@ test('(n) the swapped-in env does not start from its final place: original resto
   assert.equal(await exists(`${envDir}.old`), false)
   assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
 })
+
+test('(o) a Windows file lock during install is not remembered as a bad version', async () => {
+  for (const stderr of ['Access is denied. (os error 5)', 'os error 32', 'being used by another process']) {
+    const { deps, stateFile } = await setup({ runner: updateRunner({ install: fail(stderr) }) })
+    await updateValidator(deps)
+    assert.equal(await exists(stateFile), false, stderr)
+  }
+})
