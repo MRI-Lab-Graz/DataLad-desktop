@@ -6,6 +6,10 @@ import { join } from 'node:path'
 // (shipped as a resource); changing that file or `python` makes ensureEnv reinstall.
 export const MANAGED_ENV = { python: '3.12' }
 
+// Merged over process.env by the runner; an undefined value is not passed to the child at all. These variables
+// could add or swap the package index (hashes still guard the content; this keeps the source fixed too).
+export const UV_ENV = Object.fromEntries(['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS'].map((k) => [k, undefined]))
+
 const MARKER = 'managed-env.json'
 const exe = (name, platform) => (platform === 'win32' ? `${name}.exe` : name)
 const sameConfig = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -33,7 +37,7 @@ export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOu
 
   // A stale, mismatched or half-built env is never patched: start clean.
   await rm(envDir, { recursive: true, force: true })
-  const opts = { signal, onOutput }
+  const opts = { signal, onOutput, env: UV_ENV }
   const steps = [
     // --no-config: ignore uv.toml/pyproject.toml found from wherever the app was launched.
     // Hashes make the index untrusted; wheels only, so no package build script ever runs.

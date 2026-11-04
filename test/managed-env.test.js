@@ -201,3 +201,18 @@ test('ensureEnv reinstalls when an auto-update marker is present but the validat
   await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
   assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
 })
+
+// UV_* variables could add or swap the package index; hashes protect the content, this keeps the source fixed.
+test('ensureEnv runs every uv step without UV_* index variables', async () => {
+  const envDir = await fresh()
+  const inner = fakeRunner()
+  const seen = []
+  const runner = { run: (command, args, opts) => { if (command === '/uv') seen.push(opts); return inner.run(command, args, opts) } }
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(seen.length, 2)
+  for (const opts of seen) {
+    for (const key of ['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS']) {
+      assert.ok(key in opts.env && opts.env[key] === undefined, key)
+    }
+  }
+})

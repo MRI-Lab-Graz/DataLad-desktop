@@ -6,6 +6,7 @@ import {
   parseVersion,
   compatCheck,
   pickRelease,
+  repairEnvDir,
   updateValidator
 } from '../src/datalad/validator-update.js'
 import { access, mkdir, mkdtemp, readdir, readFile, rename as fsRename, writeFile } from 'node:fs/promises'
@@ -107,19 +108,24 @@ const ok = (stdout = '') => ({ failed: false, exitCode: 0, stdout, stderr: '' })
 const bad = { failed: true, exitCode: 1, stdout: '', stderr: 'boom' }
 
 // Each env dir holds a VERSION file that `--version` prints; `pip install` writes it into the target env.
-function updateRunner({ compile = true, compat = '{"valid":false,"issues":[]}', newVersion = '1.21.0', installs = newVersion } = {}) {
+// `compile` / `install`: a scripted failure result instead of success. `options` records each call's options.
+function updateRunner({ compile, install, compat = '{"valid":false,"issues":[]}', newVersion = '1.21.0', installs = newVersion } = {}) {
   const calls = []
+  const options = []
   return {
     calls,
-    async run(command, args) {
+    options,
+    async run(command, args, opts) {
       calls.push([command, ...args])
+      options.push(opts)
       if (command === '/uv') {
         if (args[0] === 'venv') { await mkdir(args.at(-1), { recursive: true }); return ok() }
         if (args[1] === 'compile') {
-          if (!compile) return bad
+          if (compile) return compile
           await writeFile(args[args.indexOf('-o') + 1], `prism-validator==${newVersion} \\\n    --hash=sha256:aa\n`)
           return ok()
         }
+        if (install) return install
         await writeFile(join(args[args.indexOf('--python') + 1], 'VERSION'), `prism-validator ${installs}\n`)
         return ok()
       }
@@ -187,6 +193,13 @@ test('(d) compile is hash-locked, uses the cutoff, and its temp files are remove
   for (const flag of ['--no-config', '--universal', '--generate-hashes', '--no-header']) assert.ok(call.includes(flag), flag)
   assert.equal(call[call.indexOf('--python-version') + 1], '3.12')
   assert.equal(call[call.indexOf('--exclude-newer') + 1], CUTOFF)
+  assert.equal(call[call.indexOf('--only-binary') + 1], ':all:') // never build an sdist just to read its metadata
+  assert.equal(call[call.indexOf('--index-url') + 1], 'https://pypi.org/simple')
+  const compileOpts = runner.options[runner.calls.indexOf(call)]
+  assert.equal(compileOpts.timeoutMs, 120000)
+  for (const key of ['UV_INDEX_URL', 'UV_DEFAULT_INDEX', 'UV_INDEX', 'UV_EXTRA_INDEX_URL', 'UV_FIND_LINKS']) {
+    assert.ok(key in compileOpts.env && compileOpts.env[key] === undefined, key) // undefined = not passed to the child
+  }
   const lock = call[call.indexOf('-o') + 1]
   assert.equal(await exists(dirname(lock)), false)
   const install = runner.calls.find((c) => c[2] === 'install')
@@ -215,8 +228,10 @@ test('(f) failed compat check: old env stays, version remembered and not retried
 })
 
 test('(f2) failed download: old env stays, version remembered', async () => {
-  const { deps, envDir, stateFile } = await setup({ runner: updateRunner({ compile: false }) })
+  const { deps, runner, envDir, stateFile } = await setup({ runner: updateRunner({ compile: bad }) })
   assert.equal((await updateValidator(deps)).status, 'failed')
+  const call = compileCall(runner)
+  assert.equal(await exists(dirname(call[call.indexOf('-o') + 1])), false)
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
   assert.equal(JSON.parse(await readFile(stateFile, 'utf8')).failedVersion, '1.21.0')
 })
@@ -279,4 +294,87 @@ test('(k) an env that reports a different version than chosen is rejected', asyn
   const { deps, envDir } = await setup({ runner: updateRunner({ installs: '1.20.5' }) })
   assert.equal((await updateValidator(deps)).status, 'failed')
   assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+})
+
+// --- fix round 1 ---
+const fail = (stderr, exitCode = 1, extra = {}) => ({ failed: true, exitCode, stdout: '', stderr, ...extra })
+const compiles = (runner) => runner.calls.filter((c) => c[2] === 'compile').length
+
+test('(l) offline while downloading: offline, nothing recorded, retried next call', async () => {
+  for (const runner of [updateRunner({ compile: fail('dns error: failed to lookup') }), updateRunner({ install: fail('connection reset by peer') }),
+    updateRunner({ compile: fail('uv timed out after 120000ms', 124) })]) {
+    const { deps, envDir, stateFile } = await setup({ runner })
+    assert.deepEqual(await updateValidator(deps), { status: 'offline' })
+    assert.equal(await exists(stateFile), false)
+    assert.equal(await exists(`${envDir}.next`), false)
+    assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+    await updateValidator(deps)
+    assert.equal(compiles(runner), 2)
+  }
+})
+
+test('(l2) disk full or blocked helper: failed with a plain reason, nothing recorded', async () => {
+  for (const runner of [updateRunner({ install: fail('No space left on device (os error 28)') }), updateRunner({ compile: fail('', 127) })]) {
+    const { deps, stateFile } = await setup({ runner })
+    const result = await updateValidator(deps)
+    assert.equal(result.status, 'failed')
+    assert.match(result.reason, /next start/)
+    assert.doesNotMatch(result.reason, /hash|wheel|\buv\b/i)
+    assert.equal(await exists(stateFile), false)
+  }
+})
+
+test('(l3) cancelled: current, nothing recorded', async () => {
+  const { deps, stateFile } = await setup({ runner: updateRunner({ compile: fail('', 130, { cancelled: true }) }) })
+  assert.deepEqual(await updateValidator(deps), { status: 'current' })
+  assert.equal(await exists(stateFile), false)
+})
+
+test('(m1) restore fails too: the verified new env is put in place as a last resort', async () => {
+  let nextTries = 0
+  const rename = async (from, to) => {
+    if (from.endsWith('.next') && nextTries++ === 0) throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    if (from.endsWith('.old')) throw Object.assign(new Error('perm'), { code: 'EPERM' })
+    return fsRename(from, to)
+  }
+  const { deps, envDir } = await setup({ rename })
+  assert.equal((await updateValidator(deps)).status, 'updated')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.21.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+})
+
+test('(m2) repairEnvDir restores a lone .old and removes a leftover .old', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'repair '))
+  const envDir = join(base, 'env')
+  await mkdir(`${envDir}.old`)
+  await writeFile(join(`${envDir}.old`, 'VERSION'), 'a')
+  await repairEnvDir({ envDir })
+  assert.equal(await readFile(join(envDir, 'VERSION'), 'utf8'), 'a')
+  assert.equal(await exists(`${envDir}.old`), false)
+  await mkdir(`${envDir}.old`)
+  await repairEnvDir({ envDir })
+  assert.equal(await exists(`${envDir}.old`), false)
+  assert.equal(await readFile(join(envDir, 'VERSION'), 'utf8'), 'a')
+  await repairEnvDir({ envDir: join(base, 'nothing') }) // nothing there: no throw
+})
+
+test('(m6) first rename fails: failed, env unchanged, .next removed, nothing recorded', async () => {
+  const rename = async (from, to) => {
+    if (!from.endsWith('.next') && !from.endsWith('.old')) throw Object.assign(new Error('perm'), { code: 'EPERM' })
+    return fsRename(from, to)
+  }
+  const { deps, envDir, stateFile } = await setup({ rename })
+  const result = await updateValidator(deps)
+  assert.equal(result.status, 'failed')
+  assert.match(result.reason, /next start/)
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.next`), false)
+  assert.equal(await exists(stateFile), false)
+})
+
+test('(m6b) isBusy throwing: failed, never a throw, env unchanged', async () => {
+  const { deps, envDir } = await setup({ isBusy: () => { throw new Error('x') } })
+  assert.equal((await updateValidator(deps)).status, 'failed')
+  assert.equal(await versionIn(envDir), 'prism-validator 1.20.0')
+  assert.equal(await exists(`${envDir}.next`), false)
 })
