@@ -183,3 +183,21 @@ test('ensureEnv still reinstalls a differing lock when the marker has no source'
   await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
   assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
 })
+
+test('ensureEnv reinstalls an auto-updated env built for another Python', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.11', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner()
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})
+
+test('ensureEnv reinstalls when an auto-update marker is present but the validator does not run', async () => {
+  const envDir = await fresh()
+  await mkdir(envDir, { recursive: true })
+  await writeFile(join(envDir, 'managed-env.json'), JSON.stringify({ python: '3.12', lock: 'other', source: 'auto-update' }))
+  const runner = fakeRunner({ failStep: 'verify' })
+  await ensureEnv({ runner, uvPath: '/uv', envDir, lockPath: await lockFile() })
+  assert.equal(runner.calls.filter((c) => c.includes('venv')).length, 1)
+})

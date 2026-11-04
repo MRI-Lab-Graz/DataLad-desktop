@@ -26,7 +26,7 @@ export async function ensureEnv({ runner, uvPath, envDir, lockPath, signal, onOu
   const config = { ...MANAGED_ENV, lock, ...(source && { source }) }
   const marker = await readFile(join(envDir, MARKER), 'utf8').then(JSON.parse, () => null)
   // An auto-updated env came from a newer generated lock; Install must not roll it back to the shipped pin.
-  if (marker && (sameConfig(marker, config) || marker.source === 'auto-update')) {
+  if (marker && (sameConfig(marker, config) || (marker.source === 'auto-update' && marker.python === MANAGED_ENV.python))) {
     const status = await envStatus({ runner, envDir, platform })
     if (status.ready) return status
   }
