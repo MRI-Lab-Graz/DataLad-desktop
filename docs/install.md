@@ -7,10 +7,10 @@ checks it against a checksum written into the script itself, and sets everything
 
 1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases) and download what fits your system:
    - **macOS (Apple silicon):** `install.sh` (see [macOS: install with a script](#macos-install-with-a-script))
-   - **Windows:** `install.cmd` + `install.ps1`, both into the same folder (no admin rights; see
+   - **Windows:** `windows-install.cmd`, one file (no admin rights; see
      [Windows: install with a script](#windows-install-with-a-script))
    - **Linux:** the `.AppImage` file (make it executable, then run it)
-2. Run the script (macOS `install.sh`, Windows `install.cmd`) or the AppImage.
+2. Run the script (macOS `install.sh`, Windows `windows-install.cmd`) or the AppImage.
 3. Launch **DataLad Desktop** like any other app.
 
 > **Windows script:** also checks for Git, DataLad and git-annex and installs any that are missing (this needs an
@@ -68,10 +68,9 @@ To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's pack
 
 ## Windows: install with a script
 
-For one user, without administrator rights. From the release page download **both** `install.cmd` and
-`install.ps1` into the same folder and double-click `install.cmd`. It:
+For one user, without administrator rights. From the release page download `windows-install.cmd` (one file) and double-click it. It:
 
-1. downloads the app and refuses to continue unless its SHA-256 matches the one written into `install.ps1`;
+1. downloads the app and refuses to continue unless its SHA-256 matches the one written into the file itself;
 2. puts DataLad in its own private environment next to the app (hash-locked packages and its own Python; a
    Python you installed is never run) and adds that environment to **your** user PATH;
 3. installs Git and git-annex only when they are missing, from pinned, checksum-verified downloads. If Git is
@@ -81,11 +80,11 @@ For one user, without administrator rights. From the release page download **bot
 Everything lands in `%LOCALAPPDATA%\DataLad Desktop`; the log is `DataLad Desktop install.log` next to that
 folder. Start the app from the shortcut, not from a terminal that was already open, so it sees the new PATH.
 
-From a clone of the repository, run `scripts\windows\install.cmd` instead: that copy has no release pinned, so it
+From a clone of the repository, run `scripts\windows\windows-install.cmd` instead: that copy has no release pinned, so it
 installs the latest release and takes the zip's SHA-256 from that release's `SHA256SUMS.txt`. The copy from the
 release page is stricter, because its hash is written into the script itself.
 
-To upgrade, run `install.cmd` from a newer release: the old version is put back if the new one fails. To remove it,
+To upgrade, run `windows-install.cmd` from a newer release: the old version is put back if the new one fails. To remove it,
 run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
 entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.
 

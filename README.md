@@ -49,8 +49,7 @@ across nested sub-projects? The app shows you exactly what changed and where.
 ## Download & Install
 
 Download the app for your OS from the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases):
-**macOS** `install.sh` (Apple silicon, one Terminal command, no Gatekeeper warning), **Windows** `install.cmd` + `install.ps1`
-(no admin rights), **Linux** `.AppImage`. The scripts check the app against a SHA-256 written into the script, so the
+**macOS** `install.sh` (Apple silicon, one Terminal command, no Gatekeeper warning), **Windows** `windows-install.cmd` (one file, no admin rights), **Linux** `.AppImage`. The scripts check the app against a SHA-256 written into the script, so the
 unsigned builds need no click-through warning.
 
 Everything else — macOS and Windows script installs, first launch (name and email), the

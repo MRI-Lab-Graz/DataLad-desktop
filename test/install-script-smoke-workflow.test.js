@@ -19,13 +19,13 @@ test('starts from a runner without DataLad or git-annex pre-installed', () => {
   assert.doesNotMatch(workflow, /pip install/)
 })
 
-test('builds the unpacked app, zips and renders it like the release job, then runs install.cmd -FromDir', () => {
+test('builds the unpacked app, zips and renders it like the release job, then runs windows-install.cmd -FromDir', () => {
   const order = [
     'node scripts/fetch-uv.mjs x86_64-pc-windows-msvc',
     'electron-builder --win dir',
     'Compress-Archive -Path',
     'node scripts/render-install-script.mjs',
-    'install.cmd -FromDir'
+    'windows-install.cmd -FromDir'
   ]
   let at = -1
   for (const step of order) {
@@ -36,7 +36,7 @@ test('builds the unpacked app, zips and renders it like the release job, then ru
 })
 
 test('the install runs without waiting for a key at the end', () => {
-  assert.match(workflow, /install\.cmd -FromDir [^\n]*< NUL/)
+  assert.match(workflow, /windows-install\.cmd -FromDir [^\n]*< NUL/)
 })
 
 test('proves git, DataLad and git-annex work and that datalad comes from the private env under LocalAppData', () => {

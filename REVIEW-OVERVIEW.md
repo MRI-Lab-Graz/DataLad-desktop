@@ -47,6 +47,6 @@ Both the process-execution and the Electron/IPC surface were reviewed in depth; 
 ## Limitations we found ourselves (please push on these)
 
 1. **Path confinement exceptions.** `adapter:inspectBidsCandidate` (read-only probe; returns only BIDS marker names) and the clone/create target path are deliberately outside `requireAuthorizedRoot`; `adapter:detectProject` authorizes any git work tree it is given. Windows case-insensitivity and junction points are not specifically tested.
-2. **Windows install script** (`scripts/windows/install.ps1`, runs as the user): the install-script smoke workflow is the check; the old elevated NSIS installer was removed.
+2. **Windows install script** (`scripts/windows/windows-install.cmd`, runs as the user): the install-script smoke workflow is the check; the old elevated NSIS installer was removed.
 3. **Signing.** Releases are unsigned and will stay so for now; they ship as install scripts plus zips (no `.dmg`, installer or portable `.exe`). Integrity rests on the checksum written into each script, `SHA256SUMS.txt` and a build provenance attestation.
 5. No auto-update. Two e2e tests are skipped. The folder-trust prompt itself (a native dialog) is covered by unit tests of its logic, not by an e2e.

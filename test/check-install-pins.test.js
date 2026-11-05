@@ -20,8 +20,8 @@ const fakeFetch = (files, page) => async (url) => {
 }
 const files = { [pins.gitAnnex.url]: 'annex', [pins.git.url]: 'git' }
 
-test('parsePins reads the pins from install.ps1, the only place they are written', async () => {
-  const parsed = parsePins(await readFile(new URL('../scripts/windows/install.ps1', import.meta.url), 'utf8'))
+test('parsePins reads the pins from windows-install.cmd, the only place they are written', async () => {
+  const parsed = parsePins(await readFile(new URL('../scripts/windows/windows-install.cmd', import.meta.url), 'utf8'))
   assert.equal(parsed.gitAnnex.version, '10.20260901')
   assert.equal(parsed.gitAnnex.url, 'https://datasets.datalad.org/datalad/packages/windows/git-annex-installer_10.20260901_x64.exe')
   assert.match(parsed.gitAnnex.sha256, /^[0-9A-F]{64}$/)

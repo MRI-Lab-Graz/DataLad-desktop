@@ -1,6 +1,6 @@
 name: Install Script Smoke
 
-# Manual + release tags only: scripts/windows/install.ps1 (and scripts/macos/install.sh) download git-annex from a third-party mirror (and
+# Manual + release tags only: scripts/windows/windows-install.cmd (and scripts/macos/install.sh) download git-annex from a third-party mirror (and
 # Git when missing), so this must not gate every push.
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   install-script:
-    name: install.cmd (windows-latest)
+    name: windows-install.cmd (windows-latest)
     runs-on: windows-latest
     timeout-minutes: 40
 
@@ -48,16 +48,15 @@ jobs:
           New-Item -ItemType Directory $out | Out-Null
           $zip = Join-Path $out "DataLad-Desktop-$version-win-x64.zip"
           Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
-          node scripts/render-install-script.mjs $version $zip (Join-Path $out 'install.ps1')
-          Copy-Item scripts/windows/install.cmd (Join-Path $out 'install.cmd')
+          node scripts/render-install-script.mjs $version $zip (Join-Path $out 'windows-install.cmd') scripts/windows/windows-install.cmd
 
-      # `< NUL` answers the pause at the end of install.cmd.
-      - name: Install with install.cmd
+      # `< NUL` answers the pause at the end of windows-install.cmd.
+      - name: Install with windows-install.cmd
         shell: cmd
         timeout-minutes: 25
         run: |
           cd /d "%RUNNER_TEMP%\release"
-          install.cmd -FromDir "%RUNNER_TEMP%\release" < NUL
+          windows-install.cmd -FromDir "%RUNNER_TEMP%\release" < NUL
 
       # Actions steps keep the PATH they started with, but a researcher opening the app after setup gets the
       # PATH the installers updated.
