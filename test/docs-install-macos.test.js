@@ -30,10 +30,10 @@ test('SECURITY.md describes the macOS install script and what it does not pin', 
   assert.match(sec, /not pinned/i)
 })
 
-test('the version and changelog agree on 0.5.3 and the example URL uses it', async () => {
+test('the version and changelog agree on 0.5.4 and the example URL uses it', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
   const log = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8')
-  assert.equal(pkg.version, '0.5.3')
+  assert.equal(pkg.version, '0.5.4')
   assert.match(log, /^## 0\.5\.3$/m)
   assert.doesNotMatch(log, /^## Unreleased$/m)
   assert.ok(doc.includes(`download/v${pkg.version}/install.sh`))

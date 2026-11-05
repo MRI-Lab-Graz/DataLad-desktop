@@ -50,10 +50,10 @@ changes. IT departments can pre-trust locations; see [SECURITY.md](https://githu
 ## macOS: install with a script
 
 For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper warning (a file fetched with `curl`
-is not quarantined). Open **Terminal** and paste (this is the 0.5.3 link; for another version, change the `v0.5.3` in the address):
+is not quarantined). Open **Terminal** and paste (this is the 0.5.4 link; for another version, change the `v0.5.4` in the address):
 
 ```bash
-curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.3/install.sh | bash
+curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.4/install.sh | bash
 ```
 
 Prefer to read it first? Download `install.sh` from the release page, then run `bash install.sh`.
