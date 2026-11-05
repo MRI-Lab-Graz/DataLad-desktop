@@ -14,7 +14,7 @@ import { summarizeFsck } from './integrity.js'
 import { displayCommand, isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
 import { collectChangedPaths, computeSaveGating, unsavedLeftovers } from './save-gating.js'
-import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
+import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates, mergeSelection } from './merge-ui.js'
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { linesOf, defaultRunMessage, computeRunGating } from './run-dialog.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -3262,7 +3262,9 @@ elements.useSuggestionButton.addEventListener('click', () => {
 
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)
+  const chosen = mergeSelection(candidates, elements.mergeBranchSelect.value)
   elements.mergeBranchSelect.innerHTML = candidates.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')
+  elements.mergeBranchSelect.value = chosen
   elements.mergeBranchButton.disabled = candidates.length === 0
 }
 

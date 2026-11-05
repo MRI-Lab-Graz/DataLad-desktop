@@ -28,7 +28,8 @@ async function until(check, what) {
     if (await check()) return
     await wait(500)
   }
-  throw new Error(`timed out waiting for ${what}`)
+  const seen = await app.page.evaluate(() => ['branch-status', 'last-action-state', 'command-output'].map((id) => `${id}: ${document.getElementById(id)?.textContent}`).join(' | ')).catch(() => '')
+  throw new Error(`timed out waiting for ${what}; app says: ${seen}; git status: ${git('status', '--porcelain')}`)
 }
 const openBranches = async () => {
   if (await app.page.isVisible('#new-branch-name')) return // already on Tools -> Branches & Ignore

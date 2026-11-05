@@ -1,7 +1,15 @@
 // Pure logic behind the Merge controls and the merge banner. DOM wiring is in app.js.
 
+// git-annex's own "adjusted/<branch>(unlocked)" branches (Windows) are internal; merging one is never what is meant.
+const ADJUSTED = /^adjusted\/.+\(\w+\)$/
+
 export function mergeCandidates(branches, currentBranch) {
-  return branches.filter((branch) => branch !== currentBranch)
+  return branches.filter((branch) => branch !== currentBranch && !ADJUSTED.test(branch))
+}
+
+// A refresh rebuilds the picker; keep what the user chose unless it is gone.
+export function mergeSelection(candidates, previous) {
+  return candidates.includes(previous) ? previous : (candidates[0] ?? '')
 }
 
 // Why a merge cannot start right now, in researcher language, or null. Untracked files do not count: git itself
