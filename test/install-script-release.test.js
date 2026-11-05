@@ -27,7 +27,7 @@ test('a release tag must equal the package version, because the script downloads
 
 test('the Windows artifact carries the zip, install.cmd and install.ps1 under the release pattern name', () => {
   const upload = windowsJob.slice(windowsJob.indexOf('name: datalad-desktop-windows-x64'))
-  for (const path of ['dist/*.exe', 'dist/*.zip', 'dist/install.cmd', 'dist/install.ps1']) {
+  for (const path of ['dist/DataLad-Desktop-*-win-x64.zip', 'dist/install.cmd', 'dist/install.ps1']) {
     assert.ok(upload.includes(path), `artifact does not include ${path}`)
   }
 })

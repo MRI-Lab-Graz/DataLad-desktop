@@ -1,7 +1,7 @@
-// Drives an *installed* DataLad Desktop (the NSIS installer's output) and asks
-// it to check its own environment: proves the installer left Python, DataLad
+// Drives an *installed* DataLad Desktop (the install script's output) and asks
+// it to check its own environment: proves the install script left Python, DataLad
 // and git-annex where the app can find them. Skipped unless DLAD_APP_EXECUTABLE
-// points at the installed binary; see .github/workflows/installer-smoke.yml.
+// points at the installed binary; see .github/workflows/install-script-smoke.yml.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { launchApp } from './electron-driver.mjs'

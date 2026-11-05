@@ -16,11 +16,6 @@ jobs:
     name: macOS (Apple silicon)
     runs-on: macos-latest
     steps:
-      # Signing/notarization is opt-in via the MACOS_SIGNING_ENABLED repo variable (there is no
-      # certificate yet, so releases are currently unsigned and say so in the release notes).
-      # To enable it set the variable to 'true' and add these repo secrets: MACOS_CSC_LINK
-      # (base64-encoded .p12 developer ID certificate), MACOS_CSC_KEY_PASSWORD, APPLE_ID,
-      # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
@@ -39,20 +34,9 @@ jobs:
       - name: Fetch bundled uv
         run: node scripts/fetch-uv.mjs aarch64-apple-darwin
 
-      - name: Build macOS artifacts (signed and notarized)
-        if: ${{ vars.MACOS_SIGNING_ENABLED == 'true' }}
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
-          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run package:mac:arm64 -- --publish=never
-
-      # CSC_LINK must be unset (not empty) when not signing, hence two build steps.
-      - name: Build macOS artifacts (unsigned test build)
-        if: ${{ vars.MACOS_SIGNING_ENABLED != 'true' }}
+      # Releases are unsigned (no certificate). The install script is the way in: a file fetched with curl is not
+      # quarantined, so Gatekeeper never asks.
+      - name: Build the macOS app
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run package:mac:arm64 -- --publish=never
@@ -76,8 +60,6 @@ jobs:
         with:
           name: datalad-desktop-macos
           path: |
-            dist/*.dmg
-            dist/*-mac.zip
             dist/DataLad-Desktop-*-mac-arm64.zip
             dist/install.sh
           if-no-files-found: error
@@ -108,41 +90,6 @@ jobs:
       - name: Build Windows artifacts
         run: npm run package:win:x64 -- --publish=never
 
-      - name: Upload unsigned executables for signing
-        if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
-        id: upload-unsigned
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: unsigned-windows-x64-for-signing
-          path: dist/*.exe
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Sign Windows executables with SignPath
-        if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
-        uses: signpath/github-action-submit-signing-request@ced31329c0317e779dad2eec2a7c3bb46ea1343e # v1
-        with:
-          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
-          organization-id: '${{ secrets.SIGNPATH_ORG_ID }}'
-          project-slug: 'datalad-desktop'
-          signing-policy-slug: 'release-signing'
-          artifact-configuration-slug: 'initial'
-          github-artifact-id: '${{ steps.upload-unsigned.outputs.artifact-id }}'
-          wait-for-completion: true
-          output-artifact-directory: 'dist-signed'
-
-      # When signing is on, both the installer and the portable exe must be signed; a signed
-      # file with no unsigned twin means the signing configuration changed, so fail loudly.
-      - name: Replace every executable with its signed version
-        if: ${{ vars.SIGNPATH_ENABLED == 'true' }}
-        shell: bash
-        run: |
-          for signed in dist-signed/*.exe; do
-            name=$(basename "$signed")
-            [ -f "dist/$name" ] || { echo "::error::signed $name has no unsigned twin in dist/"; exit 1; }
-            cp "$signed" "dist/$name"
-          done
-
       # The script install (scripts/windows/install.ps1) downloads this zip from the tag's release and checks it
       # against the SHA-256 rendered into its own copy of the script, so the tag has to match the package version.
       - name: Zip the unpacked app and render the install script
@@ -162,8 +109,7 @@ jobs:
         with:
           name: datalad-desktop-windows-x64
           path: |
-            dist/*.exe
-            dist/*.zip
+            dist/DataLad-Desktop-*-win-x64.zip
             dist/install.cmd
             dist/install.ps1
           if-no-files-found: error
@@ -227,40 +173,31 @@ jobs:
         working-directory: release-assets
         run: |
           shopt -s nullglob
-          sha256sum *.dmg *.zip *.exe *.AppImage *.cmd *.ps1 *.sh > SHA256SUMS.txt
+          sha256sum *.zip *.AppImage *.cmd *.ps1 *.sh > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
         with:
           subject-path: |
-            release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.exe
             release-assets/*.AppImage
             release-assets/*.cmd
             release-assets/*.ps1
             release-assets/*.sh
 
-      # Be explicit about what users are getting: unsigned builds trigger OS warnings, so
-      # tell them how to check the download against what CI built instead.
-      - name: Describe signing status and how to verify
+      - name: Describe how to install and how to verify
         run: |
           {
+            echo "## Install"
+            echo
+            echo "- macOS (Apple silicon): run \`install.sh\` (one Terminal command, see the install guide)."
+            echo "- Windows: download \`install.cmd\` and \`install.ps1\` into one folder and double-click \`install.cmd\`."
+            echo "- Linux: the \`.AppImage\`."
+            echo
+            echo "Builds are not code-signed. The install scripts check the app against a SHA-256 written into the script itself."
+            echo
             echo "## Verify your download"
-            echo
-            if [ "${{ vars.MACOS_SIGNING_ENABLED }}" = 'true' ]; then
-              echo "- macOS: signed and notarized."
-            else
-              echo "- macOS: **UNSIGNED**. Gatekeeper will warn; see the README for System Settings, Privacy and Security, Open Anyway."
-            fi
-            if [ "${{ vars.SIGNPATH_ENABLED }}" = 'true' ]; then
-              echo "- Windows: signed."
-            else
-              echo "- Windows: **UNSIGNED**. SmartScreen will warn on first run."
-            fi
-            echo
-            echo "Check the file you downloaded against what CI built:"
             echo
             echo '```'
             echo "sha256sum -c SHA256SUMS.txt --ignore-missing"
@@ -275,9 +212,7 @@ jobs:
           body_path: release-note.md
           generate_release_notes: true
           files: |
-            release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.exe
             release-assets/*.AppImage
             release-assets/*.cmd
             release-assets/*.ps1

@@ -44,13 +44,9 @@ test('signing secrets are passed to the signing step only, never exported to the
 test('an unsigned release is allowed but is labelled as such, with verification instructions', () => {
   assert.doesNotMatch(release, /Refuse to build an unsigned release/)
   assert.match(release, /body_path: release-note\.md/)
-  assert.match(release, /UNSIGNED/)
+  assert.match(release, /not code-signed/)
   assert.match(release, /sha256sum -c SHA256SUMS\.txt/)
   assert.match(release, /gh attestation verify/)
-})
-
-test('every signed Windows executable replaces its unsigned twin, not just the installer', () => {
-  assert.match(release, /for signed in dist-signed\/\*\.exe/)
 })
 
 // The app has no auto-updater, and signing changes the installer, so these would be stale or wrong.
