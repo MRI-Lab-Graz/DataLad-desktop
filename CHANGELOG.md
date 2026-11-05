@@ -1,6 +1,16 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2, v0.5.3, v0.5.4.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2, v0.5.3, v0.5.4, v0.5.5.
+
+## 0.5.5
+
+Fixes for things that surfaced while walking through the tutorials with the real app. No upgrade notes.
+
+- Fix: after switching branches on Windows, a real change could be left unticked in **Files To Save**, which left **Save** disabled. Until you tick or untick something yourself, every change is now ticked, new ones included; after that your choice is kept.
+- Fix: **Merge** could run on the wrong branch, because the branch list refreshing after a save reset your choice in the picker. It now keeps what you picked.
+- The **Merge** picker no longer offers git-annex's internal `adjusted/<branch>(unlocked)` branches (Windows).
+- Tests: the update-notice walkthrough no longer depends on which DataLad is first on PATH, and the Windows test cleanup copes with read-only folders.
+
 
 ## 0.5.4
 
