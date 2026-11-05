@@ -15,8 +15,15 @@ export function parsePins(ps1) {
   const version = value('GitAnnexVersion')
   const urlLine = ps1.match(/^\$GitAnnexUrl = "([^"]+)"/m)
   if (!urlLine) throw new Error('install.ps1 has no $GitAnnexUrl pin')
+  const fallbackLine = ps1.match(/^\$GitAnnexFallbackUrl = "([^"]+)"/m)
+  if (!fallbackLine) throw new Error('install.ps1 has no $GitAnnexFallbackUrl pin')
   return {
-    gitAnnex: { version, sha256: value('GitAnnexSha256').toUpperCase(), url: urlLine[1].replace('${GitAnnexVersion}', version) },
+    gitAnnex: {
+      version,
+      sha256: value('GitAnnexSha256').toUpperCase(),
+      url: urlLine[1].replaceAll('${GitAnnexVersion}', version),
+      fallbackUrl: fallbackLine[1].replaceAll('${GitAnnexVersion}', version)
+    },
     git: { url: value('GitUrl'), sha256: value('GitSha256').toUpperCase() }
   }
 }
@@ -49,6 +56,7 @@ export async function checkPins({ fetchImpl = fetch, pins, retryDelayMs = 5000 }
   const problems = []
   for (const [label, url, expected] of [
     [`git-annex ${pins.gitAnnex.version}`, pins.gitAnnex.url, pins.gitAnnex.sha256],
+    [`git-annex ${pins.gitAnnex.version} (fallback)`, pins.gitAnnex.fallbackUrl, pins.gitAnnex.sha256],
     ['Git for Windows', pins.git.url, pins.git.sha256]
   ]) {
     try {

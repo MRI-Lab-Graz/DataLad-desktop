@@ -384,3 +384,12 @@ test('a prerequisite that cannot be installed is collected with manual instructi
     assert.match(fn, /catch \{[\s\S]*\$script:Failures \+=[\s\S]*return/, `${name}: a failed download must not abort the whole install`)
   }
 })
+
+test('git-annex falls back to the same version on GitHub, checked against the same SHA-256', async () => {
+  const ps = await read('install.ps1')
+  assert.ok(ps.includes('$GitAnnexFallbackUrl = "https://github.com/con/git-annex/releases/download/${GitAnnexVersion}/git-annex-installer_${GitAnnexVersion}_x64.exe"'))
+  const fn = body(ps, 'Install-GitAnnex')
+  assert.match(fn, /Get-VerifiedFile -Url \$GitAnnexUrl -Sha256 \$GitAnnexSha256/)
+  assert.match(fn, /Get-VerifiedFile -Url \$GitAnnexFallbackUrl -Sha256 \$GitAnnexSha256/)
+  assert.ok(fn.indexOf('$GitAnnexUrl -Sha256') < fn.indexOf('$GitAnnexFallbackUrl -Sha256'), 'the mirror is tried first')
+})
