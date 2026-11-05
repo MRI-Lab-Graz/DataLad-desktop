@@ -19,6 +19,9 @@
           <div class="hero-meta-stack">
             <div class="hero-meta-text">
               <div class="hero-actions">
+                <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
+                  Switch Project
+                </button>
                 <button
                   id="open-settings"
                   class="button button-ghost button-inline"
@@ -60,14 +63,27 @@
 
         <div class="setup-section">
           <h3 class="setup-section-title">Preferences</h3>
-          <label
-            class="power-toggle-wrap"
-            for="bids-auto-nest-toggle"
-            title="When a BIDS dataset is detected, automatically split subject/rawdata/derivatives folders into nested subdatasets."
-          >
-            <input type="checkbox" id="bids-auto-nest-toggle" role="switch" checked />
+          <label class="power-toggle-wrap" for="bids-auto-nest-toggle">
+            <input type="checkbox" id="bids-auto-nest-toggle" role="switch" aria-describedby="bids-auto-nest-help" checked />
             Auto-nest BIDS datasets
           </label>
+          <div id="bids-auto-nest-help" class="lede-small">
+            <p>
+              <strong>On (recommended for BIDS):</strong> when you open or create a project that follows BIDS, the app
+              gives each <em>sub-…</em> folder, and the <em>rawdata</em>, <em>derivatives</em> and <em>sourcedata</em>
+              folders, its own nested dataset with its own history. Large data sets then stay fast, and one person's data
+              can be shared or downloaded without the rest. The app saves the files already in those folders for you, so
+              this adds saves to your project history.
+            </p>
+            <p>
+              <strong>Off:</strong> your folders stay as they are. You can still turn a single folder into a nested
+              dataset later with <em>Convert to subdataset</em> in Files.
+            </p>
+            <p>
+              This only runs when a project is opened or created, and it never undoes nesting that already exists. The
+              choice is remembered on this computer only.
+            </p>
+          </div>
         </div>
 
         <div class="setup-section">
@@ -93,7 +109,9 @@
           <p class="lede-small">Checks that your data follows the PRISM and BIDS structure. Installed privately for this app.</p>
           <p id="prism-env-status" class="lede-small"></p>
           <p id="prism-update-status" class="lede-small" hidden></p>
+          <p id="prism-newer" class="lede-small" hidden></p>
           <div class="row-actions">
+            <button id="prism-update-now" class="button button-ghost button-inline" type="button" hidden>Update now</button>
             <button id="prism-env-install" class="button button-ghost button-inline" type="button">Install</button>
             <button id="prism-env-cancel" class="button button-ghost button-inline" type="button" hidden>Cancel</button>
           </div>
@@ -240,11 +258,12 @@
       </section>
 
       <section id="project-strip" class="card project-strip" aria-labelledby="current-project-title" hidden>
-        <div class="project-strip-identity">
-          <span id="current-project-icon" class="project-strip-icon" aria-hidden="true">📁</span>
-          <div>
-            <p id="current-project-title" class="strip-label">Current Project</p>
-            <input
+        <div id="project-strip-about" class="project-strip-part">
+          <div class="project-strip-identity">
+            <span id="current-project-icon" class="project-strip-icon" aria-hidden="true">📁</span>
+            <div>
+              <p id="current-project-title" class="strip-label">Current Project</p>
+              <input
               id="current-project-title-input"
               aria-labelledby="current-project-title"
               class="project-strip-title-input"
@@ -252,25 +271,35 @@
               placeholder="Add a project title"
               maxlength="80"
             />
-            <p id="current-project-path" class="strip-path">No project selected</p>
-            <p id="current-project-nested-info" class="strip-nested-info" hidden></p>
+              <p id="current-project-path" class="strip-path">No project selected</p>
+              <p id="current-project-nested-info" class="strip-nested-info" hidden></p>
+            </div>
+          </div>
+          <div class="strip-state-group">
+            <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
+            <button id="current-project-bids-badge" class="badge badge-bids badge-button" type="button" hidden>BIDS</button>
+            <button id="current-project-prism-badge" class="badge badge-bids badge-button" type="button" hidden>PRISM</button>
+            <button id="open-tools" class="button button-primary button-inline" type="button" aria-controls="project-tools" aria-expanded="false">Work on this project <span aria-hidden="true">▸</span></button>
+          </div>
+        </div>
+        <div id="project-strip-now" class="project-strip-part project-strip-now">
+          <div>
+            <p class="strip-label">Right now</p>
             <p id="project-status-line" class="status-line status-line-neutral">
               Select a project to see its save, sync, and data status.
             </p>
             <p id="last-commit-meta" class="hero-meta hero-meta-idle">
               Last save status appears here after selecting a project.
             </p>
+            <details id="validity-details" class="validity-details" hidden>
+              <summary>Show what to fix</summary>
+              <ul id="validity-problems" class="validity-problems"></ul>
+              <button id="validity-recheck" class="button button-ghost button-inline" type="button">Check again</button>
+            </details>
           </div>
-        </div>
-        <div class="strip-state-group">
-          <span id="current-project-badge" class="badge badge-unknown">Unknown</span>
-          <span id="current-project-bids-badge" class="badge badge-bids" hidden>BIDS</span>
-          <span id="current-project-prism-badge" class="badge badge-bids" hidden>PRISM</span>
-          <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
-          <button id="open-tools" class="button button-ghost button-inline" type="button" aria-controls="project-tools" aria-expanded="false">Tools <span aria-hidden="true">▸</span></button>
-          <button id="switch-project" class="button button-ghost button-inline" type="button" hidden>
-            Switch Project
-          </button>
+          <div class="strip-state-group">
+            <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
+          </div>
         </div>
       </section>
 

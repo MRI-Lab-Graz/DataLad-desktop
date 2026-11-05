@@ -462,3 +462,50 @@ test('(q) repairEnvDir also removes a leftover .next (a build a crash interrupte
   await repairEnvDir({ envDir })
   assert.equal(await exists(`${envDir}.next`), false)
 })
+
+// --- "Update now" from the Setup card: reports a newer-but-too-young release, and installs it on request ---
+const YOUNG = { releases: { ...PYPI.releases, '1.22.0': [file('2026-11-03T10:00:00Z')] } } // 1.5 days old at NOW
+
+test('(r1) a newer release still inside the cooldown is reported, not installed', async () => {
+  const { deps, runner } = await setup({ installed: '1.21.0', fetchJson: async () => YOUNG })
+  assert.deepEqual(await updateValidator(deps), { status: 'current', from: '1.21.0', newer: '1.22.0' })
+  assert.equal(compileCall(runner), undefined)
+})
+
+test('(r2) confirmed version: installs exactly that release, cutoff = its own upload time (not now)', async () => {
+  const runner = updateRunner({ newVersion: '1.22.0' })
+  const { deps, envDir } = await setup({ installed: '1.21.0', runner, fetchJson: async () => YOUNG })
+  assert.deepEqual(await updateValidator({ ...deps, confirmedVersion: '1.22.0' }), { status: 'updated', from: '1.21.0', to: '1.22.0' })
+  assert.equal(await versionIn(envDir), 'prism-validator 1.22.0')
+  assert.equal(compileCall(runner)[compileCall(runner).indexOf('--exclude-newer') + 1], '2026-11-03T10:00:00.000Z')
+})
+
+test('(r3) confirmed version: a version that failed before is tried again', async () => {
+  const runner = updateRunner({ newVersion: '1.22.0' })
+  const { deps, stateFile } = await setup({ installed: '1.21.0', runner, fetchJson: async () => YOUNG })
+  await mkdir(dirname(stateFile), { recursive: true })
+  await writeFile(stateFile, JSON.stringify({ failedVersion: '1.22.0' }))
+  assert.equal((await updateValidator({ ...deps, confirmedVersion: '1.22.0' })).status, 'updated')
+})
+
+test('(r4) a release newer than the confirmed one appeared meanwhile: nothing is built, the new number is reported to confirm again', async () => {
+  const later = { releases: { ...YOUNG.releases, '1.23.0': [file('2026-11-04T11:00:00Z')] } }
+  const runner = updateRunner({ newVersion: '1.23.0' })
+  const { deps, envDir } = await setup({ installed: '1.21.0', runner, fetchJson: async () => later })
+  assert.deepEqual(await updateValidator({ ...deps, confirmedVersion: '1.22.0' }), { status: 'current', from: '1.21.0', newer: '1.23.0' })
+  assert.equal(compileCall(runner), undefined)
+  assert.equal(await versionIn(envDir), 'prism-validator 1.21.0')
+})
+
+test('(r5) the confirmed version is gone from PyPI (yanked): nothing is built', async () => {
+  const yanked = { releases: { ...PYPI.releases, '1.22.0': [file('2026-11-03T10:00:00Z', true)] } }
+  const runner = updateRunner()
+  const { deps } = await setup({ installed: '1.21.0', runner, fetchJson: async () => yanked })
+  assert.equal((await updateValidator({ ...deps, confirmedVersion: '1.22.0' })).status, 'current')
+  assert.equal(compileCall(runner), undefined)
+})
+
+test('(r6) pickRelease reports when the chosen release was uploaded (earliest non-yanked file)', () => {
+  const r = pickRelease({ releases: { '1.0.0': [file('2026-10-02T10:00:00Z'), file('2026-10-01T10:00:00Z'), file('2026-09-01T10:00:00Z', true)] } }, { now: NOW, cooldownDays: 3 })
+  assert.equal(r.uploaded, '2026-10-01T10:00:00.000Z')
+})

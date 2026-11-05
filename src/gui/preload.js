@@ -31,12 +31,14 @@ contextBridge.exposeInMainWorld('dataladDesktop', {
   },
   getGitIdentity: () => ipcRenderer.invoke('identity:get'),
   setGitIdentity: (identity) => ipcRenderer.invoke('identity:set', identity),
+  checkPrism: (projectPath, runId) => ipcRenderer.invoke('prism:check', projectPath, runId),
   inspectPrism: (projectPath) => ipcRenderer.invoke('prism:inspect', projectPath),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getCapabilities: () => ipcRenderer.invoke('app:capabilities'),
   getManagedEnvStatus: () => ipcRenderer.invoke('env:status'),
   ensureManagedEnv: (runId) => ipcRenderer.invoke('env:ensure', runId),
   getUpdateStatus: () => ipcRenderer.invoke('updates:status'),
+  updateValidatorNow: () => ipcRenderer.invoke('updates:validator-now'),
   skipUpdateNotice: ({ tool, version }) => ipcRenderer.invoke('updates:skip', { tool, version }),
   onUpdatesChanged: (callback) => {
     const listener = () => callback()

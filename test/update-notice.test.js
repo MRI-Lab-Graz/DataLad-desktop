@@ -63,3 +63,30 @@ test('an updated validator asks for the Setup status line to be refreshed; nothi
   const body = app.slice(app.indexOf('async function refreshUpdateNotice'), app.indexOf('refreshUpdateNotice()\napi.onUpdatesChanged'))
   assert.match(body, /if \(refreshEnv\) refreshPrismEnvStatus\(\)\.catch\(/)
 })
+
+test('a newer validator release that is still waiting is reported as validatorNewer, never as a line', () => {
+  const r = describeUpdates({ disabled: false, validator: { status: 'current', from: '1.23.2', newer: '1.24.0' }, notices: [] })
+  assert.deepEqual(r, { lines: [], validatorNewer: '1.24.0' })
+})
+
+test('validatorNewer only accepts a plain version number, and is off when updates are off', () => {
+  for (const newer of ['<img src=x>', '1.2.3; rm', '', undefined, 5]) {
+    assert.deepEqual(describeUpdates({ disabled: false, validator: { status: 'current', newer }, notices: [] }), { lines: [] })
+  }
+  assert.deepEqual(describeUpdates({ disabled: true, validator: { status: 'current', newer: '1.24.0' }, notices: [] }), { lines: [] })
+})
+
+test('Setup card has the "Update now" button and its line; the page shows versions with textContent only', () => {
+  const html = readFileSync(new URL('../src/gui/renderer/index.html', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  assert.match(html, /id="prism-update-now"[^>]*hidden/)
+  assert.match(html, /id="prism-newer"[^>]*hidden/)
+  assert.match(app, /elements\.prismNewer\.textContent =/)
+  assert.doesNotMatch(app, /prismNewer\.innerHTML/)
+})
+
+test('"Update now": if a newer release appeared after the confirmation, the page says so instead of "did not work"', () => {
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  const click = app.slice(app.indexOf('elements.prismUpdateNow.addEventListener'), app.indexOf('elements.prismUpdateNow.addEventListener') + 1400)
+  assert.match(click, /result\.status === 'current'[\s\S]{0,260}came out/)
+})

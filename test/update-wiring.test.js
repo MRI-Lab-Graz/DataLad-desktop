@@ -176,6 +176,15 @@ test('main.js builds the background run from the policy switch, the install lock
 test('both validator call sites are wrapped by the busy counter', () => {
   assert.match(handler('adapter:runCommand'), /validatorUse\.track\(\(\) =>\s*gateSave\(/)
   assert.match(handler('prism:inspect'), /validatorUse\.track\(\(\) =>\s*inspectProject\(/)
+  assert.match(handler('prism:check'), /validatorUse\.track\(\(\) =>\s*checkProject\(/)
+})
+
+test('prism:check checks the authorized root first, cancels with the run id, and the page can only name a folder and a run id', () => {
+  const h = handler('prism:check')
+  assert.ok(h.indexOf('requireAuthorizedRoot(') >= 0 && h.indexOf('requireAuthorizedRoot(') < h.indexOf('checkProject('))
+  assert.match(h, /runWithHandle\(event, runId,/)
+  assert.match(h, /handle\('prism:check', \(event, projectPath, runId\)|handle\('prism:check', async \(event, projectPath, runId\)/)
+  assert.match(preload, /checkPrism:\s*\(projectPath, runId\)\s*=>\s*ipcRenderer\.invoke\('prism:check', projectPath, runId\)/)
 })
 
 test('the run starts after the window loaded, delayed, and the env is repaired before the window exists', () => {
@@ -215,4 +224,77 @@ test('createUpdateChecks: dropNotice removes a skipped notice from the status', 
 
 test('updates:skip handler drops the notice from the cached status', () => {
   assert.match(handler('updates:skip'), /updateChecks\.dropNotice\(tool, version\)/)
+})
+
+// --- "Update now" (the user's click, no cooldown) ---
+
+test('updateNow: runs a manual update inside the guard, stores the result and emits a change', async () => {
+  const seen = []
+  let changes = 0
+  const checks = createUpdateChecks({
+    disabled: false,
+    guard: guard(),
+    update: async (opts) => { seen.push(opts); return { status: 'updated', from: '1.0.0', to: '1.1.0' } },
+    notices: async () => []
+  })
+  const result = await checks.updateNow(() => changes++, '1.1.0')
+  assert.deepEqual(seen, [{ confirmedVersion: '1.1.0' }])
+  assert.deepEqual(result, { status: 'updated', from: '1.0.0', to: '1.1.0' })
+  assert.deepEqual(checks.status().validator, result)
+  assert.equal(changes, 1)
+})
+
+test('updateNow: disabled by policy = no network, busy lock = deferred, never throws', async () => {
+  let updates = 0
+  const off = createUpdateChecks({ disabled: true, guard: guard(), update: async () => updates++, notices: async () => [] })
+  assert.deepEqual(await off.updateNow(() => {}, '1.1.0'), { status: 'disabled' })
+  const busy = createUpdateChecks({ disabled: false, guard: { run: async () => { throw new Error('busy') } }, update: async () => updates++, notices: async () => [] })
+  assert.deepEqual(await busy.updateNow(() => { throw new Error('window gone') }, '1.1.0'), { status: 'deferred' })
+  assert.equal(updates, 0)
+})
+
+test('createAppUpdateChecks: updateNow passes the confirmed version on to the update with the same deps', async () => {
+  const { seen, checks } = await appChecks()
+  await checks.updateNow(() => {}, '1.1.0')
+  assert.equal(seen.update.confirmedVersion, '1.1.0')
+  assert.equal(seen.update.envDir, '/env')
+})
+
+test('updates:validator-now is wired through main and preload, with no arguments from the page', () => {
+  assert.match(handler('updates:validator-now'), /updateChecks\.updateNow\(/)
+  assert.doesNotMatch(handler('updates:validator-now'), /_event,\s*\w/) // nothing the page sends is used
+  const h = handler('updates:validator-now')
+  // Fail closed, asked in the main process (a compromised page cannot skip it): only a known newer version, only after a yes.
+  assert.match(h, /status\(\)\.validator\?\.newer/)
+  assert.ok(h.indexOf('showMessageBox') > 0 && h.indexOf('showMessageBox') < h.indexOf('updateChecks.updateNow('), 'asks before updating')
+  assert.match(h, /defaultId:\s*0,\s*cancelId:\s*0/)
+  assert.match(preload, /updateValidatorNow:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('updates:validator-now'\)/)
+})
+
+test('updateNow: a click that did not install keeps the cached status, so the button stays', async () => {
+  const before = { status: 'current', from: '1.0.0', newer: '1.1.0' }
+  for (const status of ['deferred', 'retry', 'failed', 'current']) {
+    const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => ({ status }), notices: async () => [] })
+    checks.status().validator = before
+    assert.equal((await checks.updateNow(() => {}, '1.1.0')).status, status)
+    assert.equal(checks.status().validator, before)
+  }
+})
+
+test('updateNow: a "current" answer that names an even newer version replaces the cached one, so the card shows the new number', async () => {
+  const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => ({ status: 'current', from: '1.0.0', newer: '1.2.0' }), notices: async () => [] })
+  checks.status().validator = { status: 'current', from: '1.0.0', newer: '1.1.0' }
+  await checks.updateNow(() => {}, '1.1.0')
+  assert.equal(checks.status().validator.newer, '1.2.0')
+})
+
+test('updateNow without a version string does nothing (the confirmed version is mandatory)', async () => {
+  let updates = 0
+  const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => updates++, notices: async () => [] })
+  for (const bad of [undefined, '', 5, '1.2; rm', '<b>']) assert.deepEqual(await checks.updateNow(() => {}, bad), { status: 'current' })
+  assert.equal(updates, 0)
+})
+
+test('updates:validator-now hands the version the user confirmed to updateNow', () => {
+  assert.match(handler('updates:validator-now'), /updateChecks\.updateNow\(\(\) => \{[\s\S]*?\}, newer\)/)
 })

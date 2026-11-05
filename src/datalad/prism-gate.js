@@ -12,6 +12,10 @@ const hasFile = (projectPath, name) => lstat(join(projectPath, name)).then(() =>
 export const isPrismProject = (projectPath) => hasFile(projectPath, PRISM_MARKER)
 export const isBidsProject = (projectPath) => hasFile(projectPath, BIDS_MARKER)
 
+// The validator carries the BIDS validator since 1.20: PRISM projects get both checks, BIDS-only projects just BIDS.
+// One place for the Save gate and the badge check, so they can never run differently.
+const validatorArgs = (root, prism) => (prism ? [root, '--bids', '--format', 'json'] : [root, '--no-prism', '--bids', '--format', 'json'])
+
 // A save from a subfolder commits the whole repo, so the gate always works on the repo root.
 // Exit 128 = not a git repository: nothing can be committed, so there is nothing to gate.
 async function repoRoot({ runner, projectPath }) {
@@ -102,9 +106,7 @@ export async function gateSave({ runner, projectPath, validatorBin, checkValidat
     )
   }
 
-  // The validator carries the BIDS validator since 1.20: PRISM projects get both checks, BIDS-only projects just BIDS.
-  const args = prism ? [root, '--bids', '--format', 'json'] : [root, '--no-prism', '--bids', '--format', 'json']
-  const run = await runner.run(validatorBin, args, { signal, onOutput, timeoutMs })
+  const run = await runner.run(validatorBin, validatorArgs(root, prism), { signal, onOutput, timeoutMs })
   if (run.cancelled) return unchecked('Cancelled.', label)
 
   // The validator exits non-zero for invalid data, so the report (not the exit code) decides.
@@ -132,4 +134,23 @@ export async function inspectProject({ runner, projectPath, checkValidator }) {
   const validatorReady = await checkValidator()
   const introducesPrism = prism ? await isConversionSave({ runner, projectPath }).catch(() => false) : false
   return { kind: prism ? 'prism' : 'bids', validatorReady, introducesPrism }
+}
+
+// The same validator run as the Save check, for the "valid / not valid" badge. Display only: Save runs its own check and
+// never trusts this. Never throws and never says "valid" unless the validator did.
+export async function checkProject({ runner, projectPath, validatorBin, checkValidator, signal, onOutput, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+  const prism = await isPrismProject(projectPath)
+  if (!prism && !(await isBidsProject(projectPath))) return { kind: null, verdict: 'none' }
+  const kind = prism ? 'prism' : 'bids'
+  try {
+    if (!(await checkValidator())) return { kind, verdict: 'unchecked', reason: 'validator-missing' }
+    const run = await runner.run(validatorBin, validatorArgs(projectPath, prism), { signal, onOutput, timeoutMs })
+    if (run.cancelled) return { kind, verdict: 'unchecked', reason: 'cancelled' }
+    const report = interpretReport(run.stdout)
+    if (report.verdict === 'valid') return { kind, verdict: 'valid' }
+    if (report.verdict === 'invalid') return { kind, verdict: 'invalid', errorCount: report.errorCount, errors: report.errors }
+    return { kind, verdict: 'unchecked', reason: 'unreadable' }
+  } catch {
+    return { kind, verdict: 'unchecked', reason: 'failed' }
+  }
 }

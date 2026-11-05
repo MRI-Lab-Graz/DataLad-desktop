@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { DataLadAdapter } from '../datalad/adapter.js'
 import { getGitIdentity, setGitIdentity } from '../datalad/git-identity.js'
 import { createEnsureGuard, describeEnvFailure, ensureEnv, envBin, envStatus, resolveUv } from '../datalad/managed-env.js'
-import { gateSave, inspectProject } from '../datalad/prism-gate.js'
+import { checkProject, gateSave, inspectProject } from '../datalad/prism-gate.js'
 import { ProcessRunner } from '../datalad/process-runner.js'
 import { assertCommandRequest } from '../datalad/schema.js'
 import { createResultCounter } from '../datalad/result-counter.js'
@@ -420,6 +420,22 @@ handle('prism:inspect', async (_event, projectPath) => {
   )
 })
 
+// Display only (the "valid / not valid" badge): the Save gate never relies on it. The page names a folder and a run id.
+handle('prism:check', async (event, projectPath, runId) => {
+  requireAuthorizedRoot(projectPath)
+  return runWithHandle(event, runId, (runOptions) =>
+    validatorUse.track(() =>
+      checkProject({
+        runner: toolRunner,
+        projectPath,
+        validatorBin: envBin(managedEnvDir(), 'prism-validator'),
+        checkValidator: async () => (await envStatus({ runner: toolRunner, envDir: managedEnvDir() })).ready,
+        signal: runOptions.signal
+      })
+    )
+  )
+})
+
 handle('adapter:cancelCommand', (_event, runId) => {
   return typeof runId === 'string' ? runRegistry.cancel(runId) : false
 })
@@ -451,6 +467,28 @@ handle('env:ensure', (event, runId) =>
 )
 
 handle('updates:status', () => updateChecks.status())
+
+// No arguments are read from the page: the click can only mean "update the validator now". The yes is asked
+// here, not in the page, and only for a newer version this app already found.
+handle('updates:validator-now', async (event) => {
+  const newer = updateChecks.status().validator?.newer
+  if (!newer) return { status: 'current' }
+  const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {
+    type: 'question',
+    buttons: ['Cancel', 'Update now'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Update the PRISM Validator?',
+    message: `Install prism-validator ${newer} now?`,
+    detail:
+      'Normally the app waits 3 days after a new version comes out, in case a problem turns up. Updating now skips that wait. ' +
+      'The new version is tested first; if it does not work, your current one stays.'
+  })
+  if (response !== 1) return { status: 'cancelled' }
+  return updateChecks.updateNow(() => {
+    for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send('updates:changed')
+  }, newer) // exactly the version in the dialog, never "whatever is newest now"
+})
 
 handle('updates:skip', async (_event, { tool, version } = {}) => {
   if (tool !== 'datalad' && tool !== 'git-annex') {
