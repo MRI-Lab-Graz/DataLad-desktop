@@ -21,7 +21,7 @@ export function parsePins(ps1) {
     gitAnnex: {
       version,
       sha256: value('GitAnnexSha256').toUpperCase(),
-      url: urlLine[1].replace('${GitAnnexVersion}', version),
+      url: urlLine[1].replaceAll('${GitAnnexVersion}', version),
       fallbackUrl: fallbackLine[1].replaceAll('${GitAnnexVersion}', version)
     },
     git: { url: value('GitUrl'), sha256: value('GitSha256').toUpperCase() }
