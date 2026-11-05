@@ -90,7 +90,7 @@ jobs:
       - name: Build Windows artifacts
         run: npm run package:win:x64 -- --publish=never
 
-      # The script install (scripts/windows/install.ps1) downloads this zip from the tag's release and checks it
+      # The script install (scripts/windows/windows-install.cmd) downloads this zip from the tag's release and checks it
       # against the SHA-256 rendered into its own copy of the script, so the tag has to match the package version.
       - name: Zip the unpacked app and render the install script
         shell: pwsh
@@ -101,8 +101,7 @@ jobs:
           }
           $zip = "dist/DataLad-Desktop-$version-win-x64.zip"
           Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
-          node scripts/render-install-script.mjs $version $zip dist/install.ps1
-          Copy-Item scripts/windows/install.cmd dist/install.cmd
+          node scripts/render-install-script.mjs $version $zip dist/windows-install.cmd scripts/windows/windows-install.cmd
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -110,8 +109,7 @@ jobs:
           name: datalad-desktop-windows-x64
           path: |
             dist/DataLad-Desktop-*-win-x64.zip
-            dist/install.cmd
-            dist/install.ps1
+            dist/windows-install.cmd
           if-no-files-found: error
           retention-days: 14
 
@@ -173,7 +171,7 @@ jobs:
         working-directory: release-assets
         run: |
           shopt -s nullglob
-          sha256sum *.zip *.AppImage *.cmd *.ps1 *.sh > SHA256SUMS.txt
+          sha256sum *.zip *.AppImage *.cmd *.sh > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Attest build provenance
@@ -183,7 +181,6 @@ jobs:
             release-assets/*.zip
             release-assets/*.AppImage
             release-assets/*.cmd
-            release-assets/*.ps1
             release-assets/*.sh
 
       - name: Describe how to install and how to verify
@@ -192,7 +189,7 @@ jobs:
             echo "## Install"
             echo
             echo "- macOS (Apple silicon): run \`install.sh\` (one Terminal command, see the install guide)."
-            echo "- Windows: download \`install.cmd\` and \`install.ps1\` into one folder and double-click \`install.cmd\`."
+            echo "- Windows: download \`windows-install.cmd\` and double-click it."
             echo "- Linux: the \`.AppImage\`."
             echo
             echo "Builds are not code-signed. The install scripts check the app against a SHA-256 written into the script itself."
@@ -215,6 +212,5 @@ jobs:
             release-assets/*.zip
             release-assets/*.AppImage
             release-assets/*.cmd
-            release-assets/*.ps1
             release-assets/*.sh
             release-assets/SHA256SUMS.txt

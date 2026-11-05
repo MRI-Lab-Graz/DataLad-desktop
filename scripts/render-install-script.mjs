@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-// Fills the version and the app zip's SHA-256 into scripts/windows/install.ps1 for a release. Both end up inside
+// Fills the version and the app zip's SHA-256 into script./windows/windows-install.cmd for a release. Both end up inside
 // single-quoted PowerShell strings, so they are validated, not escaped.
 export function renderInstallScript(template, { version, zipSha256 }) {
   if (!/^[0-9A-Za-z][0-9A-Za-z.+-]*$/.test(version)) {
@@ -30,7 +30,7 @@ async function main([version, zipPath, outPath, templatePath]) {
   if (!version || !zipPath || !outPath) {
     throw new Error('Usage: node scripts/render-install-script.mjs <version> <zip> <out> [template]')
   }
-  const template = await readFile(templatePath ?? new URL('./windows/install.ps1', import.meta.url), 'utf8')
+  const template = await readFile(templatePath ?? new URL('./windows/windows-install.cmd', import.meta.url), 'utf8')
   await writeFile(outPath, renderInstallScript(template, { version, zipSha256: await sha256OfFile(zipPath) }))
 }
 

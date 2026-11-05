@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { renderInstallScript } from '../scripts/render-install-script.mjs'
 
-const template = await readFile(new URL('../scripts/windows/install.ps1', import.meta.url), 'utf8')
+const template = await readFile(new URL('../scripts/windows/windows-install.cmd', import.meta.url), 'utf8')
 const HASH = 'a'.repeat(64)
 
 test('renderInstallScript puts the version and the upper-case hash into their pins', () => {
@@ -48,7 +48,7 @@ test('the committed template has each placeholder exactly once', () => {
 test('the CLI hashes the zip and writes the rendered script', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dlad-render-'))
   const zip = join(dir, 'app.zip')
-  const out = join(dir, 'install.ps1')
+  const out = join(dir, 'windows-install.cmd')
   await writeFile(zip, 'not really a zip')
   execFileSync(process.execPath, ['scripts/render-install-script.mjs', '4.5.6', zip, out], { cwd: new URL('..', import.meta.url) })
   const expected = createHash('sha256').update('not really a zip').digest('hex').toUpperCase()

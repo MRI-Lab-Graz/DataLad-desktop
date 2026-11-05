@@ -28,7 +28,7 @@ test('the release workflow neither builds nor publishes dmg, setup exe, portable
 test('the release workflow still publishes the app zips, the install scripts, the AppImage and SHA256SUMS', async () => {
   const wf = await read('.github/workflows/build-os-artifacts.yml')
   const publish = wf.split('Create GitHub Release and upload assets')[1]
-  for (const kept of ['*.zip', '*.cmd', '*.ps1', '*.sh', '*.AppImage', 'SHA256SUMS.txt']) assert.ok(publish.includes(kept), `release no longer publishes ${kept}`)
+  for (const kept of ['*.zip', '*.cmd', '*.sh', '*.AppImage', 'SHA256SUMS.txt']) assert.ok(publish.includes(kept), `release no longer publishes ${kept}`)
 })
 
 test('the docs tell people to use the install scripts, not an installer or a portable exe', async () => {
@@ -38,4 +38,13 @@ test('the docs tell people to use the install scripts, not an installer or a por
     assert.doesNotMatch(text, /\.dmg|Setup \*\.exe|portable/i)
     assert.doesNotMatch(text, /SmartScreen|Windows protected your PC/)
   }
+})
+
+test('the docs name the single Windows file, windows-install.cmd, and not install.cmd or install.ps1', async () => {
+  for (const file of ['docs/install.md', 'README.md', 'SECURITY.md', 'REVIEW-OVERVIEW.md']) {
+    const text = await read(file)
+    assert.doesNotMatch(text, /(?<![-\w])install\.cmd|install\.ps1/, `${file} still names the old Windows files`)
+  }
+  assert.match(await read('docs/install.md'), /windows-install\.cmd/)
+  assert.match(await read('README.md'), /windows-install\.cmd/)
 })

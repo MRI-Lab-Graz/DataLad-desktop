@@ -1,7 +1,38 @@
+@echo off
+REM Installs DataLad Desktop for the current user. No administrator rights needed.
+REM
+REM This is ONE file: download it and double-click it, or run it from any shell. Options such as -Uninstall or
+REM -InstallDir "D:\Apps" are passed on. Below the marker line the file continues with a PowerShell script; the few batch
+REM lines here cut that part out, write it to TEMP and run it. There is no cd: it fails on a network share.
+REM
+REM This is a .cmd on purpose: batch files are not blocked by PowerShell's execution policy.
+REM Kept free of parenthesised blocks and goto so it survives being saved with Unix line endings.
+setlocal
+set "DLAD_SELF=%~f0"
+set "DLAD_PS1=%TEMP%\windows-install-%RANDOM%.ps1"
+
+echo Removing the "downloaded from the internet" mark from this file...
+powershell -NoProfile -Command "Unblock-File -LiteralPath $env:DLAD_SELF -ErrorAction SilentlyContinue"
+
+powershell -NoProfile -Command "$s = [IO.File]::ReadAllText($env:DLAD_SELF); $i = $s.IndexOf('#PS'+'-BEGIN'); [IO.File]::WriteAllText($env:DLAD_PS1, $s.Substring($i), (New-Object Text.UTF8Encoding $true))"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%DLAD_PS1%" %*
+set "DLAD_EXIT=%errorlevel%"
+del "%DLAD_PS1%" 2>nul
+
+if not "%DLAD_EXIT%"=="0" echo.
+if not "%DLAD_EXIT%"=="0" echo Setup failed - see the messages above and "DataLad Desktop install.log" next to the install folder.
+if not "%DLAD_EXIT%"=="0" pause
+if not "%DLAD_EXIT%"=="0" exit /b 1
+
+echo.
+pause
+exit /b 0
+#PS-BEGIN
 # Installs DataLad Desktop for the current user. No administrator rights needed.
 #
-# Normally started through install.cmd. The copy attached to a GitHub release has the version and the SHA-256 of that
-# release's app zip filled in by CI. The copy in the repository is a template: it installs the latest release.
+# This is the second half of windows-install.cmd; the first half (batch) cuts it out and runs it. The copy attached to a
+# GitHub release has the version and the SHA-256 of that release's app zip filled in by CI. The copy in the repository is
+# a template: it installs the latest release.
 #
 # Options:
 #   -FromDir <folder>   take files that exist there (named as on the release page) instead of downloading them;

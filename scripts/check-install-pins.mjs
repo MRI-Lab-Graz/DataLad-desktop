@@ -2,21 +2,21 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
-// The Git and git-annex pins live in scripts/windows/install.ps1 and nowhere else. This reads them back and asks the
+// The Git and git-annex pins live in scripts/windows/windows-install.cmd and nowhere else. This reads them back and asks the
 // hosts whether the pinned files are still what the pins say, and whether the git-annex mirror has a newer version.
 const sha256 = (buffer) => createHash('sha256').update(Buffer.from(buffer)).digest('hex').toUpperCase()
 
 export function parsePins(ps1) {
   const value = (name) => {
     const m = ps1.match(new RegExp(`^\\$${name} = '([^']+)'`, 'm'))
-    if (!m) throw new Error(`install.ps1 has no $${name} pin`)
+    if (!m) throw new Error(`windows-install.cmd has no $${name} pin`)
     return m[1]
   }
   const version = value('GitAnnexVersion')
   const urlLine = ps1.match(/^\$GitAnnexUrl = "([^"]+)"/m)
-  if (!urlLine) throw new Error('install.ps1 has no $GitAnnexUrl pin')
+  if (!urlLine) throw new Error('windows-install.cmd has no $GitAnnexUrl pin')
   const fallbackLine = ps1.match(/^\$GitAnnexFallbackUrl = "([^"]+)"/m)
-  if (!fallbackLine) throw new Error('install.ps1 has no $GitAnnexFallbackUrl pin')
+  if (!fallbackLine) throw new Error('windows-install.cmd has no $GitAnnexFallbackUrl pin')
   return {
     gitAnnex: {
       version,
@@ -85,13 +85,13 @@ export async function checkPins({ fetchImpl = fetch, pins, retryDelayMs = 5000 }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const pins = parsePins(await readFile(new URL('./windows/install.ps1', import.meta.url), 'utf8'))
+  const pins = parsePins(await readFile(new URL('./windows/windows-install.cmd', import.meta.url), 'utf8'))
   const { ok, problems, newerGitAnnex } = await checkPins({ pins })
   for (const problem of problems) {
     console.error(`::error::${problem}`)
   }
   if (newerGitAnnex) {
-    console.log(`::notice::A newer git-annex is on the mirror: ${newerGitAnnex} (pinned: ${pins.gitAnnex.version}). Bump the pin in install.ps1 after checking it.`)
+    console.log(`::notice::A newer git-annex is on the mirror: ${newerGitAnnex} (pinned: ${pins.gitAnnex.version}). Bump the pin in windows-install.cmd after checking it.`)
   }
   if (!ok) {
     process.exit(1)
