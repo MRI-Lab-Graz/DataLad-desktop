@@ -63,3 +63,19 @@ test('a file that cannot be fetched is a problem, not a crash', async () => {
   assert.equal(result.ok, false)
   assert.match(result.problems[0], /git-annex 10\.20260901.*HTTP 404/)
 })
+
+test('a download that drops once is retried; a changed file is never retried into a pass', async () => {
+  let failures = 1
+  const flaky = (inner) => async (url) => { if (url === pins.gitAnnex.url && failures-- > 0) throw new TypeError('fetch failed'); return inner(url) }
+  const ok = await checkPins({ fetchImpl: flaky(fakeFetch(files, listing('10.20260901'))), pins, retryDelayMs: 0 })
+  assert.equal(ok.ok, true)
+
+  failures = 0
+  const swapped = await checkPins({ fetchImpl: fakeFetch({ ...files, [pins.gitAnnex.url]: 'swapped' }, listing('10.20260901')), pins, retryDelayMs: 0 })
+  assert.equal(swapped.ok, false)
+
+  failures = 99
+  const down = await checkPins({ fetchImpl: flaky(fakeFetch(files, listing('10.20260901'))), pins, retryDelayMs: 0 })
+  assert.equal(down.ok, false)
+  assert.match(down.problems[0], /could not fetch/)
+})
