@@ -1379,6 +1379,7 @@ elements.mergeBranchButton.addEventListener('click', async () => {
   if (result.conflicts) {
     setBranchStatus('Merge stopped: some files changed on both branches. Decide each one in the list above Files To Save.', 'error')
     setLastActionState('Merge stopped: decide each file in the Merge banner.', 'warning')
+    showHome({ focus: true }) // the banner lives on the project page, not in Tools
   } else if (/already up to date/i.test(result.stdout ?? '')) {
     setBranchStatus(`Nothing to merge: this branch already has everything from ${branchName}.`, 'idle')
   } else {
