@@ -1,6 +1,22 @@
 # Changelog
 
-Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2, v0.5.3.
+Summarized from git history. Tags: v0.2.1, v0.3.0, v0.4.0, v0.5.0, v0.5.1, v0.5.2, v0.5.3, v0.5.4.
+
+## 0.5.4
+
+The app keeps its validator up to date, tells you when DataLad or git-annex have a newer version, and a few things that broke on Windows now work. **Releases change:** there is no `.dmg`, installer or portable `.exe` any more; install with the scripts.
+
+**Upgrade notes**
+- **Install with the scripts.** macOS: `install.sh`. Windows: `install.cmd` + `install.ps1` in one folder. Linux: the `.AppImage`. Builds are still not code-signed; the scripts check the app against a SHA-256 written into the script, and fetching with them avoids the Gatekeeper and SmartScreen warnings. There is no all-users (administrator) installer any more. To move from the old Windows installer, uninstall it in Windows Settings, then run `install.cmd`.
+- The PRISM validator, when installed, updates itself a few seconds after start, only to releases at least 3 days old and only if the new one passes a self-check. DataLad and git-annex are only announced, with a **Skip this version** button; the app never installs them. Administrators can turn all of this off with `DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1` (see `SECURITY.md`).
+
+- New projects start on `main` (before, a machine whose git default was `master`, such as many Windows setups, got `master`).
+- Fix: **Get Data** with nothing selected did nothing useful with DataLad 1.6 ("Neither dataset nor target path(s) provided"); it now downloads everything in the project.
+- Fix: **Publish** right after **Add a Remote** found no target on Windows. Add a Remote now sets the target on the base branch too.
+- Fix: when a merge stops because the same file changed on both branches, the app now takes you back to the project page, where the "Merge in progress" box is. Before, you stayed in Tools and could not see it.
+- Fix: History always shows the latest saves.
+- Accessibility: results of actions are announced to screen readers, dialogs keep keyboard focus inside and give it back, the project title box has a name, and the brand colour reaches the 4.5:1 contrast for small text.
+- Documentation: tutorial 03 (branches) is walked through by an automated test of the real app, like tutorials 00 and 01 (`npm run walkthrough`).
 
 ## 0.5.3
 

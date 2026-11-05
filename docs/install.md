@@ -1,34 +1,28 @@
 # Install & first launch
 
-## Recommended: download the app for your OS
+## Recommended: install with a script
 
-Most researchers should just download the ready-to-run app:
+The releases are not code-signed, so there is no installer to double-click. Instead a small script downloads the app,
+checks it against a checksum written into the script itself, and sets everything up. You get no security warning.
 
-1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases)
-   and download the build for your system:
-   - **macOS (Apple silicon):** `install.sh` (see [macOS: install with a script](#macos-install-with-a-script)) or the `.dmg` file
-   - **Windows:** `install.cmd` + `install.ps1` (script install, no admin rights; see
-     [Windows: install with a script](#windows-install-with-a-script)), `DataLad Desktop Setup *.exe`
-     (installer, needs admin rights) or `DataLad Desktop *.exe` (portable, no admin rights or install
-     step — just run it)
+1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases) and download what fits your system:
+   - **macOS (Apple silicon):** `install.sh` (see [macOS: install with a script](#macos-install-with-a-script))
+   - **Windows:** `install.cmd` + `install.ps1`, both into the same folder (no admin rights; see
+     [Windows: install with a script](#windows-install-with-a-script))
    - **Linux:** the `.AppImage` file (make it executable, then run it)
-2. Follow your platform's steps: run the script (macOS `install.sh`, Windows `install.cmd`), open the installer, or just
-   run the portable build or AppImage.
+2. Run the script (macOS `install.sh`, Windows `install.cmd`) or the AppImage.
 3. Launch **DataLad Desktop** like any other app.
 
-> **Windows installer:** also checks for Git, Python 3, DataLad, and git-annex and installs any
-> that are missing (this needs an internet connection during setup; every downloaded installer's
-> checksum is verified before it runs). If a download is blocked by your network, install the
-> missing piece manually — the app's diagnostics screen will tell you exactly what's still missing.
+> **Windows script:** also checks for Git, DataLad and git-annex and installs any that are missing (this needs an
+> internet connection during setup; every download's checksum is verified before it runs). If a download is blocked by
+> your network, install the missing piece manually; the app's diagnostics screen tells you exactly what's still missing.
 >
-> **macOS:** the `install.sh` script installs git-annex and DataLad with Homebrew; the .dmg doesn't install them, so
-> use the script or install them yourself (see below).
+> **macOS script:** installs git-annex and DataLad with Homebrew when they are missing (see below).
 >
-> **Windows portable and Linux:** these builds don't install anything for you. To use
-> DataLad-specific actions (Get Data, Update, Publish) on a project, Git, DataLad, and git-annex
-> need to be installed on your system first. See [datalad.org](https://www.datalad.org/) for
-> installation instructions for your platform. The app's diagnostics screen tells you what's
-> missing.
+> **Linux:** the AppImage doesn't install anything for you. To use DataLad-specific actions (Get Data, Update,
+> Publish) on a project, Git, DataLad, and git-annex need to be installed on your system first. See
+> [datalad.org](https://www.datalad.org/) for installation instructions for your platform. The app's diagnostics
+> screen tells you what's missing.
 
 **PRISM projects** (a `project.json` in the project folder) get a PRISM badge, and Save only goes through when
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
@@ -56,10 +50,10 @@ changes. IT departments can pre-trust locations; see [SECURITY.md](https://githu
 ## macOS: install with a script
 
 For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper warning (a file fetched with `curl`
-is not quarantined). Open **Terminal** and paste (this is the 0.5.3 link; for another version, change the `v0.5.3` in the address):
+is not quarantined). Open **Terminal** and paste (this is the 0.5.4 link; for another version, change the `v0.5.4` in the address):
 
 ```bash
-curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.3/install.sh | bash
+curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.4/install.sh | bash
 ```
 
 Prefer to read it first? Download `install.sh` from the release page, then run `bash install.sh`.
@@ -67,23 +61,10 @@ Prefer to read it first? Download `install.sh` from the release page, then run `
 The script checks the app's SHA-256 against the value baked into it, installs the app to `~/Applications`, and
 installs git-annex and DataLad with Homebrew when they are missing. If Homebrew itself is missing it asks before
 running Homebrew's own installer (which asks for your password). Run the script again any time to update or repair.
-The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs: use the `.dmg` and install git-annex and DataLad
-yourself (for example with `brew install git-annex datalad`).
+The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs have no prebuilt app; run it
+[from source](#advanced-install-from-source).
 
 To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's packages stay).
-
-## macOS: "app can't be opened" warning
-
-This appears for the `.dmg` (and any browser download), not for the
-[script install above](#macos-install-with-a-script). Release builds aren't signed with an Apple Developer
-certificate yet, so Gatekeeper blocks the first launch. **Right-click** (or Control-click)
-**DataLad Desktop.app** → **Open** → **Open** in the dialog (if the dialog only
-offers "Done", use **System Settings → Privacy & Security → Open Anyway**
-instead). Only needed once. Or from a terminal:
-
-```bash
-xattr -d com.apple.quarantine "/Applications/DataLad Desktop.app"
-```
 
 ## Windows: install with a script
 
@@ -108,15 +89,10 @@ To upgrade, run `install.cmd` from a newer release: the old version is put back 
 run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
 entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.
 
-## Windows: "Windows protected your PC" warning
-
-Installers aren't code-signed yet, so SmartScreen blocks the first run. Click
-**More info** → **Run anyway**. Only needed once.
-
 ## Advanced: install from source
 
 This path is for contributors and advanced users who want to run the app
-from the source code instead of an installer.
+from the source code instead of a script install.
 
 **Prerequisites:**
 
@@ -156,7 +132,7 @@ about running from source.
 npm test
 ```
 
-**Build your own installer** (output goes to `dist/`):
+**Build the app yourself** (the unpacked app goes to `dist/`):
 
 ```bash
 npm run package:mac     # macOS

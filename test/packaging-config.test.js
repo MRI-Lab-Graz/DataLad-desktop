@@ -53,10 +53,6 @@ test('every packaging job fetches uv before electron-builder runs', async () => 
   }
 })
 
-test('Windows uninstall removes the app data folder that holds the managed env', async () => {
-  assert.equal(JSON.parse(await read('package.json')).build.nsis.deleteAppDataOnUninstall, true)
-})
-
 // The signed app must not double as a general Node interpreter for local malware
 // (ELECTRON_RUN_AS_NODE / NODE_OPTIONS / --inspect), and must load only its own asar.
 test('Electron fuses lock the packaged app down', async () => {
