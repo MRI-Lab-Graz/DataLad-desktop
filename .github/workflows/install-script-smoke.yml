@@ -49,14 +49,19 @@ jobs:
           $zip = Join-Path $out "DataLad-Desktop-$version-win-x64.zip"
           Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
           node scripts/render-install-script.mjs $version $zip (Join-Path $out 'windows-install.cmd') scripts/windows/windows-install.cmd
+          # The file is started from a folder with awkward characters, like a student's Downloads folder might be.
+          $odd = Join-Path $env:RUNNER_TEMP 'Tom & Jerry (test) 100%'
+          New-Item -ItemType Directory $odd | Out-Null
+          Copy-Item (Join-Path $out 'windows-install.cmd') $odd
+          "ODD_DIR=$odd" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       # `< NUL` answers the pause at the end of windows-install.cmd.
       - name: Install with windows-install.cmd
-        shell: cmd
+        shell: pwsh
         timeout-minutes: 25
         run: |
-          cd /d "%RUNNER_TEMP%\release"
-          windows-install.cmd -FromDir "%RUNNER_TEMP%\release" < NUL
+          cmd /c "`"$env:ODD_DIR\windows-install.cmd`" -FromDir `"$env:RUNNER_TEMP\release`" < NUL"
+          if ($LASTEXITCODE -ne 0) { throw "windows-install.cmd exited with $LASTEXITCODE" }
 
       # Actions steps keep the PATH they started with, but a researcher opening the app after setup gets the
       # PATH the installers updated.

@@ -25,7 +25,7 @@ test('builds the unpacked app, zips and renders it like the release job, then ru
     'electron-builder --win dir',
     'Compress-Archive -Path',
     'node scripts/render-install-script.mjs',
-    'windows-install.cmd -FromDir'
+    'windows-install.cmd`" -FromDir'
   ]
   let at = -1
   for (const step of order) {
@@ -36,7 +36,7 @@ test('builds the unpacked app, zips and renders it like the release job, then ru
 })
 
 test('the install runs without waiting for a key at the end', () => {
-  assert.match(workflow, /windows-install\.cmd -FromDir [^\n]*< NUL/)
+  assert.match(workflow, /windows-install\.cmd`" -FromDir [^\n]*< NUL/)
 })
 
 test('proves git, DataLad and git-annex work and that datalad comes from the private env under LocalAppData', () => {
@@ -97,4 +97,10 @@ test('the macOS job checks the installed app, the tools and the packaged app', (
   assert.match(macJob, /codesign --verify/)
   assert.match(macJob, /datalad --version/)
   assert.match(macJob, /DLAD_APP_EXECUTABLE/)
+})
+
+// A student's Downloads folder or user name can hold spaces, "&", brackets and "%": the single file has to cut itself out of any of them.
+test('runs windows-install.cmd from a folder whose name has spaces, &, brackets and %', () => {
+  assert.match(workflow, /Tom & Jerry \(test\) 100%/)
+  assert.match(workflow, /\$env:ODD_DIR/)
 })
