@@ -82,7 +82,7 @@ Each control below has a test; the file names are where to verify it.
 - The BIDS validator ships inside the same hash-locked environment (`bids-validator-deno`, on the `deno` PyPI wheel, wheels only), so it needs no separate download and runs offline.
 - Installed from `build/prism-requirements.txt` with `--require-hashes --only-binary :all:`, an explicit index, and uv's config discovery turned off. The bundled `uv` is pinned and SHA-256 verified at build time (`scripts/fetch-uv.mjs`).
 
-**macOS install script** (`scripts/macos/install.sh`, runs as the user, no `sudo`)
+**macOS install script** (`scripts/macos/macos-install.sh`, runs as the user, no `sudo`)
 - The release's copy has the version and the app zip's SHA-256 filled in by CI; the zip is verified before it is extracted, and the new app must pass `codesign --verify` or the previous install is restored. A repository checkout is a template and refuses to run.
 - git-annex and DataLad come from Homebrew (`brew install`), whose bottles Homebrew verifies itself; they are **not pinned** by this project. If Homebrew is missing, the script asks first and then runs Homebrew's own installer from `raw.githubusercontent.com/Homebrew/install/HEAD`, which is **not pinned or hash-checked** by this project and asks for your password itself.
 - The app is installed under `~/Applications`; a `curl` download is not quarantined, which is why Gatekeeper does not prompt. This is not code signing: the integrity check is the baked-in hash, so run the script only from this repository's releases.

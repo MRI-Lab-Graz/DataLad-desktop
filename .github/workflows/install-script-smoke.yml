@@ -1,6 +1,6 @@
 name: Install Script Smoke
 
-# Manual + release tags only: scripts/windows/windows-install.cmd (and scripts/macos/install.sh) download git-annex from a third-party mirror (and
+# Manual + release tags only: scripts/windows/windows-install.cmd (and scripts/macos/macos-install.sh) download git-annex from a third-party mirror (and
 # Git when missing), so this must not gate every push.
 on:
   workflow_dispatch:
@@ -113,7 +113,7 @@ jobs:
           Get-Command git, git-annex, datalad -ErrorAction SilentlyContinue | Format-Table Name, Source
 
   install-script-macos:
-    name: install.sh (macos-latest)
+    name: macos-install.sh (macos-latest)
     runs-on: macos-latest
     timeout-minutes: 40
 
@@ -147,12 +147,12 @@ jobs:
           mkdir -p "$out"
           zip="$out/DataLad-Desktop-$version-mac-arm64.zip"
           ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
-          node scripts/render-install-script.mjs "$version" "$zip" "$out/install.sh" scripts/macos/install.sh
+          node scripts/render-install-script.mjs "$version" "$zip" "$out/macos-install.sh" scripts/macos/macos-install.sh
 
       # No terminal on the runner: Homebrew is already there, so the prompt is never reached.
-      - name: Install with install.sh
+      - name: Install with macos-install.sh
         timeout-minutes: 25
-        run: bash "$RUNNER_TEMP/release/install.sh" --from-dir "$RUNNER_TEMP/release" < /dev/null
+        run: bash "$RUNNER_TEMP/release/macos-install.sh" --from-dir "$RUNNER_TEMP/release" < /dev/null
 
       - name: Script left a verified app and working tools
         run: |

@@ -40,3 +40,19 @@ test('SHA256SUMS, the attestation and the release files cover windows-install.cm
     assert.equal(publishJob.split(glob).length - 1, 2, `${glob} must be in both the attestation and the release files`)
   }
 })
+
+// Linux: the AppImage is the app, so linux-install.sh is rendered from it and carries its SHA-256.
+const linuxJob = release.slice(release.indexOf('  linux:'), release.indexOf('  publish-release:'))
+
+test('linux-install.sh is rendered from the AppImage that ships with it, after the AppImage is built', () => {
+  const build = linuxJob.indexOf('npm run package:linux')
+  const render = linuxJob.indexOf('node scripts/render-install-script.mjs')
+  assert.ok(build !== -1 && render > build)
+  assert.ok(linuxJob.includes('dist/linux-install.sh scripts/linux/linux-install.sh'))
+  assert.match(linuxJob, /refs\/tags\/v\$version/)
+})
+
+test('the Linux artifact carries the AppImage and linux-install.sh', () => {
+  const upload = linuxJob.slice(linuxJob.indexOf('name: datalad-desktop-linux'))
+  for (const path of ['dist/*.AppImage', 'dist/linux-install.sh']) assert.ok(upload.includes(path), `artifact does not include ${path}`)
+})
