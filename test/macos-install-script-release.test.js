@@ -6,26 +6,26 @@ const release = await readFile(new URL('../.github/workflows/build-os-artifacts.
 const macJob = release.slice(release.indexOf('  macos:'), release.indexOf('  windows:'))
 const publishJob = release.slice(release.indexOf('  publish-release:'))
 
-test('the macOS job zips the app with ditto, then renders install.sh from that zip', () => {
+test('the macOS job zips the app with ditto, then renders macos-install.sh from that zip', () => {
   const zip = macJob.indexOf('ditto -c -k --keepParent')
   const render = macJob.indexOf('node scripts/render-install-script.mjs')
   assert.ok(zip !== -1 && render > zip)
   assert.ok(macJob.includes('DataLad-Desktop-$version-mac-arm64.zip'))
-  assert.ok(macJob.includes('scripts/macos/install.sh'))
+  assert.ok(macJob.includes('scripts/macos/macos-install.sh'))
 })
 
 test('a release tag must equal the package version, because the script downloads from the tag', () => {
   assert.match(macJob, /refs\/tags\/v\$version/)
 })
 
-test('the macOS artifact carries the arm64 zip and install.sh', () => {
+test('the macOS artifact carries the arm64 zip and macos-install.sh', () => {
   const upload = macJob.slice(macJob.indexOf('name: datalad-desktop-macos'))
-  for (const p of ['dist/DataLad-Desktop-*-mac-arm64.zip', 'dist/install.sh']) {
+  for (const p of ['dist/DataLad-Desktop-*-mac-arm64.zip', 'dist/macos-install.sh']) {
     assert.ok(upload.includes(p), `artifact does not include ${p}`)
   }
 })
 
-test('SHA256SUMS, the attestation and the release files cover install.sh', () => {
+test('SHA256SUMS, the attestation and the release files cover macos-install.sh', () => {
   assert.match(publishJob, /sha256sum [^\n]*\*\.sh/)
   assert.equal(publishJob.split('release-assets/*.sh').length - 1, 2)
 })

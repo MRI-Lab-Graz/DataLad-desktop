@@ -74,7 +74,7 @@ test('keeps read-only permissions', () => {
 
 const macJob = workflow.slice(workflow.indexOf('  install-script-macos:'))
 
-test('the macOS job starts from a runner with no DataLad or git-annex pre-installed and runs install.sh --from-dir', () => {
+test('the macOS job starts from a runner with no DataLad or git-annex pre-installed and runs macos-install.sh --from-dir', () => {
   assert.ok(macJob.length > 0, 'no install-script-macos job')
   assert.match(macJob, /runs-on: macos-latest/)
   assert.doesNotMatch(macJob, /brew install/)
@@ -83,7 +83,7 @@ test('the macOS job starts from a runner with no DataLad or git-annex pre-instal
     'electron-builder --mac dir --arm64',
     'ditto -c -k --keepParent',
     'node scripts/render-install-script.mjs',
-    'bash "$RUNNER_TEMP/release/install.sh" --from-dir'
+    'bash "$RUNNER_TEMP/release/macos-install.sh" --from-dir'
   ]
   let at = -1
   for (const step of order) {

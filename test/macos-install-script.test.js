@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderInstallScript } from '../scripts/render-install-script.mjs'
 
-const path = fileURLToPath(new URL('../scripts/macos/install.sh', import.meta.url))
+const path = fileURLToPath(new URL('../scripts/macos/macos-install.sh', import.meta.url))
 const sh = await readFile(path, 'utf8').catch(() => '')
 const HASH = '0'.repeat(64)
 // The script targets macOS; the tests that execute it need a POSIX bash and fake executables on PATH.
@@ -24,7 +24,7 @@ async function fakeUname(system, machine) {
 
 async function run(script, args, { system = 'Darwin', machine = 'arm64', bin = '' } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'dlad-run-'))
-  const file = join(dir, 'install.sh')
+  const file = join(dir, 'macos-install.sh')
   await writeFile(file, script)
   const home = join(dir, 'home')
   await mkdir(home)
@@ -35,7 +35,7 @@ async function run(script, args, { system = 'Darwin', machine = 'arm64', bin = '
   return { ...r, home, out: `${r.stdout}${r.stderr}` }
 }
 
-test('install.sh is valid bash', posix, () => {
+test('macos-install.sh is valid bash', posix, () => {
   execFileSync('bash', ['-n', path])
 })
 
@@ -54,10 +54,10 @@ async function fakeCurl(body, status = 0) {
 }
 
 // A repo checkout is a template: it must not try to download v__VERSION__, it hands over to the latest release's copy.
-test('an unrendered template runs the latest release install.sh, passing its arguments on', posix, async () => {
+test('an unrendered template runs the latest release macos-install.sh, passing its arguments on', posix, async () => {
   const r = await run(sh, ['--from-dir', '/x'], { bin: await fakeCurl('echo "release copy got: $*"') })
   assert.equal(r.status, 0, r.out)
-  assert.match(r.out, /releases\/latest\/download\/install\.sh/)
+  assert.match(r.out, /releases\/latest\/download\/macos-install\.sh/)
   assert.match(r.out, /release copy got: --from-dir \/x/)
 })
 
@@ -99,9 +99,9 @@ test('never uses sudo and installs only under $HOME', () => {
   assert.doesNotMatch(sh, /["\s]\/Applications\b/)
 })
 
-test('downloads the app from a versioned tag URL; latest is only used to fetch install.sh itself', () => {
+test('downloads the app from a versioned tag URL; latest is only used to fetch macos-install.sh itself', () => {
   assert.match(sh, /releases\/download\/v\$\{APP_VERSION\}\//)
-  assert.deepEqual(sh.match(/releases\/latest\/[^"\s]*/g), ['releases/latest/download/install.sh'])
+  assert.deepEqual(sh.replace(/^\s*#.*$/gm, '').match(/releases\/latest\/[^"\s]*/g), ['releases/latest/download/macos-install.sh'])
 })
 
 test('checks the zip hash before extracting it', () => {
