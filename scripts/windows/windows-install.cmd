@@ -270,10 +270,30 @@ function Install-Git {
     }
 }
 
+# The version git-annex reports ("git-annex version: 10.20260901"), or $null when it cannot be read.
+function Get-InstalledGitAnnexVersion {
+    $command = Get-Command git-annex -ErrorAction SilentlyContinue
+    if (-not $command) {
+        return $null
+    }
+    $ErrorActionPreference = 'Continue'
+    $text = & $command.Source version 2>$null | Out-String
+    if ($text -match 'version:\s*(\d+\.\d+)') {
+        return [version]$Matches[1]
+    }
+    return $null
+}
+
 function Install-GitAnnex {
     if (Get-Command git-annex -ErrorAction SilentlyContinue) {
-        Write-Log 'git-annex is already installed.'
-        return
+        # A release ships a tested DataLad + git-annex pair: an older git-annex is brought up to the pin, a newer one
+        # or one whose version cannot be read is left alone.
+        $installed = Get-InstalledGitAnnexVersion
+        if (-not $installed -or $installed -ge [version]$GitAnnexVersion) {
+            Write-Log 'git-annex is already installed.'
+            return
+        }
+        Write-Log "git-annex $installed is older than the tested $GitAnnexVersion; installing the tested version."
     }
     $installer = Join-Path ([IO.Path]::GetTempPath()) 'dlad-git-annex-installer.exe'
     $manual = "Download $GitAnnexUrl and run it. If Git is installed for all users (in Program Files), run it as an administrator once."

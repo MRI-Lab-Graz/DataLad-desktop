@@ -28,6 +28,8 @@ async function readSkipped(userDataDir) {
 
 async function oneNotice({ tool, name, args, feed }, { runner, fetchJson, resolve, skipped, platform }) {
   try {
+    // Windows: the install script ships a tested git-annex pinned with this DataLad; the app cannot update it.
+    if (tool === 'git-annex' && platform === 'win32') return null
     const path = resolve(tool)
     if (!path) return null
     // The app's own installer put this DataLad there and pins it: nothing the user can do.

@@ -48,3 +48,7 @@ test('the docs name the single Windows file, windows-install.cmd, and not instal
   assert.match(await read('docs/install.md'), /windows-install\.cmd/)
   assert.match(await read('README.md'), /windows-install\.cmd/)
 })
+
+test('the install guide says that running the newest windows-install.cmd also updates DataLad and git-annex to the tested pair', async () => {
+  assert.match(await read('docs/install.md'), /tested (versions|pair)[^\n]*DataLad[^\n]*git-annex|DataLad and git-annex[^\n]*tested/i)
+})

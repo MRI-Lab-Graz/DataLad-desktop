@@ -84,7 +84,7 @@ From a clone of the repository, run `scripts\windows\windows-install.cmd` instea
 installs the latest release and takes the zip's SHA-256 from that release's `SHA256SUMS.txt`. The copy from the
 release page is stricter, because its hash is written into the script itself.
 
-To upgrade, run `windows-install.cmd` from a newer release: the old version is put back if the new one fails. To remove it,
+To upgrade, run `windows-install.cmd` from a newer release: the old version is put back if the new one fails. Each release ships a tested pair of DataLad and git-annex, so this also brings DataLad and an older git-annex up to the tested versions; a newer git-annex of yours is left alone. To remove it,
 run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
 entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.
 

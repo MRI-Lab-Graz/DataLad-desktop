@@ -141,3 +141,19 @@ test('skipNotice ignores an unknown tool or a version that is not a plain versio
   const saved = JSON.parse(await readFile(join(c.userDataDir, 'update-notices.json'), 'utf8'))
   assert.deepEqual(saved, { skipped: { datalad: '1.8.0' } })
 })
+
+// On Windows the install script puts a tested, pinned git-annex next to a tested DataLad; the app cannot update it and
+// the only feed it has is Homebrew's, so a notice would only nag. Updating means running the newest windows-install.cmd.
+test('no git-annex notice on Windows, even when a newer one exists', async () => {
+  const c = await mk({ platform: 'win32', dir: 'C:\\Program Files\\Git\\usr\\bin\\', latest: { dl: '1.7.2', ga: '10.20261105' } })
+  assert.deepEqual(await collectNotices(c), [])
+  assert.ok(!c.calls.includes('https://formulae.brew.sh/api/formula/git-annex.json'), 'the Homebrew feed is not even asked on Windows')
+})
+
+test('the git-annex notice stays on macOS and Linux, where a package manager can update it', async () => {
+  for (const platform of ['darwin', 'linux']) {
+    const n = await collectNotices(await mk({ platform, latest: { dl: '1.7.2', ga: '10.20261105' } }))
+    assert.equal(n.length, 1, platform)
+    assert.equal(n[0].tool, 'git-annex', platform)
+  }
+})
