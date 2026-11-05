@@ -103,10 +103,13 @@ test('downloads from a versioned tag URL; latest is only used to fetch linux-ins
   assert.deepEqual(sh.replace(/^\s*#.*$/gm, '').match(/releases\/latest\/[^"\s]*/g), ['releases/latest/download/linux-install.sh'])
 })
 
-test('checks the hash before the file is made executable or moved into place', () => {
-  assert.ok(sh.indexOf('check_hash') !== -1)
-  assert.ok(sh.indexOf('check_hash "$image"') < sh.indexOf('chmod +x'))
-  assert.ok(sh.indexOf('check_hash "$image"') < sh.indexOf('mv '))
+// The file is copied into a private work folder first and the copy is what gets checked, so it cannot change between the check and the install.
+test('checks the hash of the private copy, after copying it and before it is made executable or moved into place', () => {
+  const copy = sh.indexOf('cp "$image" "$work/new.AppImage"')
+  const check = sh.indexOf('check_hash "$work/new.AppImage"')
+  assert.ok(copy !== -1 && check > copy, 'hash must be checked on the copy')
+  assert.ok(check < sh.indexOf('chmod +x'))
+  assert.ok(check < sh.indexOf('mv -f'))
 })
 
 // Under `curl | bash` the shell reads the script from stdin, so it has to be parsed completely first.

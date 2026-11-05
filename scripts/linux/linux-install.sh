@@ -72,8 +72,8 @@ main() {
             log "Downloading $APP_URL"
             curl -fsSL --retry 3 -o "$image" "$APP_URL" || die "Download failed: $APP_URL"
         fi
-        check_hash "$image"
-        cp "$image" "$work/new.AppImage"
+        cp "$image" "$work/new.AppImage"   # the copy is checked, so the file cannot change after the check
+        check_hash "$work/new.AppImage"
         chmod +x "$work/new.AppImage"
         mv -f "$work/new.AppImage" "$TARGET"
         cat > "$MENU_DIR/datalad-desktop.desktop" <<DESKTOP
