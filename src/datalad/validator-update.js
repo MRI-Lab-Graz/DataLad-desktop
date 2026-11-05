@@ -30,6 +30,7 @@ export function pickRelease(pypiJson, { now, cooldownDays }) {
   if (!releases || typeof releases !== 'object' || Array.isArray(releases)) return null
   const cutoffMs = now.getTime() - cooldownDays * 86400000
   let best = null
+  let bestUploaded = null
   for (const [version, files] of Object.entries(releases)) {
     if (!/^\d+(\.\d+)*$/.test(version) || !isSafe(version) || !Array.isArray(files)) continue
     let earliest = Infinity
@@ -41,9 +42,12 @@ export function pickRelease(pypiJson, { now, cooldownDays }) {
     }
     if (!(earliest <= cutoffMs)) continue // also rejects NaN and no non-yanked file
     const c = best && compareVersions(version, best)
-    if (!best || c > 0 || (c === 0 && version.length > best.length)) best = version
+    if (!best || c > 0 || (c === 0 && version.length > best.length)) {
+      best = version
+      bestUploaded = new Date(earliest).toISOString()
+    }
   }
-  return best && { version: best, cutoff: new Date(cutoffMs).toISOString() }
+  return best && { version: best, cutoff: new Date(cutoffMs).toISOString(), uploaded: bestUploaded }
 }
 
 const PYPI_URL = 'https://pypi.org/pypi/prism-validator/json'
@@ -100,7 +104,7 @@ function notTheVersionsFault(failure, uvPath) {
 // silent, nothing remembered. 'failed' = the version's own fault (install error, wrong version, safety test, broken after
 // the swap): remembered and shown once.
 // `rename` (synchronous) is injectable so tests can simulate a Windows file lock (EBUSY/EPERM).
-export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, manual = false, platform = process.platform, rename = renameSync }) {
+export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, confirmedVersion, platform = process.platform, rename = renameSync }) {
   const next = `${envDir}.next`
   const old = `${envDir}.old`
   const stateFile = join(userDataDir, STATE)
@@ -114,15 +118,19 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
 
     let pypi
     try { pypi = await fetchJson(PYPI_URL) } catch { return { status: 'retry', from, reason: OFFLINE } }
-    // manual = the user clicked "Update now": no cooldown (the UI asked them to confirm), and a version that failed before may be retried.
-    const pick = pickRelease(pypi, { now: now(), cooldownDays: manual ? 0 : PRISM_COOLDOWN_DAYS })
-    if (!pick || !from || compareVersions(from, pick.version) >= 0) {
-      // Tell the UI about a newer release that is only waiting out the cooldown.
+    // confirmedVersion = the user clicked "Update now" and confirmed exactly this version: no cooldown, and a version that
+    // failed before may be retried. Only that version is ever installed: if PyPI now has a newer one, nothing is built and
+    // the newer number is reported, so the user confirms again. Its cutoff is the release's own upload time, so dependencies
+    // published after it are not pulled in.
+    const pick = pickRelease(pypi, { now: now(), cooldownDays: confirmedVersion ? 0 : PRISM_COOLDOWN_DAYS })
+    const wanted = confirmedVersion ? pick?.version === confirmedVersion : pick
+    if (!wanted || !from || compareVersions(from, pick.version) >= 0) {
+      // Tell the UI about a newer release that is only waiting out the cooldown (or that appeared after the confirmation).
       const newest = pickRelease(pypi, { now: now(), cooldownDays: 0 })
       return from && newest && compareVersions(from, newest.version) < 0 ? { status: 'current', from, newer: newest.version } : { status: 'current' }
     }
     const state = await readFile(stateFile, 'utf8').then(JSON.parse).catch(() => null)
-    if (!manual && state?.failedVersion === pick.version) return { status: 'current' }
+    if (!confirmedVersion && state?.failedVersion === pick.version) return { status: 'current' }
     const to = pick.version
     retry = (reason) => ({ status: 'retry', from, to, reason })
 
@@ -144,7 +152,7 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
     // the one fixed index, no uv.toml or UV_* index variables.
     const compiled = await runner.run(uvPath, ['pip', 'compile', '--no-config', '--python-version', MANAGED_ENV.python,
       '--universal', '--generate-hashes', '--no-header', '--only-binary', ':all:', '--index-url', 'https://pypi.org/simple',
-      '--exclude-newer', pick.cutoff, '-o', lockPath, input], { timeoutMs: COMPILE_TIMEOUT_MS, env: UV_ENV })
+      '--exclude-newer', confirmedVersion ? pick.uploaded : pick.cutoff, '-o', lockPath, input], { timeoutMs: COMPILE_TIMEOUT_MS, env: UV_ENV })
     // A dependency still inside the cooldown can fail the resolve now and resolve later: never remember this version as bad.
     if (compiled.failed) return retry(notTheVersionsFault(compiled, uvPath) ?? NOT_PREPARED)
     const built = await ensureEnv({ runner, uvPath, envDir: next, lockPath, platform, source: 'auto-update', timeoutMs: BUILD_TIMEOUT_MS })

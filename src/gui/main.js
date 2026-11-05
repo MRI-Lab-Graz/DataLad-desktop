@@ -487,7 +487,7 @@ handle('updates:validator-now', async (event) => {
   if (response !== 1) return { status: 'cancelled' }
   return updateChecks.updateNow(() => {
     for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send('updates:changed')
-  })
+  }, newer) // exactly the version in the dialog, never "whatever is newest now"
 })
 
 handle('updates:skip', async (_event, { tool, version } = {}) => {

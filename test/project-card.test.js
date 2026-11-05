@@ -56,7 +56,7 @@ test('only a plain Git folder (or an unknown one) gets a type badge; DataLad pro
 // --- validity badge ---
 
 test('validity: valid, invalid, checking and not checked, each with plain words', () => {
-  assert.deepEqual(describeValidity({ label: 'PRISM', check: { verdict: 'valid' } }), { text: 'PRISM ✓ valid', tone: 'ok', title: 'PRISM and BIDS were checked together and passed.' })
+  assert.deepEqual(describeValidity({ label: 'PRISM', check: { verdict: 'valid' } }), { text: 'PRISM ✓ valid', tone: 'ok', title: 'Checked with the validator: no problems found.' })
   assert.equal(describeValidity({ label: 'BIDS', check: { verdict: 'invalid', errorCount: 3 } }).text, 'BIDS ✗ 3 problems')
   assert.equal(describeValidity({ label: 'BIDS', check: { verdict: 'invalid', errorCount: 1 } }).text, 'BIDS ✗ 1 problem')
   assert.equal(describeValidity({ label: 'BIDS', check: { verdict: 'invalid', errorCount: 0 } }).text, 'BIDS ✗ not valid')

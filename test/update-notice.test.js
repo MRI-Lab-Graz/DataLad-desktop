@@ -84,3 +84,9 @@ test('Setup card has the "Update now" button and its line; the page shows versio
   assert.match(app, /elements\.prismNewer\.textContent =/)
   assert.doesNotMatch(app, /prismNewer\.innerHTML/)
 })
+
+test('"Update now": if a newer release appeared after the confirmation, the page says so instead of "did not work"', () => {
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  const click = app.slice(app.indexOf('elements.prismUpdateNow.addEventListener'), app.indexOf('elements.prismUpdateNow.addEventListener') + 1400)
+  assert.match(click, /result\.status === 'current'[\s\S]{0,260}came out/)
+})

@@ -36,7 +36,7 @@ export function describeTypeBadge(classification) {
 // Anything that is not an exact, known verdict reads as "not checked", never as valid.
 export function describeValidity({ label, check }) {
   const verdict = check && typeof check === 'object' ? check.verdict : undefined
-  if (verdict === 'valid') return { text: `${label} ✓ valid`, tone: 'ok', title: 'PRISM and BIDS were checked together and passed.' }
+  if (verdict === 'valid') return { text: `${label} ✓ valid`, tone: 'ok', title: 'Checked with the validator: no problems found.' }
   if (verdict === 'invalid') {
     const n = Number.isSafeInteger(check.errorCount) ? check.errorCount : 0
     return { text: n > 0 ? `${label} ✗ ${n} ${plural(n, 'problem', 'problems')}` : `${label} ✗ not valid`, tone: 'bad', title: 'Click to see what to fix.' }

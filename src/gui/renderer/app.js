@@ -835,6 +835,7 @@ elements.prismUpdateNow.addEventListener('click', async () => {
     const result = await api.updateValidatorNow()
     if (result.status === 'updated') await refreshPrismEnvStatus()
     else if (result.status === 'deferred') message = 'Another update or install is running. Please try again in a minute.'
+    else if (result.status === 'current' && result.newer) message = `An even newer version (${result.newer}) came out meanwhile. Check it above and click Update now again if you want it.`
     else if (result.status !== 'cancelled') message = result.reason ?? 'The update did not work, so the current version stays.'
   } catch {
     message = 'The update did not work, so the current version stays.'

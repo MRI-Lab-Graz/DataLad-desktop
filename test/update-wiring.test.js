@@ -237,8 +237,8 @@ test('updateNow: runs a manual update inside the guard, stores the result and em
     update: async (opts) => { seen.push(opts); return { status: 'updated', from: '1.0.0', to: '1.1.0' } },
     notices: async () => []
   })
-  const result = await checks.updateNow(() => changes++)
-  assert.deepEqual(seen, [{ manual: true }])
+  const result = await checks.updateNow(() => changes++, '1.1.0')
+  assert.deepEqual(seen, [{ confirmedVersion: '1.1.0' }])
   assert.deepEqual(result, { status: 'updated', from: '1.0.0', to: '1.1.0' })
   assert.deepEqual(checks.status().validator, result)
   assert.equal(changes, 1)
@@ -247,16 +247,16 @@ test('updateNow: runs a manual update inside the guard, stores the result and em
 test('updateNow: disabled by policy = no network, busy lock = deferred, never throws', async () => {
   let updates = 0
   const off = createUpdateChecks({ disabled: true, guard: guard(), update: async () => updates++, notices: async () => [] })
-  assert.deepEqual(await off.updateNow(() => {}), { status: 'disabled' })
+  assert.deepEqual(await off.updateNow(() => {}, '1.1.0'), { status: 'disabled' })
   const busy = createUpdateChecks({ disabled: false, guard: { run: async () => { throw new Error('busy') } }, update: async () => updates++, notices: async () => [] })
-  assert.deepEqual(await busy.updateNow(() => { throw new Error('window gone') }), { status: 'deferred' })
+  assert.deepEqual(await busy.updateNow(() => { throw new Error('window gone') }, '1.1.0'), { status: 'deferred' })
   assert.equal(updates, 0)
 })
 
-test('createAppUpdateChecks: updateNow passes manual:true on to the update with the same deps', async () => {
+test('createAppUpdateChecks: updateNow passes the confirmed version on to the update with the same deps', async () => {
   const { seen, checks } = await appChecks()
-  await checks.updateNow(() => {})
-  assert.equal(seen.update.manual, true)
+  await checks.updateNow(() => {}, '1.1.0')
+  assert.equal(seen.update.confirmedVersion, '1.1.0')
   assert.equal(seen.update.envDir, '/env')
 })
 
@@ -276,7 +276,25 @@ test('updateNow: a click that did not install keeps the cached status, so the bu
   for (const status of ['deferred', 'retry', 'failed', 'current']) {
     const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => ({ status }), notices: async () => [] })
     checks.status().validator = before
-    assert.equal((await checks.updateNow(() => {})).status, status)
+    assert.equal((await checks.updateNow(() => {}, '1.1.0')).status, status)
     assert.equal(checks.status().validator, before)
   }
+})
+
+test('updateNow: a "current" answer that names an even newer version replaces the cached one, so the card shows the new number', async () => {
+  const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => ({ status: 'current', from: '1.0.0', newer: '1.2.0' }), notices: async () => [] })
+  checks.status().validator = { status: 'current', from: '1.0.0', newer: '1.1.0' }
+  await checks.updateNow(() => {}, '1.1.0')
+  assert.equal(checks.status().validator.newer, '1.2.0')
+})
+
+test('updateNow without a version string does nothing (the confirmed version is mandatory)', async () => {
+  let updates = 0
+  const checks = createUpdateChecks({ disabled: false, guard: guard(), update: async () => updates++, notices: async () => [] })
+  for (const bad of [undefined, '', 5, '1.2; rm', '<b>']) assert.deepEqual(await checks.updateNow(() => {}, bad), { status: 'current' })
+  assert.equal(updates, 0)
+})
+
+test('updates:validator-now hands the version the user confirmed to updateNow', () => {
+  assert.match(handler('updates:validator-now'), /updateChecks\.updateNow\(\(\) => \{[\s\S]*?\}, newer\)/)
 })
