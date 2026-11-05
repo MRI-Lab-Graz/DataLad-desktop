@@ -41,7 +41,7 @@ The team must avoid conflicts on main while integrating safely.
 ## Failure injection
 
 - On two feature branches, edit the same line in `README.md`.
-- Trigger a merge conflict during integration. If the same file changed on both branches, the **Merge in progress** banner appears above **Files To Save**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back; it asks you to confirm). **Keep it deleted** appears instead of the other branch's version when that branch removed the file. **I fixed it myself** is refused while the `<<<<<<<` / `>>>>>>>` markers are still in the file.
+- Trigger a merge conflict during integration. If the same file changed on both branches, the **Merge in progress** banner appears above **What changed**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back; it asks you to confirm). **Keep it deleted** appears instead of the other branch's version when that branch removed the file. **I fixed it myself** is refused while the `<<<<<<<` / `>>>>>>>` markers are still in the file.
 - Recover by choosing the scientifically correct wording (or editing it yourself), then finishing the merge.
 
 ## Completion criteria

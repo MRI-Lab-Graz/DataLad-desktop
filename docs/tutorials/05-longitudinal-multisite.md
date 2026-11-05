@@ -37,7 +37,7 @@ must ingest new waves while preserving site-level traceability.
 3. Validate integration, switch to `main` and merge `integration/wave-01` the same way.
 4. Repeat for wave 2 with the same discipline.
 5. Use Update before each integration merge to reduce divergence.
-   - If Update leaves conflicts, the **Merge in progress** banner appears above **Files To Save**.
+   - If Update leaves conflicts, the **Merge in progress** banner appears above **What changed**.
    - For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
 6. Publish only after each wave integration passes review.
 

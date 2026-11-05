@@ -52,3 +52,31 @@ export function describeValidity({ label, check }) {
   }
   return { text: label, tone: 'unknown', title: '' }
 }
+
+// What the changed files looked like when the check ran: if it differs later, the result is old.
+export function changeSignature(files) {
+  return (Array.isArray(files) ? files : []).map((f) => `${f?.status}:${f?.path}`).sort().join('\n')
+}
+
+// The validity box inside the Save area. null = nothing to show (not a BIDS/PRISM project, or no result yet).
+// Only a fresh "not valid" holds Save back; Save checks again by itself, so an old result never blocks.
+export function describeSaveValidity({ check, stale }) {
+  const verdict = check && typeof check === 'object' ? check.verdict : undefined
+  if (!['valid', 'invalid', 'checking', 'unchecked'].includes(verdict)) return null
+  const names = check.kind === 'prism' ? 'PRISM and BIDS' : 'BIDS'
+  const old = ' Files changed since: press Check again.'
+  if (verdict === 'checking') return { text: 'Checking your data…', tone: 'wait', blocksSave: false }
+  if (verdict === 'unchecked') {
+    const missing = check.reason === 'validator-missing'
+    return { text: missing ? 'Not checked: the check needs a one-time install (Setup, PRISM Validator).' : 'The check could not run. Press Check again.', tone: 'unknown', blocksSave: false }
+  }
+  if (verdict === 'valid') {
+    return stale
+      ? { text: `No problems when last checked.${old}`, tone: 'unknown', blocksSave: false }
+      : { text: `✓ ${names}: no problems found.`, tone: 'ok', blocksSave: false }
+  }
+  const n = Number.isSafeInteger(check.errorCount) ? check.errorCount : 0
+  const what = n > 0 ? `${n} ${plural(n, 'problem', 'problems')}` : 'Not valid'
+  if (stale) return { text: `✗ ${what} when last checked.${old}`, tone: 'bad', blocksSave: false }
+  return { text: `✗ ${what}. Save stays off until ${n === 1 || n === 0 ? 'it is' : 'they are'} fixed.`, tone: 'bad', blocksSave: true }
+}

@@ -20,3 +20,13 @@ export function suggestMessage(files) {
   }
   return `${verb} ${files.length} files`
 }
+
+// A nudge, never a block: a message like "update" is allowed, but it will not tell future you what happened.
+const VAGUE = new Set(['update', 'updates', 'updated', 'change', 'changes', 'changed', 'fix', 'fixes', 'fixed', 'test', 'tests', 'wip', 'stuff', 'misc', 'edit', 'edits', 'save', 'saved', 'commit', 'asdf'])
+export function vagueMessageNudge(message) {
+  const text = String(message ?? '').trim()
+  if (!text) return ''
+  const plain = text.toLowerCase().replace(/[^\p{L}\p{N} ]+$/u, '')
+  if (!VAGUE.has(plain) && text.length >= 8) return ''
+  return `"${text}" will not tell future you much. Say what you did and why, for example "Fixed sidecar names in sub-01".`
+}

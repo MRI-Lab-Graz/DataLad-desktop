@@ -84,6 +84,14 @@
               choice is remembered on this computer only.
             </p>
           </div>
+          <label class="power-toggle-wrap" for="save-tips-toggle">
+            <input type="checkbox" id="save-tips-toggle" role="switch" aria-describedby="save-tips-help" checked />
+            Show tips in the Save area
+          </label>
+          <p id="save-tips-help" class="lede-small">
+            Short hints that explain the steps and suggest better save messages. Turn them off once you know the routine;
+            the validity check and the message box stay.
+          </p>
         </div>
 
         <div class="setup-section">
@@ -291,11 +299,6 @@
             <p id="last-commit-meta" class="hero-meta hero-meta-idle">
               Last save status appears here after selecting a project.
             </p>
-            <details id="validity-details" class="validity-details" hidden>
-              <summary>Show what to fix</summary>
-              <ul id="validity-problems" class="validity-problems"></ul>
-              <button id="validity-recheck" class="button button-ghost button-inline" type="button">Check again</button>
-            </details>
           </div>
           <div class="strip-state-group">
             <span id="last-action-state" class="state-pill state-idle">No actions yet</span>
@@ -325,8 +328,8 @@
           <div class="section-head">
             <h2 id="project-actions-title">Save</h2>
           </div>
-          <p class="lede-small">
-            Write down what you've done and save your files. This is the action you'll
+          <p class="lede-small save-tip">
+            Finished a small step? Check it, then tell future you what you did. This is the action you'll
             use most, and it works fully offline.
           </p>
 
@@ -340,9 +343,9 @@
             </div>
           </label>
 
-          <section class="status-box" aria-labelledby="changed-files-title">
+          <section id="save-step-changes" class="status-box" aria-labelledby="changed-files-title">
             <div class="section-head branch-head">
-              <h3 id="changed-files-title">Files To Save</h3>
+              <h3 id="changed-files-title"><span class="save-tip">1 · </span>What changed</h3>
               <div class="section-actions">
                 <button id="changed-files-select-all" class="button button-ghost button-inline" type="button">
                   All
@@ -352,16 +355,26 @@
                 </button>
               </div>
             </div>
-            <p class="lede-small">Choose which changed files this save should include.</p>
+            <p class="lede-small save-tip">Choose which changed files this save should include.</p>
             <div id="changed-files-output" class="panel panel-muted panel-compact">
               No changed files yet.
             </div>
           </section>
 
-          <label class="field">
-            <span id="message-field-label">Message</span>
+          <section id="save-step-valid" class="status-box" aria-labelledby="save-valid-title" hidden>
+            <div class="section-head branch-head">
+              <h3 id="save-valid-title"><span class="save-tip">2 · </span>Is it valid?</h3>
+            </div>
+            <p id="save-validity-text" class="save-validity-text" role="status"></p>
+            <ul id="save-validity-problems" class="validity-problems"></ul>
+            <button id="save-validity-recheck" class="button button-ghost button-inline" type="button">Check again</button>
+          </section>
+
+          <label id="save-step-message" class="field">
+            <span id="message-field-label"><span class="save-tip">3 · </span>What did you do, and why?</span>
             <input id="message" type="text" placeholder="Describe what you changed" />
           </label>
+          <p id="message-nudge" class="hint-inline hint-inline-warning save-tip" hidden></p>
 
           <p id="save-guidance" class="hint-inline">Add a message, or Save will ask you for one.</p>
           <button id="use-suggestion" class="button button-ghost button-inline" type="button" hidden>Use suggestion</button>
@@ -372,18 +385,8 @@
             type="button"
             title="Save the current state of your files with a message. Works fully offline."
           >
-            Save
+            Save this step
           </button>
-
-          <section class="status-box" aria-labelledby="recent-commits-title">
-            <div class="section-head branch-head">
-              <h3 id="recent-commits-title">Recent saves</h3>
-              <button id="history-full-link" class="button button-ghost button-inline" type="button">Full history <span aria-hidden="true">▸</span></button>
-            </div>
-            <div id="recent-commits-output" class="panel panel-muted panel-compact">
-              Recent saves appear here.
-            </div>
-          </section>
 
           <details id="last-action-details" class="branch-details">
             <summary>Details of last action</summary>
