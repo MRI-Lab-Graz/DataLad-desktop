@@ -7,7 +7,7 @@ import { checkPins, parsePins } from '../scripts/check-install-pins.mjs'
 const sha = (text) => createHash('sha256').update(text).digest('hex').toUpperCase()
 const MIRROR = 'https://mirror.example/windows/'
 const pins = {
-  gitAnnex: { version: '10.20260901', sha256: sha('annex'), url: `${MIRROR}git-annex-installer_10.20260901_x64.exe` },
+  gitAnnex: { version: '10.20260901', sha256: sha('annex'), url: `${MIRROR}git-annex-installer_10.20260901_x64.exe`, fallbackUrl: 'https://github.example/git-annex-installer_10.20260901_x64.exe' },
   git: { url: 'https://github.example/Git-64-bit.exe', sha256: sha('git') }
 }
 const listing = (...versions) => versions.map((v) => `<a href="git-annex-installer_${v}_x64.exe">x</a>`).join('\n')
@@ -18,7 +18,7 @@ const fakeFetch = (files, page) => async (url) => {
     ? { ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode(files[url]).buffer }
     : { ok: false, status: 404 }
 }
-const files = { [pins.gitAnnex.url]: 'annex', [pins.git.url]: 'git' }
+const files = { [pins.gitAnnex.url]: 'annex', [pins.gitAnnex.fallbackUrl]: 'annex', [pins.git.url]: 'git' }
 
 test('parsePins reads the pins from install.ps1, the only place they are written', async () => {
   const parsed = parsePins(await readFile(new URL('../scripts/windows/install.ps1', import.meta.url), 'utf8'))
@@ -78,4 +78,15 @@ test('a download that drops once is retried; a changed file is never retried int
   const down = await checkPins({ fetchImpl: flaky(fakeFetch(files, listing('10.20260901'))), pins, retryDelayMs: 0 })
   assert.equal(down.ok, false)
   assert.match(down.problems[0], /could not fetch/)
+})
+
+test('the GitHub fallback must match the pin too, so a swapped fallback fails the check', async () => {
+  const result = await checkPins({ fetchImpl: fakeFetch({ ...files, [pins.gitAnnex.fallbackUrl]: 'swapped' }, listing('10.20260901')), pins, retryDelayMs: 0 })
+  assert.equal(result.ok, false)
+  assert.match(result.problems[0], /git-annex 10\.20260901 \(fallback\).*SHA-256/)
+})
+
+test('parsePins reads the fallback URL', async () => {
+  const parsed = parsePins(await readFile(new URL('../scripts/windows/install.ps1', import.meta.url), 'utf8'))
+  assert.equal(parsed.gitAnnex.fallbackUrl, 'https://github.com/con/git-annex/releases/download/10.20260901/git-annex-installer_10.20260901_x64.exe')
 })

@@ -29,9 +29,11 @@ $AppZipUrl = "https://github.com/$Repo/releases/download/v$AppVersion/$AppZipNam
 $GitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe'
 $GitSha256 = 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6'
 # DataLad's mirror keeps one file per git-annex version; the author's own current/ URL moves and would break this pin.
+# The same file is also a release asset on GitHub (same SHA-256), tried when the mirror cannot be reached.
 $GitAnnexVersion = '10.20260901'
 $GitAnnexSha256 = '582F0EF30AC9BE560285D9510F27EBDD95EBDF01719DEC42543B591F6BEF0095'
 $GitAnnexUrl = "https://datasets.datalad.org/datalad/packages/windows/git-annex-installer_${GitAnnexVersion}_x64.exe"
+$GitAnnexFallbackUrl = "https://github.com/con/git-annex/releases/download/${GitAnnexVersion}/git-annex-installer_${GitAnnexVersion}_x64.exe"
 
 # Steps that cannot finish are collected here; the script reports them and exits non-zero at the end.
 $script:Failures = @()
@@ -247,8 +249,13 @@ function Install-GitAnnex {
     try {
         Get-VerifiedFile -Url $GitAnnexUrl -Sha256 $GitAnnexSha256 -OutFile $installer
     } catch {
-        $script:Failures += "git-annex could not be downloaded: $($_.Exception.Message) $manual"
-        return
+        Write-Log "The DataLad mirror did not work ($($_.Exception.Message)). Trying GitHub."
+        try {
+            Get-VerifiedFile -Url $GitAnnexFallbackUrl -Sha256 $GitAnnexSha256 -OutFile $installer
+        } catch {
+            $script:Failures += "git-annex could not be downloaded: $($_.Exception.Message) $manual"
+            return
+        }
     }
     Write-Log 'Installing git-annex...'
     try {
