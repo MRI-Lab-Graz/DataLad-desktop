@@ -124,3 +124,23 @@ test('unsavedLeftovers ignores a nested dataset entry: on Windows git reports it
   assert.deepEqual(unsavedLeftovers(['sub', 'my file.csv'], after), ['my file.csv'])
   assert.deepEqual(unsavedLeftovers(['sub'], after), [])
 })
+
+test('reconcileSelection auto-selects every change until the user has chosen, and keeps their choice after', async () => {
+  const { reconcileSelection } = await import('../src/gui/renderer/save-gating.js')
+  const run = (files, selected, explicit, preserve = true) => {
+    const out = reconcileSelection({ files: files.map((path) => ({ path })), selected: new Set(selected), explicit, preserve })
+    return { selected: [...out.selected].sort(), explicit: out.explicit }
+  }
+  // A leftover entry was auto-selected, then a real change arrives and the leftover is gone: the new file must be selected.
+  assert.deepEqual(run(['README.md'], ['figures/plot.ipynb'], false), { selected: ['README.md'], explicit: false })
+  // New files join an untouched selection.
+  assert.deepEqual(run(['a', 'b'], ['a'], false), { selected: ['a', 'b'], explicit: false })
+  // Once the user ticked or unticked something, their choice stays and vanished paths drop out.
+  assert.deepEqual(run(['a', 'b'], ['a', 'gone'], true), { selected: ['a'], explicit: true })
+  assert.deepEqual(run(['a', 'b'], [], true), { selected: [], explicit: true }) // "None" is a choice too
+  // A fresh load resets everything.
+  assert.deepEqual(run(['a'], ['x'], true, false), { selected: ['a'], explicit: false })
+  // A ticked file inside a nested dataset survives a refresh.
+  const nested = reconcileSelection({ files: [{ path: 'sub', nestedFiles: [{ path: 'sub/a.txt' }] }], selected: new Set(['sub/a.txt']), explicit: true, preserve: true })
+  assert.deepEqual([...nested.selected], ['sub/a.txt'])
+})

@@ -110,3 +110,16 @@ export function unsavedLeftovers(selectedPaths, filesAfter) {
   const stillChanged = new Set((filesAfter ?? []).filter((entry) => !entry.isSubmodule).map((entry) => entry.path))
   return selectedPaths.filter((path) => stillChanged.has(path))
 }
+
+/**
+ * Which changed files are ticked after a status refresh. Until the user ticks or unticks something every change is
+ * ticked, new ones included (a leftover entry that disappears must not leave the real change unticked and Save
+ * disabled). Once they have chosen, their choice stays; paths that are no longer changed drop out.
+ *
+ * @returns {{ selected: Set<string>, explicit: boolean }}
+ */
+export function reconcileSelection({ files, selected, explicit, preserve }) {
+  if (!preserve || !explicit) return { selected: new Set(files.map((entry) => entry.path)), explicit: false }
+  const available = collectChangedPaths(files)
+  return { selected: new Set([...selected].filter((path) => available.has(path))), explicit: true }
+}
