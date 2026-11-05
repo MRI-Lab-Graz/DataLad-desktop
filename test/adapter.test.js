@@ -1220,6 +1220,17 @@ test('runCommand builds a datalad create call for createProject', async () => {
   assert.deepEqual(runner.calls[0].args, ['create', '--', '/tmp/new-proj'])
 })
 
+test('createProject starts the project on main, whatever the machine\'s git default is', async () => {
+  const runner = new FakeRunner()
+  const adapter = new DataLadAdapter({ runner })
+  await adapter.runCommand('createProject', { targetPath: '/tmp/new-proj' })
+
+  const env = runner.calls[0].options.env
+  assert.equal(env.GIT_CONFIG_COUNT, '1')
+  assert.equal(env.GIT_CONFIG_KEY_0, 'init.defaultBranch')
+  assert.equal(env.GIT_CONFIG_VALUE_0, 'main')
+})
+
 test('runCommand maps createProject failure to researcher-facing non-empty-folder message', async () => {
   const runner = new FakeRunner()
   runner.set('datalad', ['create', '--', '/tmp/existing'], {

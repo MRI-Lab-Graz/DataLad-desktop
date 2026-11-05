@@ -1588,7 +1588,10 @@ export class DataLadAdapter {
           args.push('--force')
         }
         args.push('--', request.targetPath)
-        return { command: 'datalad', args, options: {} }
+        // datalad create has no option for the first branch's name; the tutorials and docs say "main", while a
+        // machine's git default may still be "master" (Git for Windows). The runner appends its own settings after these.
+        const env = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'init.defaultBranch', GIT_CONFIG_VALUE_0: 'main' }
+        return { command: 'datalad', args, options: { env } }
       }
       case 'createSubdataset': {
         const parentPath = request.projectPath
