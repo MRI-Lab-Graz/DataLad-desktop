@@ -21,11 +21,13 @@ export function stepRunner({ getPage, outDir }) {
 // Same lookup as the app (Homebrew folders, .exe/.com only on Windows).
 const onPath = (cmd) => resolveTool(cmd) !== null
 
-// git-annex leaves read-only objects; make everything writable first (POSIX only; Windows needs no chmod).
+// git-annex leaves read-only objects; make everything writable first. On Windows a read-only folder cannot be
+// removed by Node 20's fs.rm (EPERM; Node 22 copes), so clear the attribute on everything below the folder.
 export async function removeTree(dir) {
-  if (process.platform !== 'win32') {
-    try { execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' }) } catch {}
-  }
+  try {
+    if (process.platform === 'win32') execFileSync('attrib', ['-R', join(dir, '*'), '/S', '/D'], { stdio: 'ignore' })
+    else execFileSync('chmod', ['-R', 'u+w', dir], { stdio: 'ignore' })
+  } catch {}
   try {
     await rm(dir, { recursive: true, force: true, maxRetries: 5 })
   } catch (err) {
