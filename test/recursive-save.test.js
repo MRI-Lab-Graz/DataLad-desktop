@@ -28,7 +28,8 @@ test('the active folder is the project root, while the dataset list still feeds 
 })
 
 test('a ticked file inside a nested dataset survives a status refresh', () => {
+  // The behaviour itself (nested paths included) is tested on reconcileSelection in save-gating.test.js.
   const body = fnBody('function syncSelectedChangedPaths')
-  assert.match(body, /const availablePaths = collectChangedPaths\(files\)/)
-  assert.match(app, /import \{[^}]*collectChangedPaths[^}]*\} from '\.\/save-gating\.js'/)
+  assert.match(body, /reconcileSelection\(/)
+  assert.match(app, /import \{[^}]*reconcileSelection[^}]*\} from '\.\/save-gating\.js'/)
 })

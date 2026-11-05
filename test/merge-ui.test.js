@@ -1,12 +1,25 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from '../src/gui/renderer/merge-ui.js'
+import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates, mergeSelection } from '../src/gui/renderer/merge-ui.js'
 
 const clean = { stagedCount: 0, unstagedCount: 0, untrackedCount: 2, mergeInProgress: false, files: [] }
 
 test('the picker offers every local branch except the current one', () => {
   assert.deepEqual(mergeCandidates(['feature', 'main', 'x'], 'main'), ['feature', 'x'])
   assert.deepEqual(mergeCandidates([], null), [])
+})
+
+test('git-annex adjusted branches are internal and never offered', () => {
+  assert.deepEqual(mergeCandidates(['adjusted/main(unlocked)', 'feature', 'main'], 'main'), ['feature'])
+  assert.deepEqual(mergeCandidates(['adjusted/main(unlocked)', 'feature'], 'adjusted/main(unlocked)'), ['feature'])
+  assert.deepEqual(mergeCandidates(['adjusted/notes', 'x'], 'main'), ['adjusted/notes', 'x']) // a researcher's own branch name
+})
+
+test('a refreshed picker keeps the branch the user chose, when it is still offered', () => {
+  assert.equal(mergeSelection(['a', 'b'], 'b'), 'b')
+  assert.equal(mergeSelection(['a', 'b'], 'gone'), 'a')
+  assert.equal(mergeSelection(['a', 'b'], ''), 'a')
+  assert.equal(mergeSelection([], 'b'), '')
 })
 
 test('merging is blocked with a plain reason, first matching rule wins', () => {

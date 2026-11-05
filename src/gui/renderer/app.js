@@ -13,8 +13,8 @@ import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { displayCommand, isRunCommit, parseRunRecord } from './run-record.js'
 import { renderAnnexBadge } from './file-badges.js'
-import { collectChangedPaths, computeSaveGating, unsavedLeftovers } from './save-gating.js'
-import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates } from './merge-ui.js'
+import { computeSaveGating, reconcileSelection, unsavedLeftovers } from './save-gating.js'
+import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates, mergeSelection } from './merge-ui.js'
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { linesOf, defaultRunMessage, computeRunGating } from './run-dialog.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
@@ -2980,27 +2980,14 @@ function renderDismissibleEnvironmentOutput(bodyHtml, label = 'Setup status') {
 }
 
 function syncSelectedChangedPaths(files, preserveSelection) {
-  const availablePaths = collectChangedPaths(files)
-
-  if (!preserveSelection) {
-    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
-    state.hasExplicitChangedSelection = false
-    return
-  }
-
-  if (state.selectedChangedPaths.size === 0 && !state.hasExplicitChangedSelection) {
-    state.selectedChangedPaths = new Set(files.map((entry) => entry.path))
-    return
-  }
-
-  const nextSelection = new Set()
-  for (const selectedPath of state.selectedChangedPaths) {
-    if (availablePaths.has(selectedPath)) {
-      nextSelection.add(selectedPath)
-    }
-  }
-
-  state.selectedChangedPaths = nextSelection
+  const { selected, explicit } = reconcileSelection({
+    files,
+    selected: state.selectedChangedPaths,
+    explicit: state.hasExplicitChangedSelection,
+    preserve: preserveSelection
+  })
+  state.selectedChangedPaths = selected
+  state.hasExplicitChangedSelection = explicit
 }
 
 function renderWorkingTreeSummary(overrideMessage = null) {
@@ -3262,7 +3249,9 @@ elements.useSuggestionButton.addEventListener('click', () => {
 
 function renderMergeBranchSelect() {
   const candidates = mergeCandidates(state.localBranches, state.currentBranch)
+  const chosen = mergeSelection(candidates, elements.mergeBranchSelect.value)
   elements.mergeBranchSelect.innerHTML = candidates.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')
+  elements.mergeBranchSelect.value = chosen
   elements.mergeBranchButton.disabled = candidates.length === 0
 }
 

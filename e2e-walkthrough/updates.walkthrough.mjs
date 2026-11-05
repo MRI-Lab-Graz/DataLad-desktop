@@ -3,8 +3,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { fileURLToPath } from 'node:url'
-import { join } from 'node:path'
+import { copyFile } from 'node:fs/promises'
+import { delimiter, join } from 'node:path'
 import { launchApp } from '../e2e/electron-driver.mjs'
+import { createTempRoot } from '../e2e/fixtures.mjs'
 import { removeTree, requireTools, stepRunner } from './harness.mjs'
 
 requireTools()
@@ -19,7 +21,9 @@ let requests = 0
 let server
 let feed
 let app
+let stub
 const profiles = []
+const withStub = (env) => ({ ...env, [stub.pathKey]: stub.path })
 const step = stepRunner({
   getPage: () => app?.page,
   outDir: join(fileURLToPath(new URL('..', import.meta.url)), 'walkthrough-failures')
@@ -34,7 +38,17 @@ const waitForDatalad = () =>
     { timeout: 40_000 }
   )
 
+// The app hides the DataLad notice for the DataLad it installed itself (datalad-env), and on a machine that has one it is
+// often first on PATH. A stand-in "datalad" that prints an old version, first on PATH, makes the test independent of that.
+async function fakeDatalad() {
+  const dir = await createTempRoot()
+  await copyFile(process.execPath, join(dir, process.platform === 'win32' ? 'datalad.exe' : 'datalad')) // `datalad --version` prints node's version
+  const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') ?? 'PATH'
+  return { dir, pathKey, path: `${dir}${delimiter}${process.env[pathKey] ?? ''}` }
+}
+
 test.before(async () => {
+  stub = await fakeDatalad()
   server = http.createServer((req, res) => {
     requests += 1
     const body = BODIES[req.url]
@@ -55,11 +69,11 @@ test.after(async () => {
   await app?.close()
   server?.closeAllConnections()
   await new Promise((resolve) => server?.close(resolve))
-  for (const dir of profiles) await removeTree(dir)
+  for (const dir of [...profiles, stub?.dir].filter(Boolean)) await removeTree(dir)
 })
 
 async function launch(options) {
-  app = await launchApp(options)
+  app = await launchApp({ ...options, env: withStub(options.env) })
   profiles.push(app.userDataDir)
   return app
 }
