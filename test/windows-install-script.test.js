@@ -397,7 +397,7 @@ test('Git is installed for the current user and only when it is missing', async 
   assert.match(fn, /Get-VerifiedFile -Url \$GitUrl -Sha256 \$GitSha256/)
 })
 
-test('git-annex is installed only when it is missing, and only after Git', async () => {
+test('git-annex is installed only when it is missing or older than the tested one, and only after Git', async () => {
   const ps = await readPs()
   const fn = body(ps, 'Install-GitAnnex')
   assert.match(fn, /Get-Command git-annex -ErrorAction/)
@@ -425,4 +425,19 @@ test('git-annex falls back to the same version on GitHub, checked against the sa
   assert.match(fn, /Get-VerifiedFile -Url \$GitAnnexUrl -Sha256 \$GitAnnexSha256/)
   assert.match(fn, /Get-VerifiedFile -Url \$GitAnnexFallbackUrl -Sha256 \$GitAnnexSha256/)
   assert.ok(fn.indexOf('$GitAnnexUrl -Sha256') < fn.indexOf('$GitAnnexFallbackUrl -Sha256'), 'the mirror is tried first')
+})
+
+// The release ships a tested pair (DataLad + git-annex). Re-running the script has to bring an older git-annex up to the
+// pin, and has to leave a newer or an unreadable one alone.
+test('an installed git-annex older than the pin is replaced by the pinned one; equal, newer or unreadable ones are left alone', async () => {
+  const ps = await readPs()
+  const read = body(ps, 'Get-InstalledGitAnnexVersion')
+  assert.match(read, /git-annex/)
+  assert.match(read, /\bversion\b/)
+  assert.match(read, /return \$null/)
+  const fn = body(ps, 'Install-GitAnnex')
+  assert.match(fn, /Get-InstalledGitAnnexVersion/)
+  assert.match(fn, /-ge \[version\]\$GitAnnexVersion/)
+  assert.match(fn, /-not \$installed/, 'a version that cannot be read is left alone')
+  assert.ok(fn.indexOf('-ge [version]$GitAnnexVersion') < fn.indexOf('Get-VerifiedFile'), 'the comparison comes before any download')
 })
