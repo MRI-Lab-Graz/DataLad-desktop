@@ -26,9 +26,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - macos-latest
+        # PRs: Windows only (main platform). Full matrix runs after merge on main.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["windows-latest"]' || '["windows-latest","macos-latest"]') }}
         node:
           - '22'
 
@@ -72,6 +71,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Run packaging smoke build (unpacked)
+        if: github.event_name != 'pull_request'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run package:dir
@@ -79,13 +79,13 @@ jobs:
       # Launches the unpacked app built above (real asar, real main process)
       # and drives it over CDP, so packaging-only breakage fails CI.
       - name: Run packaged app smoke test (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && github.event_name != 'pull_request'
         env:
           DLAD_APP_EXECUTABLE: dist/win-unpacked/DataLad Desktop.exe
         run: node --test e2e/packaged.e2e.mjs
 
       - name: Run packaged app smoke test (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && github.event_name != 'pull_request'
         env:
           DLAD_APP_EXECUTABLE: dist/mac-arm64/DataLad Desktop.app/Contents/MacOS/DataLad Desktop
         run: node --test e2e/packaged.e2e.mjs
