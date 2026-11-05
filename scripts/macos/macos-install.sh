@@ -1,10 +1,10 @@
 #!/bin/bash
 # Installs DataLad Desktop for the current user (Apple silicon). No administrator rights needed for this script.
 #
-# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v<version>/install.sh | bash
-# or download it and run:   bash install.sh
+# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh | bash
+# or download it and run:   bash macos-install.sh
 # The copy attached to a GitHub release has the version and the SHA-256 of that release's app zip filled in by CI.
-# The copy in the repository is a template: it runs the install.sh of the latest release instead.
+# The copy in the repository is a template: it runs the macos-install.sh of the latest release instead.
 #
 # Options:
 #   --from-dir <folder>   take the zip from that folder (named as on the release page) instead of downloading it;
@@ -32,9 +32,9 @@ main() {
 
     case "$APP_VERSION" in
         __*) # repository template: hand over to the latest release's copy, which has the version and hash filled in
-            log 'Repository template: running the install.sh of the latest release'
-            curl -fsSL "https://github.com/${REPO}/releases/latest/download/install.sh" | bash -s -- "$@" ||
-                die 'Could not run the install.sh of the latest release.'
+            log 'Repository template: running the macos-install.sh of the latest release'
+            curl -fsSL "https://github.com/${REPO}/releases/latest/download/macos-install.sh" | bash -s -- "$@" ||
+                die 'Could not run the macos-install.sh of the latest release.'
             exit 0 ;;
     esac
     while [ $# -gt 0 ]; do
@@ -45,7 +45,7 @@ main() {
     done
 
     [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" = arm64 ] ||
-        die 'This installer supports Macs with Apple silicon only. Intel Macs: use the .dmg from the release page.'
+        die 'This installer supports Macs with Apple silicon only. Intel Macs are not supported.'
 
     mkdir -p "$LOG_DIR"
     exec > >(tee -a "$LOG_DIR/install.log") 2>&1

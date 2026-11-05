@@ -2,3 +2,4 @@
 build/git-hooks/* text eol=lf
 # CRLF would break the install script under bash and the text checks in its tests.
 scripts/macos/*.sh text eol=lf
+scripts/linux/*.sh text eol=lf

@@ -49,6 +49,22 @@ test('the docs name the single Windows file, windows-install.cmd, and not instal
   assert.match(await read('README.md'), /windows-install\.cmd/)
 })
 
-test('the install guide says that running the newest windows-install.cmd also updates DataLad and git-annex to the tested pair', async () => {
-  assert.match(await read('docs/install.md'), /tested (versions|pair)[^\n]*DataLad[^\n]*git-annex|DataLad and git-annex[^\n]*tested/i)
+test('there is one install file per system, with the same name in every release', async () => {
+  const wf = await read('.github/workflows/build-os-artifacts.yml')
+  for (const name of ['windows-install.cmd', 'macos-install.sh', 'linux-install.sh']) assert.ok(wf.includes(`dist/${name}`), `${name} is not built`)
+  assert.equal(wf.includes('dist/install.sh'), false)
+  assert.equal(await exists('scripts/macos/macos-install.sh'), true)
+  assert.equal(await exists('scripts/macos/install.sh'), false)
+  assert.equal(await exists('scripts/linux/linux-install.sh'), true)
+})
+
+test('the release text and the docs link each system to its file with releases/latest/download', async () => {
+  const wf = await read('.github/workflows/build-os-artifacts.yml')
+  const doc = await read('docs/install.md')
+  const readme = await read('README.md')
+  for (const name of ['windows-install.cmd', 'macos-install.sh', 'linux-install.sh']) {
+    assert.ok(wf.includes(`releases/latest/download/${name}`), `release text lacks the link to ${name}`)
+    assert.ok(doc.includes(`releases/latest/download/${name}`), `install guide lacks the link to ${name}`)
+    assert.ok(readme.includes(name), `README lacks ${name}`)
+  }
 })

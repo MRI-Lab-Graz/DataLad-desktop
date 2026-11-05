@@ -5,12 +5,14 @@
 The releases are not code-signed, so there is no installer to double-click. Instead a small script downloads the app,
 checks it against a checksum written into the script itself, and sets everything up. You get no security warning.
 
-1. Go to the [Releases page](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases) and download what fits your system:
-   - **macOS (Apple silicon):** `install.sh` (see [macOS: install with a script](#macos-install-with-a-script))
-   - **Windows:** `windows-install.cmd`, one file (no admin rights; see
+1. Get the one file for your system (each link always points to the newest release):
+   - **Windows:** [`windows-install.cmd`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/windows-install.cmd) (no admin rights; see
      [Windows: install with a script](#windows-install-with-a-script))
-   - **Linux:** the `.AppImage` file (make it executable, then run it)
-2. Run the script (macOS `install.sh`, Windows `windows-install.cmd`) or the AppImage.
+   - **macOS (Apple silicon):** [`macos-install.sh`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh) (see
+     [macOS: install with a script](#macos-install-with-a-script))
+   - **Linux:** [`linux-install.sh`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh) (see
+     [Linux: install with a script](#linux-install-with-a-script))
+2. Run it: double-click `windows-install.cmd`, or paste the one-liner from the section for your system.
 3. Launch **DataLad Desktop** like any other app.
 
 > **Windows script:** also checks for Git, DataLad and git-annex and installs any that are missing (this needs an
@@ -19,10 +21,10 @@ checks it against a checksum written into the script itself, and sets everything
 >
 > **macOS script:** installs git-annex and DataLad with Homebrew when they are missing (see below).
 >
-> **Linux:** the AppImage doesn't install anything for you. To use DataLad-specific actions (Get Data, Update,
-> Publish) on a project, Git, DataLad, and git-annex need to be installed on your system first. See
-> [datalad.org](https://www.datalad.org/) for installation instructions for your platform. The app's diagnostics
-> screen tells you what's missing.
+> **Linux script:** installs the app only. To use DataLad-specific actions (Get Data, Update, Publish) on a project,
+> Git, DataLad, and git-annex need to be installed on your system first; the script prints the command for your
+> distribution (it never runs `sudo` itself). See [datalad.org](https://www.datalad.org/) for more. The app's
+> diagnostics screen tells you what's missing.
 
 **PRISM projects** (a `project.json` in the project folder) get a PRISM badge, and Save only goes through when
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
@@ -50,13 +52,13 @@ changes. IT departments can pre-trust locations; see [SECURITY.md](https://githu
 ## macOS: install with a script
 
 For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper warning (a file fetched with `curl`
-is not quarantined). Open **Terminal** and paste (this is the 0.5.5 link; for another version, change the `v0.5.5` in the address):
+is not quarantined). Open **Terminal** and paste:
 
 ```bash
-curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/download/v0.5.5/install.sh | bash
+curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh | bash
 ```
 
-Prefer to read it first? Download `install.sh` from the release page, then run `bash install.sh`.
+Prefer to read it first? Download `macos-install.sh` from the release page, then run `bash macos-install.sh`.
 
 The script checks the app's SHA-256 against the value baked into it, installs the app to `~/Applications`, and
 installs git-annex and DataLad with Homebrew when they are missing. If Homebrew itself is missing it asks before
@@ -65,6 +67,20 @@ The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs have no preb
 [from source](#advanced-install-from-source).
 
 To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's packages stay).
+
+## Linux: install with a script
+
+For 64-bit Intel/AMD computers, no administrator rights. Open a terminal and paste:
+
+```bash
+curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh | bash
+```
+
+The script checks the AppImage's SHA-256 against the value baked into it, saves it as `~/Applications/DataLad-Desktop.AppImage`
+and adds an entry to your application menu. It does not install Git, git-annex or DataLad: it lists what is missing and
+the command for your package manager. AppImages need FUSE (`libfuse2` on Debian/Ubuntu); the script tells you if it is
+missing. Run it again any time to update. To uninstall, delete `~/Applications/DataLad-Desktop.AppImage` and
+`~/.local/share/applications/datalad-desktop.desktop`.
 
 ## Windows: install with a script
 

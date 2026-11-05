@@ -41,7 +41,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run package:mac:arm64 -- --publish=never
 
-      # The script install (scripts/macos/install.sh) downloads this zip from the tag's release and checks it
+      # The script install (scripts/macos/macos-install.sh) downloads this zip from the tag's release and checks it
       # against the SHA-256 rendered into its own copy of the script, so the tag has to match the package version.
       # ditto keeps the code signature and symlinks intact, which a plain zip would not.
       - name: Zip the app and render the install script
@@ -53,7 +53,7 @@ jobs:
           fi
           zip="dist/DataLad-Desktop-$version-mac-arm64.zip"
           ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
-          node scripts/render-install-script.mjs "$version" "$zip" dist/install.sh scripts/macos/install.sh
+          node scripts/render-install-script.mjs "$version" "$zip" dist/macos-install.sh scripts/macos/macos-install.sh
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -61,7 +61,7 @@ jobs:
           name: datalad-desktop-macos
           path: |
             dist/DataLad-Desktop-*-mac-arm64.zip
-            dist/install.sh
+            dist/macos-install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -138,11 +138,24 @@ jobs:
       - name: Build Linux artifacts
         run: npm run package:linux -- --publish=never
 
+      # linux-install.sh downloads this AppImage from the tag's release and checks it against the SHA-256 rendered into
+      # its own copy of the script, so the tag has to match the package version.
+      - name: Render the install script
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF" == refs/tags/v* && "$GITHUB_REF" != "refs/tags/v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF does not match the package.json version $version"
+            exit 1
+          fi
+          node scripts/render-install-script.mjs "$version" dist/*.AppImage dist/linux-install.sh scripts/linux/linux-install.sh
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: datalad-desktop-linux
-          path: dist/*.AppImage
+          path: |
+            dist/*.AppImage
+            dist/linux-install.sh
           if-no-files-found: error
           retention-days: 14
 
@@ -188,9 +201,9 @@ jobs:
           {
             echo "## Install"
             echo
-            echo "- macOS (Apple silicon): run \`install.sh\` (one Terminal command, see the install guide)."
-            echo "- Windows: download \`windows-install.cmd\` and double-click it."
-            echo "- Linux: the \`.AppImage\`."
+            echo "- **Windows:** download [windows-install.cmd](https://github.com/${{ github.repository }}/releases/latest/download/windows-install.cmd) and double-click it."
+            echo "- **macOS (Apple silicon):** in Terminal run \`curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/macos-install.sh | bash\`"
+            echo "- **Linux:** in a terminal run \`curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/linux-install.sh | bash\`"
             echo
             echo "Builds are not code-signed. The install scripts check the app against a SHA-256 written into the script itself."
             echo
