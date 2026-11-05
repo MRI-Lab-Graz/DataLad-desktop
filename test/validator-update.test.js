@@ -462,3 +462,28 @@ test('(q) repairEnvDir also removes a leftover .next (a build a crash interrupte
   await repairEnvDir({ envDir })
   assert.equal(await exists(`${envDir}.next`), false)
 })
+
+// --- "Update now" from the Setup card: reports a newer-but-too-young release, and installs it on request ---
+const YOUNG = { releases: { ...PYPI.releases, '1.22.0': [file('2026-11-03T10:00:00Z')] } } // 1.5 days old at NOW
+
+test('(r1) a newer release still inside the cooldown is reported, not installed', async () => {
+  const { deps, runner } = await setup({ installed: '1.21.0', fetchJson: async () => YOUNG })
+  assert.deepEqual(await updateValidator(deps), { status: 'current', from: '1.21.0', newer: '1.22.0' })
+  assert.equal(compileCall(runner), undefined)
+})
+
+test('(r2) manual: installs the newest release even inside the cooldown (cutoff = now)', async () => {
+  const runner = updateRunner({ newVersion: '1.22.0' })
+  const { deps, envDir } = await setup({ installed: '1.21.0', runner, fetchJson: async () => YOUNG })
+  assert.deepEqual(await updateValidator({ ...deps, manual: true }), { status: 'updated', from: '1.21.0', to: '1.22.0' })
+  assert.equal(await versionIn(envDir), 'prism-validator 1.22.0')
+  assert.equal(compileCall(runner)[compileCall(runner).indexOf('--exclude-newer') + 1], NOW.toISOString())
+})
+
+test('(r3) manual: a version that failed before is tried again', async () => {
+  const runner = updateRunner({ newVersion: '1.22.0' })
+  const { deps, stateFile } = await setup({ installed: '1.21.0', runner, fetchJson: async () => YOUNG })
+  await mkdir(dirname(stateFile), { recursive: true })
+  await writeFile(stateFile, JSON.stringify({ failedVersion: '1.22.0' }))
+  assert.equal((await updateValidator({ ...deps, manual: true })).status, 'updated')
+})

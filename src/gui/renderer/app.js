@@ -8,6 +8,7 @@ import {
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
+import { describeFolders, describeTypeBadge, describeValidity } from './project-card.js'
 import { rowDataActions } from './row-data-actions.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
@@ -94,6 +95,7 @@ const state = {
   headerProjectPath: null,
   rootProjectIsBids: false,
   rootProjectPrism: null,
+  rootProjectCheck: null,
   createProjectBidsCandidate: null
 }
 
@@ -133,6 +135,9 @@ const elements = {
   currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
+  validityDetails: document.getElementById('validity-details'),
+  validityProblems: document.getElementById('validity-problems'),
+  validityRecheck: document.getElementById('validity-recheck'),
   currentProjectPrismBadge: document.getElementById('current-project-prism-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
@@ -234,6 +239,8 @@ const elements = {
   environmentOutput: document.getElementById('environment-output'),
   prismEnvStatus: document.getElementById('prism-env-status'),
   prismUpdateStatus: document.getElementById('prism-update-status'),
+  prismNewer: document.getElementById('prism-newer'),
+  prismUpdateNow: document.getElementById('prism-update-now'),
   updateNotice: document.getElementById('update-notice'),
   prismEnvInstall: document.getElementById('prism-env-install'),
   prismEnvCancel: document.getElementById('prism-env-cancel'),
@@ -777,7 +784,8 @@ api.getCapabilities().then((capabilities) => {
 // Update notices: text only (textContent), errors leave the strip hidden.
 async function refreshUpdateNotice() {
   try {
-    const { lines, refreshEnv } = describeUpdates(await api.getUpdateStatus())
+    const updateStatus = await api.getUpdateStatus()
+    const { lines, refreshEnv, validatorNewer } = describeUpdates(updateStatus)
     if (refreshEnv) refreshPrismEnvStatus().catch(() => {})
     elements.updateNotice.replaceChildren(
       ...lines.map((line) => {
@@ -806,12 +814,39 @@ async function refreshUpdateNotice() {
     const validatorLine = lines.find((line) => !line.skip && line.text.startsWith('prism-validator'))
     elements.prismUpdateStatus.hidden = !validatorLine
     elements.prismUpdateStatus.textContent = validatorLine?.text ?? ''
+    elements.prismNewer.hidden = elements.prismUpdateNow.hidden = !validatorNewer
+    if (validatorNewer) {
+      elements.prismNewer.textContent =
+        `Currently installed: ${updateStatus.validator.from}. Newer version available: ${validatorNewer}. ` +
+        'The app installs it by itself 3 days after it came out. "Update now" does it right away.'
+    }
   } catch {
     elements.updateNotice.hidden = true
   }
 }
 refreshUpdateNotice()
 api.onUpdatesChanged(refreshUpdateNotice)
+
+// The main process asks "are you sure?" itself; this only shows the outcome in plain words.
+elements.prismUpdateNow.addEventListener('click', async () => {
+  setButtonBusy(elements.prismUpdateNow, true)
+  let message = ''
+  try {
+    const result = await api.updateValidatorNow()
+    if (result.status === 'updated') await refreshPrismEnvStatus()
+    else if (result.status === 'deferred') message = 'Another update or install is running. Please try again in a minute.'
+    else if (result.status !== 'cancelled') message = result.reason ?? 'The update did not work, so the current version stays.'
+  } catch {
+    message = 'The update did not work, so the current version stays.'
+  } finally {
+    setButtonBusy(elements.prismUpdateNow, false)
+  }
+  await refreshUpdateNotice()
+  if (message) {
+    elements.prismNewer.hidden = false
+    elements.prismNewer.textContent = message
+  }
+})
 
 elements.closeSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = true
@@ -1904,8 +1939,10 @@ async function detectProjectType(projectPath) {
     state.rootProjectClassification = result.classification
     state.rootProjectIsBids = Boolean(result.isBids)
     state.rootProjectPrism = null
+    state.rootProjectCheck = null
     setCurrentProjectHeader(projectPath, result.classification)
     void refreshPrismInspect(projectPath)
+    void refreshValidity(projectPath)
     rememberRecentProject(projectPath)
     void api.setWatchedProject(projectPath)
     // Best-effort, fire-and-forget: always exclude OS noise files (.DS_Store
@@ -2045,6 +2082,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     const result = await api.runCommand(commandName, request, runId)
 
     const nextProjectPath = request.projectPath ?? request.targetPath
+    if (commandName === 'save' && nextProjectPath) void refreshValidity(nextProjectPath) // a blocked Save too: the badge shows why
     if (commandName === 'save' && result.ok && nextProjectPath) void refreshPrismInspect(nextProjectPath)
     let saveSummary = null
     if (result.ok && nextProjectPath) {
@@ -3561,7 +3599,7 @@ function friendlyProjectTypeLabel(classification) {
   }
 
   if (classification === 'superdataset') {
-    return 'DataLad project with linked data'
+    return 'DataLad project'
   }
 
   return 'Project type unknown'
@@ -3577,7 +3615,7 @@ function friendlyProjectSummary(classification) {
   }
 
   if (classification === 'superdataset') {
-    return 'This DataLad project contains linked child data folders.'
+    return 'This is a DataLad project. Some of its folders are tracked on their own.'
   }
 
   return 'We could not determine the project type.'
@@ -3656,6 +3694,61 @@ async function refreshPrismInspect(projectPath) {
   elements.currentProjectPrismBadge.hidden = state.rootProjectPrism?.kind !== 'prism'
   updateSaveButtonState()
 }
+
+// The "valid / not valid" badges. Display only: Save runs its own check. Runs on open and after each Save; a newer
+// run cancels the one before, and an answer for another project (or an older run) is dropped.
+let validityRunId = null
+async function refreshValidity(projectPath) {
+  if (!projectPath || projectPath !== state.rootProjectPath) return
+  if (validityRunId) api.cancelCommand(validityRunId).catch(() => {})
+  const runId = `prism-check-${Date.now()}`
+  validityRunId = runId
+  state.rootProjectCheck = { verdict: 'checking' }
+  renderValidity()
+  let check
+  try {
+    check = await api.checkPrism(projectPath, runId)
+  } catch {
+    check = { verdict: 'unchecked', reason: 'failed' }
+  }
+  if (runId !== validityRunId || projectPath !== state.rootProjectPath) return
+  validityRunId = null
+  state.rootProjectCheck = check?.verdict === 'none' ? null : check
+  renderValidity()
+}
+
+function renderValidity() {
+  const check = state.rootProjectCheck
+  for (const [badge, label] of [[elements.currentProjectBidsBadge, 'BIDS'], [elements.currentProjectPrismBadge, 'PRISM']]) {
+    const out = describeValidity({ label, check })
+    badge.textContent = out.text
+    badge.title = out.title
+    badge.classList.toggle('badge-ok', out.tone === 'ok')
+    badge.classList.toggle('badge-bad', out.tone === 'bad')
+  }
+  const out = describeValidity({ label: 'PRISM', check })
+  const problems =
+    check?.verdict === 'invalid' && Array.isArray(check.errors)
+      ? check.errors.filter((e) => typeof e === 'string')
+      : check?.verdict === 'unchecked'
+        ? [out.title]
+        : []
+  elements.validityDetails.hidden = check?.verdict !== 'invalid' && check?.verdict !== 'unchecked'
+  elements.validityDetails.querySelector('summary').textContent = check?.verdict === 'unchecked' ? "Why wasn't it checked?" : 'Show what to fix'
+  elements.validityProblems.replaceChildren(
+    ...problems.map((line) => Object.assign(document.createElement('li'), { textContent: line }))
+  )
+  if (check?.verdict !== 'invalid') elements.validityDetails.open = false
+}
+
+for (const badge of [elements.currentProjectBidsBadge, elements.currentProjectPrismBadge]) {
+  badge.addEventListener('click', () => {
+    if (elements.validityDetails.hidden) return
+    elements.validityDetails.open = true
+    elements.validityRecheck.focus()
+  })
+}
+elements.validityRecheck.addEventListener('click', () => void refreshValidity(state.rootProjectPath))
 
 function applyDatasetGatedButtons(classification) {
   state.currentProjectClassification = classification
@@ -3885,34 +3978,12 @@ function classificationForPath(projectPath) {
 }
 
 function setProjectBadge(classification) {
-  const next = classification ?? 'unknown'
-  elements.currentProjectBadge.classList.remove(
-    'badge-git',
-    'badge-dataset',
-    'badge-superdataset',
-    'badge-unknown'
-  )
-
-  if (next === 'git') {
-    elements.currentProjectBadge.classList.add('badge-git')
-    elements.currentProjectBadge.textContent = 'Git'
-    return
-  }
-
-  if (next === 'dataset') {
-    elements.currentProjectBadge.classList.add('badge-dataset')
-    elements.currentProjectBadge.textContent = 'DataLad'
-    return
-  }
-
-  if (next === 'superdataset') {
-    elements.currentProjectBadge.classList.add('badge-superdataset')
-    elements.currentProjectBadge.textContent = 'DataLad + Links'
-    return
-  }
-
-  elements.currentProjectBadge.classList.add('badge-unknown')
-  elements.currentProjectBadge.textContent = 'Unknown'
+  const badge = describeTypeBadge(classification ?? 'unknown')
+  elements.currentProjectBadge.classList.remove('badge-git', 'badge-dataset', 'badge-superdataset', 'badge-unknown')
+  elements.currentProjectBadge.classList.add(badge.className)
+  elements.currentProjectBadge.textContent = badge.text
+  elements.currentProjectBadge.title = badge.title ?? ''
+  elements.currentProjectBadge.hidden = badge.hidden // a normal DataLad project needs no badge; the text stays for tests and screen readers
 }
 
 const BUSY_LABEL_FILE_COUNT_THRESHOLD = 20
@@ -4267,17 +4338,11 @@ function setProjectTitleForPath(projectPath, title) {
 }
 
 function renderNestedDatasetInfo() {
-  const nestedCount = (state.datasets ?? []).filter((dataset) => dataset.relativePath !== '.').length
-
-  if (!state.rootProjectPath || nestedCount === 0) {
-    elements.currentProjectNestedInfo.hidden = true
-    elements.currentProjectNestedInfo.textContent = ''
-    return
-  }
-
-  elements.currentProjectNestedInfo.hidden = false
-  elements.currentProjectNestedInfo.textContent =
-    nestedCount === 1 ? 'Contains 1 nested dataset' : `Contains ${nestedCount} nested datasets`
+  const text = state.rootProjectPath
+    ? describeFolders(state.datasets, { bidsLike: state.rootProjectIsBids || state.rootProjectPrism?.kind === 'prism' })
+    : ''
+  elements.currentProjectNestedInfo.hidden = text === ''
+  elements.currentProjectNestedInfo.textContent = text
 }
 
 elements.currentProjectTitleInput.addEventListener('input', () => {

@@ -13,5 +13,10 @@ export function describeUpdates(status) {
   for (const n of status.notices ?? []) {
     lines.push({ text: n.message, skip: { tool: n.tool, version: n.latest } })
   }
-  return refreshEnv ? { lines, refreshEnv } : { lines }
+  const result = refreshEnv ? { lines, refreshEnv } : { lines }
+  // A newer release that is still waiting out the cooldown: the Setup card offers "Update now". Plain version numbers only.
+  if (validator?.status === 'current' && typeof validator.newer === 'string' && /^\d+(\.\d+)*$/.test(validator.newer)) {
+    result.validatorNewer = validator.newer
+  }
+  return result
 }

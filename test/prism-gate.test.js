@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gateSave, inspectProject, interpretReport, isBidsProject, isConversionSave, isPrismProject } from '../src/datalad/prism-gate.js'
+import { checkProject, gateSave, inspectProject, interpretReport, isBidsProject, isConversionSave, isPrismProject } from '../src/datalad/prism-gate.js'
 
 test('isPrismProject is true only when project.json is in the root', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'prism '))
@@ -294,4 +294,55 @@ test('interpretReport: an error entry without a message or path still blocks and
   const out = interpretReport(JSON.stringify({ valid: false, issues: [{ severity: 'ERROR', code: 'X1' }], summary: { errors: 1 } }))
   assert.equal(out.verdict, 'invalid')
   assert.equal(out.errors.length, 1)
+})
+
+// --- checkProject: the same validator run as the Save check, for the "valid / not valid" badge (display only) ---
+const checker = (stdout, extra = {}) => ({
+  calls: [],
+  async run(command, args, opts) {
+    this.calls.push([command, ...args])
+    this.opts = opts
+    return { failed: false, exitCode: 1, stdout, stderr: '', ...extra }
+  }
+})
+const check = (runner, projectPath, extra = {}) =>
+  checkProject({ runner, projectPath, validatorBin: '/env/bin/prism-validator', checkValidator: async () => true, ...extra })
+
+test('checkProject: a folder that is neither PRISM nor BIDS is not run at all', async () => {
+  const runner = checker('')
+  const plain = await mkdtemp(join(tmpdir(), 'plain '))
+  assert.deepEqual(await check(runner, plain), { kind: null, verdict: 'none' })
+  assert.deepEqual(runner.calls, [])
+})
+
+test('checkProject: PRISM runs both checks, BIDS only the BIDS check, and says what the report said', async () => {
+  const valid = checker(JSON.stringify(validReport))
+  const prism = await prismDir()
+  assert.deepEqual(await check(valid, prism), { kind: 'prism', verdict: 'valid' })
+  assert.deepEqual(valid.calls, [['/env/bin/prism-validator', prism, '--bids', '--format', 'json']])
+  const bad = checker(await fixture('bids-invalid'))
+  const bids = await bidsDir()
+  const out = await check(bad, bids)
+  assert.equal(out.kind, 'bids')
+  assert.equal(out.verdict, 'invalid')
+  assert.equal(out.errorCount, 1)
+  assert.deepEqual(bad.calls, [['/env/bin/prism-validator', bids, '--no-prism', '--bids', '--format', 'json']])
+})
+
+test('checkProject: never claims valid when it could not check (missing validator, unreadable report, cancelled, crash)', async () => {
+  const dir = await prismDir()
+  assert.deepEqual(await check(checker('{}'), dir, { checkValidator: async () => false }), { kind: 'prism', verdict: 'unchecked', reason: 'validator-missing' })
+  assert.equal((await check(checker('not json'), dir)).verdict, 'unchecked')
+  assert.equal((await check(checker(JSON.stringify(validReport), { cancelled: true }), dir)).verdict, 'unchecked')
+  const boom = { run: async () => { throw new Error('spawn failed') } }
+  assert.equal((await check(boom, dir)).verdict, 'unchecked')
+  assert.equal((await check(checker(JSON.stringify({ valid: false, issues: [{ code: 'PRISM902', severity: 'ERROR', message: 'x' }] })), dir)).verdict, 'unchecked')
+})
+
+test('checkProject passes the cancel signal and a timeout to the validator', async () => {
+  const runner = checker(JSON.stringify(validReport))
+  const signal = new AbortController().signal
+  await check(runner, await prismDir(), { signal })
+  assert.equal(runner.opts.signal, signal)
+  assert.ok(runner.opts.timeoutMs > 0)
 })

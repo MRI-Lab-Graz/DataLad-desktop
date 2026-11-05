@@ -100,7 +100,7 @@ function notTheVersionsFault(failure, uvPath) {
 // silent, nothing remembered. 'failed' = the version's own fault (install error, wrong version, safety test, broken after
 // the swap): remembered and shown once.
 // `rename` (synchronous) is injectable so tests can simulate a Windows file lock (EBUSY/EPERM).
-export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, platform = process.platform, rename = renameSync }) {
+export async function updateValidator({ runner, uvPath, envDir, userDataDir, fetchJson, now, isBusy, manual = false, platform = process.platform, rename = renameSync }) {
   const next = `${envDir}.next`
   const old = `${envDir}.old`
   const stateFile = join(userDataDir, STATE)
@@ -114,10 +114,15 @@ export async function updateValidator({ runner, uvPath, envDir, userDataDir, fet
 
     let pypi
     try { pypi = await fetchJson(PYPI_URL) } catch { return { status: 'retry', from, reason: OFFLINE } }
-    const pick = pickRelease(pypi, { now: now(), cooldownDays: PRISM_COOLDOWN_DAYS })
-    if (!pick || !from || compareVersions(from, pick.version) >= 0) return { status: 'current' }
+    // manual = the user clicked "Update now": no cooldown (the UI asked them to confirm), and a version that failed before may be retried.
+    const pick = pickRelease(pypi, { now: now(), cooldownDays: manual ? 0 : PRISM_COOLDOWN_DAYS })
+    if (!pick || !from || compareVersions(from, pick.version) >= 0) {
+      // Tell the UI about a newer release that is only waiting out the cooldown.
+      const newest = pickRelease(pypi, { now: now(), cooldownDays: 0 })
+      return from && newest && compareVersions(from, newest.version) < 0 ? { status: 'current', from, newer: newest.version } : { status: 'current' }
+    }
     const state = await readFile(stateFile, 'utf8').then(JSON.parse).catch(() => null)
-    if (state?.failedVersion === pick.version) return { status: 'current' }
+    if (!manual && state?.failedVersion === pick.version) return { status: 'current' }
     const to = pick.version
     retry = (reason) => ({ status: 'retry', from, to, reason })
 

@@ -133,3 +133,23 @@ export async function inspectProject({ runner, projectPath, checkValidator }) {
   const introducesPrism = prism ? await isConversionSave({ runner, projectPath }).catch(() => false) : false
   return { kind: prism ? 'prism' : 'bids', validatorReady, introducesPrism }
 }
+
+// The same validator run as the Save check, for the "valid / not valid" badge. Display only: Save runs its own check and
+// never trusts this. Never throws and never says "valid" unless the validator did.
+export async function checkProject({ runner, projectPath, validatorBin, checkValidator, signal, onOutput, timeoutMs = DEFAULT_TIMEOUT_MS }) {
+  const prism = await isPrismProject(projectPath)
+  if (!prism && !(await isBidsProject(projectPath))) return { kind: null, verdict: 'none' }
+  const kind = prism ? 'prism' : 'bids'
+  try {
+    if (!(await checkValidator())) return { kind, verdict: 'unchecked', reason: 'validator-missing' }
+    const args = prism ? [projectPath, '--bids', '--format', 'json'] : [projectPath, '--no-prism', '--bids', '--format', 'json']
+    const run = await runner.run(validatorBin, args, { signal, onOutput, timeoutMs })
+    if (run.cancelled) return { kind, verdict: 'unchecked', reason: 'cancelled' }
+    const report = interpretReport(run.stdout)
+    if (report.verdict === 'valid') return { kind, verdict: 'valid' }
+    if (report.verdict === 'invalid') return { kind, verdict: 'invalid', errorCount: report.errorCount, errors: report.errors }
+    return { kind, verdict: 'unchecked', reason: 'unreadable' }
+  } catch {
+    return { kind, verdict: 'unchecked', reason: 'failed' }
+  }
+}

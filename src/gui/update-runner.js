@@ -54,6 +54,14 @@ export function createUpdateChecks({ disabled, guard, update, notices }) {
     dropNotice(tool, version) {
       status.notices = status.notices.filter((n) => !(n.tool === tool && n.latest === version))
     },
+    // The user's "Update now" click: no cooldown (the page asked them to confirm). Same lock as Install; never throws.
+    async updateNow(onChange) {
+      if (disabled) return { status: 'disabled' }
+      const result = await guard.run(() => update({ manual: true })).catch(() => ({ status: 'deferred' }))
+      if (result.status === 'updated') status.validator = result // anything else keeps the "newer version" line and the button
+      try { onChange() } catch {}
+      return result
+    },
     async start(onChange) {
       if (disabled || started) return
       started = true
@@ -78,7 +86,7 @@ export function createAppUpdateChecks({ disabled, guard, isBusy, runner, paths, 
   return createUpdateChecks({
     disabled,
     guard,
-    update: () => update({ runner, ...paths(), fetchJson, now: () => new Date(), isBusy }),
+    update: (extra) => update({ runner, ...paths(), fetchJson, now: () => new Date(), isBusy, ...extra }),
     notices: () => notices({ runner: (command, args, options) => runner.run(command, args, options), fetchJson, userDataDir: paths().userDataDir })
   })
 }
