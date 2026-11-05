@@ -31,22 +31,28 @@ const compareVersions = (a, b) => {
   return 0
 }
 
-async function sha256Of(fetchImpl, url) {
-  const res = await fetchImpl(url)
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`)
+// Only the download is retried (a runner's connection to a mirror drops now and then); the hash is compared once, after.
+async function sha256Of(fetchImpl, url, retryDelayMs) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetchImpl(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return sha256(await res.arrayBuffer())
+    } catch (error) {
+      if (attempt === 3) throw error
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+    }
   }
-  return sha256(await res.arrayBuffer())
 }
 
-export async function checkPins({ fetchImpl = fetch, pins }) {
+export async function checkPins({ fetchImpl = fetch, pins, retryDelayMs = 5000 }) {
   const problems = []
   for (const [label, url, expected] of [
     [`git-annex ${pins.gitAnnex.version}`, pins.gitAnnex.url, pins.gitAnnex.sha256],
     ['Git for Windows', pins.git.url, pins.git.sha256]
   ]) {
     try {
-      const actual = await sha256Of(fetchImpl, url)
+      const actual = await sha256Of(fetchImpl, url, retryDelayMs)
       if (actual !== expected.toUpperCase()) {
         problems.push(`${label}: the SHA-256 of ${url} is ${actual}, the pin is ${expected}`)
       }
