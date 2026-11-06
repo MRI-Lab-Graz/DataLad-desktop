@@ -1,0 +1,27 @@
+# Worldline Desktop on the uni GitLab.
+#
+# The runner is a Mac in the lab, tagged `macos`. It is "protected": it only takes jobs from protected branches
+# (main) and tags, and it runs them as a real user. So this pipeline starts only for main and for tags, and
+# holds no secrets. Builds, the Windows job and release upload come later, one small step at a time.
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+stages:
+  - test
+
+default:
+  interruptible: true
+
+unit_tests_macos:
+  stage: test
+  tags:
+    - macos
+  timeout: 30 minutes
+  script:
+    - node --version
+    - npm --version
+    - npm ci --ignore-scripts
+    - npm test
