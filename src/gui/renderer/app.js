@@ -8,11 +8,12 @@ import {
   computeDataPanelGating
 } from './button-gating.js'
 import { formatBytes, renderDataPanel } from './data-panel.js'
-import { buildFilterGroups, summarize } from './data-selection.js'
+import { buildFilterGroups, summarize, toggleValue } from './data-selection.js'
 import {
   describeActionNote, describeGetAll, canRunReckless, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
-  runSelectedBatches, runStillCurrent
+  runSelectedBatches, runStillCurrent, startSequence
 } from './data-actions.js'
+import { previewPaths } from './reckless-preview.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
 import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
@@ -100,6 +101,7 @@ const state = {
   headerProjectPath: null,
   rootProjectIsBids: false,
   // Choose data panel. unsafePaths: what a normal drop could not remove (offered to the delete-anyway dialog).
+  dataSequence: { running: false }, // one Choose data / Get all sequence at a time, whichever project
   dataPanel: { project: null, files: [], selection: {}, unsafePaths: [], unsafeProject: null },
   rootProjectPrism: null,
   rootProjectCheck: null,
@@ -269,6 +271,7 @@ const elements = {
   recklessOverlay: document.getElementById('reckless-overlay'),
   recklessForm: document.getElementById('reckless-form'),
   recklessCount: document.getElementById('reckless-count'),
+  recklessPaths: document.getElementById('reckless-paths'),
   recklessWord: document.getElementById('reckless-word'),
   recklessConfirm: document.getElementById('reckless-confirm'),
   recklessCancel: document.getElementById('reckless-cancel'),
@@ -1834,20 +1837,30 @@ async function runDataAction(action, button, relativePath) {
       if (!files) {
         await runWorkflowCommand('get', { projectPath, paths: [] }, button)
       } else {
-        const outcome = await runSelectedBatches({
-          mode: 'get',
-          paths: planGetAll(files),
-          run: (_name, batch) => runWorkflowCommand('get', { projectPath, paths: batch }, button, undefined, { progressTotal: batch.length }),
-          shouldStop: shouldStopSequence,
-          onProgress: showPartProgress
-        })
+        if (!startSequence(state.dataSequence)) {
+          setLastActionState('Another download or removal is still running.', 'warning')
+          return
+        }
+        let outcome
+        try {
+          outcome = await runSelectedBatches({
+            mode: 'get',
+            paths: planGetAll(files),
+            run: (_name, batch) =>
+              runWorkflowCommand('get', { projectPath, paths: batch }, button, undefined, { progressTotal: batch.length, skipBackgroundRefresh: true }),
+            shouldStop: shouldStopSequence,
+            onProgress: showPartProgress
+          })
+        } finally {
+          endSequence()
+        }
         if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
         if (!outcome.ok) {
           const left = outcome.failedPaths.length + outcome.remainingPaths.length
           setLastActionState(outcome.stopped ? 'Stopped. The rest was not touched.' : `${left} files were not downloaded. Details are shown below.`, 'warning')
         }
       }
-      await refreshFileBrowser(projectPath)
+      await refreshAfterSequence(projectPath)
       void loadDataPanelIfOpen()
       return
     }
@@ -1885,6 +1898,19 @@ function describeCount(files) {
   return `${count} ${count === 1 ? 'file' : 'files'}${unknownSize >= count ? ', size unknown' : `, about ${formatBytes(bytes)}`}`
 }
 
+// Batches run quietly; the status, health and file list are refreshed once when the whole sequence is over.
+async function refreshAfterSequence(projectPath) {
+  void refreshLastCommitMeta(projectPath)
+  void refreshWorkingTreeStatus(projectPath)
+  void refreshProjectHealth(projectPath)
+  await refreshFileBrowser(projectPath)
+}
+
+const endSequence = () => {
+  state.dataSequence.running = false
+  updateDataPanelButtons()
+}
+
 const showPartProgress = ({ batch, batches }) => {
   if (batches > 1) elements.dataPanelNote.textContent = `Part ${batch} of ${batches} done…`
 }
@@ -1899,7 +1925,7 @@ function updateDataPanelVisibility() {
 
 // Disabled while any command runs, and per button when its own list is empty.
 function updateDataPanelButtons() {
-  const running = state.pendingCommands.size > 0
+  const running = state.pendingCommands.size > 0 || state.dataSequence.running
   const download = document.getElementById('data-panel-download')
   const free = document.getElementById('data-panel-free')
   if (!download || !free) return
@@ -1983,10 +2009,8 @@ elements.dataPanelBody.addEventListener('change', (event) => {
   const box = event.target.closest('input[data-group]')
   if (!box) return
   const group = box.getAttribute('data-group')
-  const set = new Set(state.dataPanel.selection[group] ?? [])
-  if (box.checked) set.add(box.getAttribute('data-value'))
-  else set.delete(box.getAttribute('data-value'))
-  setGroup(group, set)
+  state.dataPanel.selection = toggleValue(state.dataPanel.selection, group, box.getAttribute('data-value'), box.checked)
+  renderDataPanelNow()
 })
 
 elements.dataPanelBody.addEventListener('click', (event) => {
@@ -2028,28 +2052,37 @@ async function runDataPanelAction(mode, button) {
     )
     if (!ok) return
   }
-  elements.dataRecklessOffer.hidden = true
-  state.dataPanel.unsafePaths = []
-  state.dataPanel.unsafeProject = null
-  elements.dataPanelNote.textContent = ''
-  const outcome = await runSelectedBatches({
-    mode,
-    files,
-    selection,
-    run: (_name, paths) => runWorkflowCommand(mode, { projectPath, paths }, button, undefined, { progressTotal: paths.length }),
-    shouldStop: shouldStopSequence,
-    onProgress: showPartProgress
-  })
-  // The user may have opened another project meanwhile: then this result must not touch the panel.
-  if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
-  if (!outcome.ok && !outcome.stopped && mode === 'drop' && needsRecklessOffer(outcome)) {
-    state.dataPanel.unsafeProject = projectPath
-    state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
-    elements.dataRecklessOffer.hidden = false
+  if (!startSequence(state.dataSequence)) {
+    elements.dataPanelNote.textContent = 'Another download or removal is still running. Wait for it to finish.'
+    return
   }
-  elements.dataPanelNote.textContent = describeActionNote(mode, outcome)
-  await loadDataPanel({ keepNote: true })
-  await refreshFileBrowser(projectPath)
+  try {
+    elements.dataRecklessOffer.hidden = true
+    state.dataPanel.unsafePaths = []
+    state.dataPanel.unsafeProject = null
+    elements.dataPanelNote.textContent = ''
+    const outcome = await runSelectedBatches({
+      mode,
+      files,
+      selection,
+      run: (_name, paths) =>
+        runWorkflowCommand(mode, { projectPath, paths }, button, undefined, { progressTotal: paths.length, skipBackgroundRefresh: true }),
+      shouldStop: shouldStopSequence,
+      onProgress: showPartProgress
+    })
+    // The user may have opened another project meanwhile: then this result must not touch the panel.
+    if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
+    if (!outcome.ok && !outcome.stopped && mode === 'drop' && needsRecklessOffer(outcome)) {
+      state.dataPanel.unsafeProject = projectPath
+      state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
+      elements.dataRecklessOffer.hidden = false
+    }
+    elements.dataPanelNote.textContent = describeActionNote(mode, outcome)
+    await loadDataPanel({ keepNote: true })
+    await refreshAfterSequence(projectPath)
+  } finally {
+    endSequence()
+  }
 }
 
 const recklessFocus = trapFocus(elements.recklessOverlay)
@@ -2065,6 +2098,7 @@ elements.dataRecklessOpen.addEventListener('click', () => {
   const count = state.dataPanel.unsafePaths.length
   if (!count) return
   elements.recklessCount.textContent = describeRecklessDialog(state.dataPanel.unsafePaths)
+  elements.recklessPaths.textContent = previewPaths(state.dataPanel.unsafePaths) // textContent: file names are never read as HTML
   elements.recklessWord.value = ''
   elements.recklessConfirm.disabled = true
   recklessFocus.remember()
@@ -2095,20 +2129,29 @@ async function runRecklessDrop() {
   const paths = [...state.dataPanel.unsafePaths]
   closeRecklessDialog()
   if (!projectPath || !paths.length) return
-  state.dataPanel.unsafePaths = []
-  state.dataPanel.unsafeProject = null
-  elements.dataRecklessOffer.hidden = true
-  const outcome = await runSelectedBatches({
-    mode: 'drop',
-    paths,
-    run: (_name, batch) => runWorkflowCommand('dropReckless', { projectPath, paths: batch }, elements.dataRecklessOpen),
-    shouldStop: shouldStopSequence,
-    onProgress: showPartProgress
-  })
-  if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
-  elements.dataPanelNote.textContent = describeActionNote('reckless', outcome)
-  await loadDataPanel({ keepNote: true })
-  await refreshFileBrowser(projectPath)
+  if (!startSequence(state.dataSequence)) {
+    elements.dataPanelNote.textContent = 'Another download or removal is still running. Nothing was deleted.'
+    return
+  }
+  try {
+    state.dataPanel.unsafePaths = []
+    state.dataPanel.unsafeProject = null
+    elements.dataRecklessOffer.hidden = true
+    const outcome = await runSelectedBatches({
+      mode: 'drop',
+      paths,
+      run: (_name, batch) =>
+        runWorkflowCommand('dropReckless', { projectPath, paths: batch }, elements.dataRecklessOpen, undefined, { skipBackgroundRefresh: true }),
+      shouldStop: shouldStopSequence,
+      onProgress: showPartProgress
+    })
+    if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
+    elements.dataPanelNote.textContent = describeActionNote('reckless', outcome)
+    await loadDataPanel({ keepNote: true })
+    await refreshAfterSequence(projectPath)
+  } finally {
+    endSequence()
+  }
 }
 
 elements.filesGetAllButton.addEventListener('click', () => runDataAction('get', elements.filesGetAllButton, null))

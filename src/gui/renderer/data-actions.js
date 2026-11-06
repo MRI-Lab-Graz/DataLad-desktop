@@ -91,3 +91,10 @@ export const runStillCurrent = ({ panelProject, rootProject, runProject }) =>
 /** Delete-anyway needs the refusal, the panel and the open project to be one and the same project. */
 export const canRunReckless = ({ unsafeProject, panelProject, rootProject }) =>
   Boolean(unsafeProject) && unsafeProject === panelProject && panelProject === rootProject
+
+/** One panel sequence at a time: true and marks the gate busy, or false when a sequence is already running. */
+export function startSequence(gate) {
+  if (gate.running) return false
+  gate.running = true
+  return true
+}

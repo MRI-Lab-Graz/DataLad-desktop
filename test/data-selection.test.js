@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildFilterGroups, selectFiles, withCompanions, summarize, batchPaths } from '../src/gui/renderer/data-selection.js'
+import { buildFilterGroups, selectFiles, withCompanions, summarize, batchPaths, toggleValue } from '../src/gui/renderer/data-selection.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 10 })
 const files = [
@@ -218,4 +218,22 @@ test('bold does not pull sbref, physio or top-level sbref json, but keeps json a
 test('suffix-less top-level json is not pulled in; README only with doc endings', () => {
   const r = paths(withCompanions([sfx[0]], sfx, 'get'))
   assert.ok(!r.includes('T1w.json') && !r.includes('README.exe') && r.includes('README.md'))
+})
+
+test('files without any name-value pair never pair with each other', () => {
+  const list = [f('sub-01/anat/data.csv'), f('sub-01/anat/data.json'), f('sub-01/anat/notes.txt')]
+  assert.deepEqual(paths(withCompanions([list[0]], list, 'get')), ['sub-01/anat/data.csv'])
+  assert.deepEqual(paths(withCompanions([list[2]], list, 'get')), ['sub-01/anat/notes.txt'])
+})
+
+test('toggleValue adds and removes a tick without touching other groups, and survives prototype names', () => {
+  const sel = { sub: new Set(['sub-01']) }
+  const a = toggleValue(sel, 'sub', 'sub-02', true)
+  assert.deepEqual([...a.sub], ['sub-01', 'sub-02'])
+  assert.deepEqual([...sel.sub], ['sub-01']) // input untouched
+  assert.deepEqual([...toggleValue(a, 'sub', 'sub-01', false).sub], ['sub-02'])
+  for (const key of ['constructor', 'toString', '__proto__']) {
+    const t = toggleValue({}, key, 'x', true)
+    assert.deepEqual([...Object.getOwnPropertyDescriptor(t, key).value], ['x'], key)
+  }
 })

@@ -193,3 +193,25 @@ test('the action note survives the reload that follows an action, and the empty 
   assert.doesNotMatch(html, /The files above/)
   assert.match(html, /last Free up space/)
 })
+
+test('one panel sequence at a time, quiet batches, one refresh at the end, prototype-safe ticks', () => {
+  for (const fn of ['async function runDataPanelAction', 'async function runRecklessDrop', 'async function runDataAction']) {
+    const body = between(app, fn, '\n}\n')
+    const start = fn.includes('runDataAction') ? body.indexOf('await runSelectedBatches(') : body.indexOf('startSequence(')
+    assert.ok(body.includes('startSequence(state.dataSequence)') || fn.includes('runDataAction'), fn)
+    assert.ok(start > 0, fn)
+    assert.ok(body.indexOf('startSequence(') < body.indexOf('runSelectedBatches('), fn)
+    assert.match(body, /skipBackgroundRefresh: true/, fn)
+    assert.match(body, /finally \{\s*endSequence\(\)/, fn)
+    assert.match(body, /refreshAfterSequence\(projectPath\)/, fn)
+  }
+  assert.match(between(app, 'function updateDataPanelButtons', '\n}\n'), /state\.dataSequence\.running/)
+  assert.match(between(app, "elements.dataPanelBody.addEventListener('change'", '\n})\n'), /toggleValue\(/)
+})
+
+test('the delete dialog lists the first paths as plain text', () => {
+  assert.match(html, /id="reckless-paths"/)
+  assert.match(app, /from '\.\/reckless-preview\.js'/)
+  assert.match(between(app, "elements.dataRecklessOpen.addEventListener('click'", '\n})\n'), /recklessPaths\.textContent = previewPaths\(/)
+  assert.match(css, /#reckless-paths/)
+})

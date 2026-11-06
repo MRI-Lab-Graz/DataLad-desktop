@@ -97,3 +97,8 @@ test('app.js passes the real file count and keeps the loading text', () => {
   assert.match(app, /'Looking at your files…'/)
   assert.match(app, /read the file list[^\n]*\n\s*elements\.dataPanelBody\.textContent = ''\n\s*return/)
 })
+
+test('an entity key named like an Object method does not break the panel', () => {
+  const g = [{ key: 'constructor', title: 'X', hint: '', values: ['a', 'b'] }]
+  assert.match(render({ groups: g, selection: {} }), /data-group="constructor"/)
+})

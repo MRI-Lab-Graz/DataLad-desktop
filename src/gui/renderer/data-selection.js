@@ -82,15 +82,17 @@ const entityKey = (entities) => JSON.stringify(Object.entries(entities).sort(([a
  */
 export function withCompanions(selected, all, mode) {
   const wantPresent = mode === 'drop'
+  // A file with no name-value pair at all (data.csv) has nothing to match on: it never pairs with anything.
+  const named = (p) => Object.keys(p.entities).length > 0
   const sel = selected.map((f) => parseBidsPath(f.path))
   const keyOf = (p) => dirOf(p.path) + '\0' + entityKey(p.entities)
-  const sameName = new Set(sel.filter((p) => !p.datasetLevel).map((p) => keyOf(p) + '\0' + p.suffix))
-  const eventsDirs = new Set(sel.filter((p) => !p.datasetLevel).map(keyOf))
+  const sameName = new Set(sel.filter((p) => !p.datasetLevel && named(p)).map((p) => keyOf(p) + '\0' + p.suffix))
+  const eventsDirs = new Set(sel.filter((p) => !p.datasetLevel && named(p)).map(keyOf))
   const out = new Map(selected.map((f) => [f.path, f]))
   for (const file of all) {
     if (file.present !== wantPresent || out.has(file.path)) continue
     const p = parseBidsPath(file.path)
-    let take = !p.datasetLevel && (sameName.has(keyOf(p) + '\0' + p.suffix) || (p.suffix === 'events' && eventsDirs.has(keyOf(p))))
+    let take = !p.datasetLevel && named(p) && (sameName.has(keyOf(p) + '\0' + p.suffix) || (p.suffix === 'events' && eventsDirs.has(keyOf(p))))
     if (!take && mode === 'get' && !file.path.includes('/')) {
       take =
         DATASET_FILES.test(file.path) ||
@@ -100,6 +102,14 @@ export function withCompanions(selected, all, mode) {
     if (take) out.set(file.path, file)
   }
   return [...out.values()]
+}
+
+/** A new selection with one box ticked or unticked. Group keys come from file names, so no plain lookup by key. */
+export function toggleValue(selection, group, value, checked) {
+  const set = new Set(Object.hasOwn(selection, group) ? selection[group] : [])
+  if (checked) set.add(value)
+  else set.delete(value)
+  return { ...selection, [group]: set }
 }
 
 export function summarize(files) {

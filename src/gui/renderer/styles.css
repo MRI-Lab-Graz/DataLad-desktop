@@ -2199,3 +2199,8 @@ select:disabled {
   gap: 4px 14px;
   margin-top: 4px;
 }
+
+#reckless-paths {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   runSelectedBatches, planPaths, needsRecklessOffer, isDeleteWord, panelMatchesProject, describeNotRemoved,
-  describeRecklessDialog, planGetAll, describeGetAll, runStillCurrent, canRunReckless, describeActionNote
+  describeRecklessDialog, planGetAll, describeGetAll, runStillCurrent, canRunReckless, describeActionNote, startSequence
 } from '../src/gui/renderer/data-actions.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 1 })
@@ -188,4 +188,13 @@ test('Get all and empty-list wording never claims everything is downloaded', () 
   const t = describeGetAll([f('a', true)])
   assert.match(t, /No files that still need downloading were found in the list/)
   assert.doesNotMatch(t, /Nothing is missing|already on this computer/)
+})
+
+test('startSequence lets one panel sequence run at a time', () => {
+  const gate = { running: false }
+  assert.equal(startSequence(gate), true)
+  assert.equal(gate.running, true)
+  assert.equal(startSequence(gate), false)
+  gate.running = false
+  assert.equal(startSequence(gate), true)
 })

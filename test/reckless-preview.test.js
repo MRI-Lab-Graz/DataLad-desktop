@@ -24,3 +24,8 @@ test('long paths are cut with an ellipsis', () => {
   assert.ok(out.length < 220)
   assert.match(out, /…/)
 })
+
+test('the renderer twin is the same function as the main-process one', async () => {
+  const twin = await import('../src/gui/renderer/reckless-preview.js')
+  assert.equal(twin.previewPaths, previewPaths)
+})
