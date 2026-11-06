@@ -30,7 +30,9 @@ across nested sub-projects? The app shows you exactly what changed and where.
 - **See what changed** — one click under a changed file shows exactly which lines (for tables: which cells) changed; Tools → History can compare any earlier save with your files now.
 - **Record how a result was made** — Tools → History → Run & record: type the command and its inputs and outputs, and DataLad saves the result together with the exact command, so anyone can repeat it.
 - **Get data on demand** — large files tracked by git-annex don't have to
-  live on your disk until you need them; fetch with one click.
+  live on your disk until you need them; fetch with one click, or in BIDS
+  projects tick just the subjects, sessions and file types you need
+  (Files → Choose data, see [Download only what you need](docs/product/researcher-workflow.md)).
 - **Stay in sync with collaborators** — update from and publish to a shared
   remote without memorizing remote/branch syntax.
 - **Keep noise out of your history** — manage `.gitignore` rules per project
