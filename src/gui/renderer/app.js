@@ -12,6 +12,7 @@ import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
 import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
 import { rowDataActions } from './row-data-actions.js'
+import { quarterTurn } from './logo-turn.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { displayCommand, isRunCommit, parseRunRecord } from './run-record.js'
@@ -290,6 +291,7 @@ api.getAppVersion().then((version) => {
 })
 initBidsAutoNestToggle()
 initSaveTipsToggle()
+document.documentElement.style.setProperty('--logo-turn', `${quarterTurn()}deg`)
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -3717,7 +3719,7 @@ function applyDatasetGatedButtons(classification) {
 function updateGetDataGating() {
   const gating = computeDatasetGating(state.currentProjectClassification, state.projectHealthSnapshot)
 
-  const visible = filesToolbarVisibility(state.projectHealthSnapshot)
+  const visible = filesToolbarVisibility(state.projectHealthSnapshot, state.currentProjectClassification)
   elements.filesGetAllButton.hidden = !visible.getAll
   elements.filesFreeAllButton.hidden = !visible.freeUp
   elements.filesGetAllButton.disabled = gating.disabled

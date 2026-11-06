@@ -47,9 +47,12 @@ export function computeDatasetGating(classification, health) {
  * Get all needs files that are missing here, which can only be fetched from somewhere, so it shows with a remote or
  * whenever something is actually missing. Unknown (health not loaded yet) shows nothing, never a premature button.
  * @param {{ hasUpstream?: boolean, missingContentCount?: number|null } | null | undefined} health
+ * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
  * @returns {{ getAll: boolean, freeUp: boolean }}
  */
-export function filesToolbarVisibility(health) {
+export function filesToolbarVisibility(health, classification) {
+  // A plain Git project stores no separate data, so neither button can ever do anything there.
+  if (classification !== 'dataset' && classification !== 'superdataset') return { getAll: false, freeUp: false }
   const hasRemote = Boolean(health?.hasUpstream)
   return { getAll: hasRemote || Number(health?.missingContentCount) > 0, freeUp: hasRemote }
 }

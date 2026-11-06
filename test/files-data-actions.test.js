@@ -83,7 +83,7 @@ test('the reasons a Files button is switched off are also plain words', () => {
 })
 
 test('the toolbar hides Get all and Free up space (all) by the same rule the page uses', () => {
-  assert.match(app, /filesToolbarVisibility\(state\.projectHealthSnapshot\)/)
+  assert.match(app, /filesToolbarVisibility\(state\.projectHealthSnapshot, state\.currentProjectClassification\)/)
   assert.match(app, /filesGetAllButton\.hidden\s*=\s*!/)
   assert.match(app, /filesFreeAllButton\.hidden\s*=\s*!/)
 })

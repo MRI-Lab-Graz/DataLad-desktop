@@ -185,14 +185,21 @@ test('remoteNameForProject names the remote only when the health snapshot is for
 })
 
 test('Free up space (all) only shows when the project has a remote to keep the other copy', () => {
-  assert.equal(filesToolbarVisibility({ hasUpstream: true }).freeUp, true)
-  for (const health of [null, undefined, {}, { hasUpstream: false }]) assert.equal(filesToolbarVisibility(health).freeUp, false)
+  assert.equal(filesToolbarVisibility({ hasUpstream: true }, 'dataset').freeUp, true)
+  for (const health of [null, undefined, {}, { hasUpstream: false }]) assert.equal(filesToolbarVisibility(health, 'dataset').freeUp, false)
 })
 
 test('Get all shows with a remote, or when files are missing (they must live somewhere), never otherwise', () => {
-  assert.equal(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 0 }).getAll, true)
-  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 3 }).getAll, true)
-  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 0 }).getAll, false)
-  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: null }).getAll, false)
-  assert.equal(filesToolbarVisibility(null).getAll, false)
+  assert.equal(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 0 }, 'dataset').getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 3 }, 'dataset').getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 0 }, 'dataset').getAll, false)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: null }, 'dataset').getAll, false)
+  assert.equal(filesToolbarVisibility(null, 'dataset').getAll, false)
+})
+
+test('a plain Git project (or an unknown one) never shows either button, even with a remote: it has no stored data', () => {
+  for (const kind of ['git', 'unknown', null, undefined]) {
+    assert.deepEqual(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 2 }, kind), { getAll: false, freeUp: false }, String(kind))
+  }
+  assert.deepEqual(filesToolbarVisibility({ hasUpstream: true }, 'superdataset'), { getAll: true, freeUp: true })
 })
