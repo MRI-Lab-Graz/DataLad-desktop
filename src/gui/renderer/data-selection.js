@@ -71,7 +71,7 @@ export function selectFiles(files, selection, mode) {
   })
 }
 
-const DATASET_FILES = /^(participants\.(tsv|json)|dataset_description\.json|README(\..*)?|CHANGES(\..*)?)$/
+const DATASET_FILES = /^(participants\.(tsv|json)|dataset_description\.json|(README|CHANGES)(\.(md|txt|rst))?)$/
 const dirOf = (path) => path.slice(0, path.lastIndexOf('/') + 1)
 const entityKey = (entities) => JSON.stringify(Object.entries(entities).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
 
@@ -83,17 +83,19 @@ const entityKey = (entities) => JSON.stringify(Object.entries(entities).sort(([a
 export function withCompanions(selected, all, mode) {
   const wantPresent = mode === 'drop'
   const sel = selected.map((f) => parseBidsPath(f.path))
-  const sameName = new Set(sel.filter((p) => !p.datasetLevel).map((p) => dirOf(p.path) + '\0' + entityKey(p.entities)))
+  const keyOf = (p) => dirOf(p.path) + '\0' + entityKey(p.entities)
+  const sameName = new Set(sel.filter((p) => !p.datasetLevel).map((p) => keyOf(p) + '\0' + p.suffix))
+  const eventsDirs = new Set(sel.filter((p) => !p.datasetLevel).map(keyOf))
   const out = new Map(selected.map((f) => [f.path, f]))
   for (const file of all) {
     if (file.present !== wantPresent || out.has(file.path)) continue
     const p = parseBidsPath(file.path)
-    let take = !p.datasetLevel && sameName.has(dirOf(p.path) + '\0' + entityKey(p.entities))
+    let take = !p.datasetLevel && (sameName.has(keyOf(p) + '\0' + p.suffix) || (p.suffix === 'events' && eventsDirs.has(keyOf(p))))
     if (!take && mode === 'get' && !file.path.includes('/')) {
       take =
         DATASET_FILES.test(file.path) ||
-        (p.ext === 'json' && Object.keys(p.entities).length > 0 &&
-          sel.some((s) => Object.entries(p.entities).every(([k, v]) => Object.hasOwn(s.entities, k) && s.entities[k] === v)))
+        (p.ext === 'json' && p.suffix && Object.keys(p.entities).length > 0 &&
+          sel.some((s) => s.suffix === p.suffix && Object.entries(p.entities).every(([k, v]) => Object.hasOwn(s.entities, k) && s.entities[k] === v)))
     }
     if (take) out.set(file.path, file)
   }

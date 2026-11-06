@@ -186,3 +186,36 @@ test('an oversized path is a batch of one', () => {
   assert.deepEqual(batchPaths(['a', big, 'b'], 20), [['a'], [big], ['b']])
   assert.deepEqual(batchPaths([]), [])
 })
+
+const sfx = [
+  f('sub-01/anat/sub-01_T1w.nii.gz'),
+  f('sub-01/anat/sub-01_T1w.json'),
+  f('sub-01/anat/sub-01_T2w.nii.gz'),
+  f('sub-01/func/sub-01_task-x_bold.nii.gz'),
+  f('sub-01/func/sub-01_task-x_bold.json'),
+  f('sub-01/func/sub-01_task-x_events.tsv'),
+  f('sub-01/func/sub-01_task-x_sbref.nii.gz'),
+  f('sub-01/func/sub-01_task-x_physio.tsv.gz'),
+  f('task-x_bold.json'),
+  f('task-x_sbref.json'),
+  f('T1w.json'),
+  f('README.md'),
+  f('README.exe')
+]
+test('T1w does not pull T2w; drop neither', () => {
+  for (const mode of ['get', 'drop']) {
+    const list = sfx.map((x) => ({ ...x, present: mode === 'drop' }))
+    const r = paths(withCompanions([list[0]], list, mode))
+    assert.ok(!r.includes('sub-01/anat/sub-01_T2w.nii.gz'), mode)
+    assert.ok(r.includes('sub-01/anat/sub-01_T1w.json'), mode)
+  }
+})
+test('bold does not pull sbref, physio or top-level sbref json, but keeps json and events', () => {
+  const r = paths(withCompanions([sfx[3]], sfx, 'get'))
+  for (const p of ['sub-01/func/sub-01_task-x_sbref.nii.gz', 'sub-01/func/sub-01_task-x_physio.tsv.gz', 'task-x_sbref.json']) assert.ok(!r.includes(p), p)
+  for (const p of ['sub-01/func/sub-01_task-x_bold.json', 'sub-01/func/sub-01_task-x_events.tsv', 'task-x_bold.json']) assert.ok(r.includes(p), p)
+})
+test('suffix-less top-level json is not pulled in; README only with doc endings', () => {
+  const r = paths(withCompanions([sfx[0]], sfx, 'get'))
+  assert.ok(!r.includes('T1w.json') && !r.includes('README.exe') && r.includes('README.md'))
+})
