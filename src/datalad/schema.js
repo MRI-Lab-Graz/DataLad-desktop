@@ -11,6 +11,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  installSubdatasets: {
+    required: ['projectPath', 'paths'],
+    optional: []
+  },
   drop: {
     required: ['projectPath'],
     optional: ['paths']
@@ -111,7 +115,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
 })
 
 /**
- * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
+ * @typedef {'cloneInstall' | 'get' | 'installSubdatasets' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
  */
 
 const RUN_MAX_COMMAND_LENGTH = 10_000
@@ -234,6 +238,9 @@ export function assertCommandRequest(commandName, request, { platform = process.
   for (const pathValue of request.paths ?? []) {
     if (typeof pathValue !== 'string' || !pathValue.trim()) {
       throw new Error(`Invalid request for ${commandName}: each path must be a non-empty string`)
+    }
+    if (commandName === 'installSubdatasets' && !isProjectRelativePath(pathValue)) {
+      throw new Error(`Invalid request for ${commandName}: paths must be inside the project`)
     }
   }
 }
