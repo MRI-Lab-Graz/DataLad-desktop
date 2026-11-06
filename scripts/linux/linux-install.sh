@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installs Worldline Desktop for the current user (Linux, 64-bit Intel/AMD). No administrator rights needed.
 #
-# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh | bash
+# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/linux-install.sh | bash
 # or download it and run:   bash linux-install.sh
 # The copy attached to a GitHub release has the version and the SHA-256 of that release's AppImage filled in by CI.
 # The copy in the repository is a template: it runs the linux-install.sh of the latest release instead.
@@ -19,7 +19,7 @@ main() {
     # ---- Pins ----
     local APP_VERSION='__VERSION__'
     local APP_SHA256='__ZIP_SHA256__'
-    local REPO='MRI-Lab-Graz/DataLad-desktop'
+    local REPO='MRI-Lab-Graz/Worldline-desktop'
     local APP_FILE="DataLad.Desktop-${APP_VERSION}.AppImage"
     local APP_URL="https://github.com/${REPO}/releases/download/v${APP_VERSION}/${APP_FILE}"
     local APP_DIR="$HOME/Applications"

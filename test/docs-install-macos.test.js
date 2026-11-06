@@ -6,7 +6,7 @@ const doc = await readFile(new URL('../docs/install.md', import.meta.url), 'utf8
 
 test('install guide leads with the macOS one-liner and also documents download-then-run and uninstall', () => {
   assert.match(doc, /## macOS: install with a script/)
-  assert.match(doc, /curl -fsSL https:\/\/github\.com\/MRI-Lab-Graz\/DataLad-desktop\/releases\/latest\/download\/macos-install\.sh \| bash/)
+  assert.match(doc, /curl -fsSL https:\/\/github\.com\/MRI-Lab-Graz\/Worldline-desktop\/releases\/latest\/download\/macos-install\.sh \| bash/)
   assert.match(doc, /bash macos-install\.sh/)
   assert.match(doc, /rm -rf "\$HOME\/Applications\/Worldline Desktop\.app"/)
   assert.match(doc, /Apple silicon/)
