@@ -44,13 +44,21 @@ test('checked state follows the selection', () => {
   assert.match(html, /data-group-none="sub"/)
 })
 
+test('unknown-size-only summary does not claim 0 B; empty hint has no parentheses; TB unit', () => {
+  assert.match(render({ summary: { count: 2, bytes: 0, unknownSize: 2 } }), />2 files, size unknown</)
+  assert.doesNotMatch(render({ summary: { count: 2, bytes: 0, unknownSize: 2 } }), /about/)
+  const g = [{ key: 'x', title: 'Things', hint: '', values: ['a', 'b'] }]
+  assert.match(render({ groups: g }), /<legend>Things<\/legend>/)
+  assert.equal(formatBytes(2.5e12), '2.5 TB')
+})
+
 test('formatBytes', () => {
   assert.equal(formatBytes(0), '0 B')
   assert.equal(formatBytes(999), '999 B')
   assert.equal(formatBytes(1500), '1.5 KB')
   assert.equal(formatBytes(1.4e9), '1.4 GB')
   assert.equal(formatBytes(1.5e9), '1.5 GB')
-  assert.equal(formatBytes(5e12), '5000.0 GB')
+  assert.equal(formatBytes(5e12), '5.0 TB')
 })
 
 const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
@@ -66,6 +74,6 @@ test('listDataFiles IPC checks the project root before listing', () => {
 
 test('reckless dialog previews the first 5 paths', () => {
   const block = main.slice(main.indexOf("payload.commandName === 'dropReckless'"))
-  assert.match(block, /paths\.slice\(0, 5\)/)
-  assert.match(block, /and \$\{count - 5\} more/)
+  assert.match(block, /previewPaths\(payload\.request\.paths\)/)
+  assert.match(main, /from '\.\/reckless-preview\.js'/)
 })

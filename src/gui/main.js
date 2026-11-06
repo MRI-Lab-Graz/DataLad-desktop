@@ -11,6 +11,7 @@ import { assertCommandRequest } from '../datalad/schema.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
+import { previewPaths } from './reckless-preview.js'
 import { initialAuthorizedRoots, isUnsafeBackupLocation, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
@@ -383,16 +384,13 @@ handle('adapter:runCommand', async (event, payload) => {
     // The page's typed word is not enough: the main process asks too. Never reachable through plain `drop`.
     assertCommandRequest('dropReckless', payload.request)
     const count = payload.request.paths.length
-    // Names come from the dataset: no control characters (they could fake lines in the dialog).
-    const shown = payload.request.paths.slice(0, 5).map((p) => '\n  ' + String(p).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' '))
     const confirmed = await confirmNative(event, {
       title: 'Delete without a safety check?',
       message: `In ${payload.request.projectPath}:`,
       detail:
         `${count} ${count === 1 ? 'file or folder' : 'files or folders'} will be removed from this computer WITHOUT checking that another copy exists. ` +
         'If there is no other copy, the data may be gone for good.\n' +
-        shown.join('') +
-        (count > 5 ? `\n  and ${count - 5} more` : ''),
+        previewPaths(payload.request.paths),
       confirmLabel: 'Delete'
     })
     if (!confirmed) {

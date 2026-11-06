@@ -4,7 +4,7 @@ import { escapeHtml as esc } from './escape-html.js'
 /** Decimal units (1 KB = 1000 B, as on macOS), one decimal above bytes. */
 export function formatBytes(n) {
   if (!(n >= 1000)) return `${Math.max(0, Math.round(n) || 0)} B`
-  const units = ['KB', 'MB', 'GB']
+  const units = ['KB', 'MB', 'GB', 'TB']
   let i = -1
   do {
     n /= 1000
@@ -15,7 +15,9 @@ export function formatBytes(n) {
 
 function summaryText({ count, bytes, unknownSize }) {
   if (!count) return 'Nothing chosen yet'
-  const text = `${count} ${count === 1 ? 'file' : 'files'}, about ${formatBytes(bytes)}`
+  const files = `${count} ${count === 1 ? 'file' : 'files'}`
+  if (unknownSize >= count) return `${files}, size unknown`
+  const text = `${files}, about ${formatBytes(bytes)}`
   return unknownSize > 0 ? `${text}, size unknown for ${unknownSize} ${unknownSize === 1 ? 'file' : 'files'}` : text
 }
 
@@ -28,7 +30,7 @@ function renderGroup(group, selected) {
     })
     .join('')
   return (
-    `<fieldset><legend>${esc(group.title)} (${esc(group.hint)})</legend>` +
+    `<fieldset><legend>${esc(group.title)}${group.hint ? ` (${esc(group.hint)})` : ''}</legend>` +
     `<button type="button" data-group-all="${key}">All</button> <button type="button" data-group-none="${key}">None</button>` +
     `<div>${boxes}</div></fieldset>`
   )
