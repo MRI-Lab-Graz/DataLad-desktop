@@ -11,10 +11,6 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
-  installSubdatasets: {
-    required: ['projectPath', 'paths'],
-    optional: []
-  },
   drop: {
     required: ['projectPath'],
     optional: ['paths']
@@ -119,7 +115,7 @@ const LEADING_DASH_FIELDS = Object.freeze({
 })
 
 /**
- * @typedef {'cloneInstall' | 'get' | 'installSubdatasets' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
+ * @typedef {'cloneInstall' | 'get' | 'save' | 'update' | 'push' | 'createBranch' | 'switchBranch'} DataLadCommandName
  */
 
 const RUN_MAX_COMMAND_LENGTH = 10_000
@@ -131,7 +127,7 @@ function isProjectRelativePath(value) {
 }
 
 // Commands that hand `paths` straight to datalad as dataset content paths.
-const PROJECT_PATH_COMMANDS = new Set(['get', 'drop', 'installSubdatasets', 'dropReckless'])
+const PROJECT_PATH_COMMANDS = new Set(['get', 'drop', 'dropReckless'])
 
 // Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),
 // bidirectional overrides and isolates, zero-width characters, the byte-order mark.

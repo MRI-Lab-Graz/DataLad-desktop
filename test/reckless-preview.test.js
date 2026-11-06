@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { previewPaths } from '../src/gui/reckless-preview.js'
+import { previewPaths } from '../src/gui/renderer/reckless-preview.js'
 
 test('hostile characters never start a new line', () => {
   for (const c of ['\n', '\r', '\u2028', '\u2029', '\u0085', '\u202e', '\u2066', '\u2069', '\u0000', '\u009f']) {
@@ -23,9 +23,4 @@ test('long paths are cut with an ellipsis', () => {
   const out = previewPaths(['x'.repeat(500)])
   assert.ok(out.length < 220)
   assert.match(out, /…/)
-})
-
-test('the renderer twin is the same function as the main-process one', async () => {
-  const twin = await import('../src/gui/renderer/reckless-preview.js')
-  assert.equal(twin.previewPaths, previewPaths)
 })

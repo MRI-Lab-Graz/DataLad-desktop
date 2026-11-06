@@ -15,7 +15,6 @@ export const CURATED_COMMANDS = new Set([
   'createProject',
   'createSubdataset',
   'get',
-  'installSubdatasets',
   'save',
   'update',
   'push',
@@ -1664,14 +1663,6 @@ export class DataLadAdapter {
           // target path(s) provided"), so name the dataset. ponytail: this dataset only, not nested ones (-r).
           args: paths.length > 0 ? ['-C', projectPath, 'get', '--', ...paths] : ['-C', projectPath, 'get', '-d', '.'],
           options: { cwd: projectPath }
-        }
-      }
-      case 'installSubdatasets': {
-        // -n: install the (sub)datasets only, no file content.
-        return {
-          command: 'datalad',
-          args: ['-C', request.projectPath, 'get', '-n', '--', ...request.paths],
-          options: { cwd: request.projectPath }
         }
       }
       case 'save': {

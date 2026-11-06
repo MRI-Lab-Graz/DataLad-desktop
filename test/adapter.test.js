@@ -2897,32 +2897,8 @@ test('listDataFiles throws a plain error when git annex find fails, but skips a 
   await assert.rejects(new DataLadAdapter({ runner: broken }).listDataFiles(root), /could not list the data files/i)
 })
 
-test('installSubdatasets runs datalad get -n for the paths', async () => {
-  const runner = new FakeRunner()
-  const args = ['-C', '/tmp/project', 'get', '-n', '--', 'sub-a', 'sub-b']
-  runner.set('datalad', args, { stdout: 'install(ok): sub-a (dataset)\n' })
-
-  const result = await new DataLadAdapter({ runner }).runCommand('installSubdatasets', {
-    projectPath: '/tmp/project',
-    paths: ['sub-a', 'sub-b']
-  })
-
-  assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, args)
-  assert.equal(runner.calls[0].options.cwd, '/tmp/project')
-})
-
-test('installSubdatasets refuses empty paths', async () => {
-  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
-  await assert.rejects(adapter.runCommand('installSubdatasets', { projectPath: '/tmp/project', paths: [] }), /non-empty/)
-  await assert.rejects(adapter.runCommand('installSubdatasets', { projectPath: '/tmp/project' }), /paths/)
-})
-
-test('installSubdatasets refuses a path outside the project', async () => {
-  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
-  for (const p of ['../other', '/etc', 'C:\\Windows', 'a/../../b']) {
-    await assert.rejects(adapter.runCommand('installSubdatasets', { projectPath: '/tmp/project', paths: [p] }), /inside the project/, p)
-  }
+test('installSubdatasets is gone: it is not a curated command', async () => {
+  await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).runCommand('installSubdatasets', { projectPath: '/tmp/project', paths: ['sub-a'] }), /Unsupported command/)
 })
 
 for (const commandName of ['get', 'drop']) {

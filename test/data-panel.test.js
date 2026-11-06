@@ -6,7 +6,7 @@ import { formatBytes, renderDataPanel } from '../src/gui/renderer/data-panel.js'
 const groups = [{ key: 'sub', title: 'Subjects', hint: 'sub-', values: ['sub-01', 'sub-02'] }]
 const some = { count: 2, bytes: 1.4e9, unknownSize: 0 }
 const none = { count: 0, bytes: 0, unknownSize: 0 }
-const render = (o = {}) => renderDataPanel({ groups, selection: {}, summary: some, mode: 'get', ...o })
+const render = (o = {}) => renderDataPanel({ groups, selection: {}, summary: some, ...o })
 
 test('panel hides groups the data does not have', () => {
   assert.doesNotMatch(render({ groups: [] }), /<fieldset/)
@@ -75,7 +75,7 @@ test('listDataFiles IPC checks the project root before listing', () => {
 test('reckless dialog previews the first 5 paths', () => {
   const block = main.slice(main.indexOf("payload.commandName === 'dropReckless'"))
   assert.match(block, /previewPaths\(payload\.request\.paths\)/)
-  assert.match(main, /from '\.\/reckless-preview\.js'/)
+  assert.match(main, /from '\.\/renderer\/reckless-preview\.js'/)
 })
 
 test('empty file list explains itself, buttons stay disabled', () => {

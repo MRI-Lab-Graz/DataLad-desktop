@@ -1945,7 +1945,6 @@ function renderDataPanelNow() {
     groups: buildFilterGroups(files),
     selection,
     summary: summarize(getFiles.map((p) => byPath.get(p))),
-    mode: 'get',
     fileCount: files.length
   })
   document.getElementById('data-panel-download').title =
