@@ -126,6 +126,9 @@ function isProjectRelativePath(value) {
   return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
 }
 
+// Commands that hand `paths` straight to datalad as dataset content paths ('dropReckless' arrives with the drop-anyway task).
+const PROJECT_PATH_COMMANDS = new Set(['get', 'drop', 'installSubdatasets', 'dropReckless'])
+
 // Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),
 // bidirectional overrides and isolates, zero-width characters, the byte-order mark.
 const RUN_HIDDEN_CHARACTERS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/
@@ -239,7 +242,7 @@ export function assertCommandRequest(commandName, request, { platform = process.
     if (typeof pathValue !== 'string' || !pathValue.trim()) {
       throw new Error(`Invalid request for ${commandName}: each path must be a non-empty string`)
     }
-    if (commandName === 'installSubdatasets' && !isProjectRelativePath(pathValue)) {
+    if (PROJECT_PATH_COMMANDS.has(commandName) && !isProjectRelativePath(pathValue)) {
       throw new Error(`Invalid request for ${commandName}: paths must be inside the project`)
     }
   }

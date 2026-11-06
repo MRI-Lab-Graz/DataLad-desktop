@@ -2923,3 +2923,21 @@ test('installSubdatasets refuses a path outside the project', async () => {
     await assert.rejects(adapter.runCommand('installSubdatasets', { projectPath: '/tmp/project', paths: [p] }), /inside the project/, p)
   }
 })
+
+for (const commandName of ['get', 'drop']) {
+  test(`${commandName} refuses paths outside the project`, async () => {
+    const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+    for (const p of ['../x', '/etc/passwd', 'C:\\x', 'a/../../b', 'a\0b']) {
+      await assert.rejects(adapter.runCommand(commandName, { projectPath: '/tmp/project', paths: [p] }), /inside the project/, JSON.stringify(p))
+    }
+  })
+
+  test(`${commandName} accepts project-relative paths`, async () => {
+    for (const p of ['sub-01/ses-1/func/a.nii.gz', 'sübjekt/ä.txt']) {
+      const runner = new FakeRunner()
+      runner.set('datalad', ['-C', '/tmp/project', commandName, '--', p], {})
+      const result = await new DataLadAdapter({ runner }).runCommand(commandName, { projectPath: '/tmp/project', paths: [p] })
+      assert.equal(result.ok, true, p)
+    }
+  })
+}
