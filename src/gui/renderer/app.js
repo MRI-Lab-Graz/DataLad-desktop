@@ -10,8 +10,8 @@ import {
 import { formatBytes, renderDataPanel } from './data-panel.js'
 import { buildFilterGroups, summarize } from './data-selection.js'
 import {
-  describeGetAll, describeNotRemoved, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
-  runSelectedBatches
+  describeGetAll, canRunReckless, describeNotRemoved, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
+  runSelectedBatches, runStillCurrent
 } from './data-actions.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
@@ -100,7 +100,7 @@ const state = {
   headerProjectPath: null,
   rootProjectIsBids: false,
   // Choose data panel. unsafePaths: what a normal drop could not remove (offered to the delete-anyway dialog).
-  dataPanel: { project: null, files: [], selection: {}, unsafePaths: [] },
+  dataPanel: { project: null, files: [], selection: {}, unsafePaths: [], unsafeProject: null },
   rootProjectPrism: null,
   rootProjectCheck: null,
   rootProjectCheckedSignature: null,
@@ -1841,6 +1841,7 @@ async function runDataAction(action, button, relativePath) {
           shouldStop: shouldStopSequence,
           onProgress: showPartProgress
         })
+        if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
         if (!outcome.ok) {
           const left = outcome.failedPaths.length + outcome.remainingPaths.length
           setLastActionState(outcome.stopped ? 'Stopped. The rest was not touched.' : `${left} files were not downloaded. Details are shown below.`, 'warning')
@@ -1932,7 +1933,7 @@ function renderDataPanelNow() {
 }
 
 function resetDataPanel() {
-  state.dataPanel = { project: state.rootProjectPath, files: [], selection: {}, unsafePaths: [] }
+  state.dataPanel = { project: state.rootProjectPath, files: [], selection: {}, unsafePaths: [], unsafeProject: null }
   elements.dataRecklessOffer.hidden = true
   closeRecklessDialog()
   elements.dataPanelNote.textContent = ''
@@ -1949,7 +1950,7 @@ async function loadDataPanel() {
   const projectPath = state.rootProjectPath
   if (!projectPath) return
   if (state.dataPanel.project !== projectPath) {
-    state.dataPanel = { project: projectPath, files: [], selection: {}, unsafePaths: [] }
+    state.dataPanel = { project: projectPath, files: [], selection: {}, unsafePaths: [], unsafeProject: null }
     elements.dataRecklessOffer.hidden = true
   }
   elements.dataPanelNote.textContent = 'Looking at your files…'
@@ -2024,6 +2025,7 @@ async function runDataPanelAction(mode, button) {
   }
   elements.dataRecklessOffer.hidden = true
   state.dataPanel.unsafePaths = []
+  state.dataPanel.unsafeProject = null
   elements.dataPanelNote.textContent = ''
   const outcome = await runSelectedBatches({
     mode,
@@ -2033,12 +2035,15 @@ async function runDataPanelAction(mode, button) {
     shouldStop: shouldStopSequence,
     onProgress: showPartProgress
   })
+  // The user may have opened another project meanwhile: then this result must not touch the panel.
+  if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
   if (outcome.ok) {
     elements.dataPanelNote.textContent = ''
   } else if (outcome.stopped) {
     elements.dataPanelNote.textContent = 'Stopped. The rest was not touched.'
   } else {
     if (mode === 'drop' && needsRecklessOffer(outcome)) {
+      state.dataPanel.unsafeProject = projectPath
       state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
       elements.dataRecklessOffer.hidden = false
     }
@@ -2087,7 +2092,7 @@ elements.recklessForm.addEventListener('submit', (event) => {
 async function runRecklessDrop() {
   if (!isDeleteWord(elements.recklessWord.value)) return // fails closed
   const projectPath = state.rootProjectPath
-  if (!panelMatchesProject(state.dataPanel, projectPath)) {
+  if (!canRunReckless({ unsafeProject: state.dataPanel.unsafeProject, panelProject: state.dataPanel.project, rootProject: projectPath })) {
     closeRecklessDialog()
     elements.dataPanelNote.textContent = 'The project changed, so nothing was deleted.'
     return
@@ -2096,6 +2101,7 @@ async function runRecklessDrop() {
   closeRecklessDialog()
   if (!projectPath || !paths.length) return
   state.dataPanel.unsafePaths = []
+  state.dataPanel.unsafeProject = null
   elements.dataRecklessOffer.hidden = true
   const outcome = await runSelectedBatches({
     mode: 'drop',
@@ -2104,6 +2110,7 @@ async function runRecklessDrop() {
     shouldStop: shouldStopSequence,
     onProgress: showPartProgress
   })
+  if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
   elements.dataPanelNote.textContent = outcome.ok
     ? ''
     : `${outcome.failedPaths.length + outcome.remainingPaths.length} files were not removed. Details are shown below.`

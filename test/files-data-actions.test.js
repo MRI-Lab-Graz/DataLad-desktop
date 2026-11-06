@@ -135,8 +135,8 @@ test('panel styles exist', () => {
 test('both panel runners refuse when the panel belongs to another project', () => {
   for (const fn of ['async function runDataPanelAction', 'async function runRecklessDrop']) {
     const body = between(app, fn, '\n}\n')
-    assert.match(body, /panelMatchesProject\(state\.dataPanel, (projectPath|state\.rootProjectPath)\)/, fn)
-    assert.ok(body.indexOf('panelMatchesProject(') < body.indexOf('runSelectedBatches('), fn)
+    assert.match(body, /panelMatchesProject\(state\.dataPanel, projectPath\)|canRunReckless\(/, fn)
+    assert.ok(body.search(/panelMatchesProject\(|canRunReckless\(/) < body.indexOf('runSelectedBatches('), fn)
   }
 })
 
@@ -164,4 +164,17 @@ test('Get all on a BIDS project goes through the batch runner with the exact pla
   assert.match(run, /describeGetAll\(/)
   assert.match(run, /runSelectedBatches\(/)
   assert.ok(run.indexOf('window.confirm') < run.indexOf('runSelectedBatches('))
+})
+
+test('a project switch during a run cannot carry its refusal into another project', () => {
+  const run = between(app, 'async function runDataPanelAction', '\n}\n')
+  const after = run.slice(run.indexOf('await runSelectedBatches('))
+  assert.match(after.slice(0, after.indexOf('needsRecklessOffer(')), /runStillCurrent\(/)
+  assert.match(run, /unsafeProject = projectPath/)
+  const reckless = between(app, 'async function runRecklessDrop', '\n}\n')
+  assert.match(reckless.slice(0, reckless.indexOf('runSelectedBatches(')), /canRunReckless\(/)
+  assert.match(reckless, /unsafeProject/)
+  assert.match(between(app, 'function resetDataPanel', '\n}\n'), /unsafeProject: null/)
+  const getAll = between(app, 'async function runDataAction', '\n}\n')
+  assert.match(getAll.slice(getAll.indexOf('await runSelectedBatches(')), /runStillCurrent\(/)
 })

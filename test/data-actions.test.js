@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   runSelectedBatches, planPaths, needsRecklessOffer, isDeleteWord, panelMatchesProject, describeNotRemoved,
-  describeRecklessDialog, planGetAll, describeGetAll
+  describeRecklessDialog, planGetAll, describeGetAll, runStillCurrent, canRunReckless
 } from '../src/gui/renderer/data-actions.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 1 })
@@ -154,4 +154,19 @@ test('Get all confirm text gives the count and size, or says it is unknown', () 
   assert.match(describeGetAll([{ path: 'a', present: false, bytes: null }]), /size is not known/)
   assert.match(describeGetAll(null), /not known/)
   assert.match(describeGetAll([f('a', true)]), /Nothing/)
+})
+
+test('a run only writes panel state while its project is still the open one', () => {
+  assert.equal(runStillCurrent({ panelProject: '/A', rootProject: '/A', runProject: '/A' }), true)
+  // A -> B switch during the run: the panel already belongs to B
+  assert.equal(runStillCurrent({ panelProject: '/B', rootProject: '/B', runProject: '/A' }), false)
+  assert.equal(runStillCurrent({ panelProject: '/A', rootProject: '/B', runProject: '/A' }), false)
+  assert.equal(runStillCurrent({ panelProject: null, rootProject: null, runProject: null }), false)
+})
+
+test('delete-anyway runs only in the project where the refusal happened', () => {
+  assert.equal(canRunReckless({ unsafeProject: '/A', panelProject: '/A', rootProject: '/A' }), true)
+  assert.equal(canRunReckless({ unsafeProject: '/A', panelProject: '/B', rootProject: '/B' }), false)
+  assert.equal(canRunReckless({ unsafeProject: '/A', panelProject: '/A', rootProject: '/B' }), false)
+  assert.equal(canRunReckless({ unsafeProject: null, panelProject: null, rootProject: null }), false)
 })

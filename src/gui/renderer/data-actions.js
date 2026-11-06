@@ -73,3 +73,11 @@ export function describeGetAll(all) {
 }
 
 export const isDeleteWord = (text) => typeof text === 'string' && text.trim().toLowerCase() === 'delete'
+
+/** After an await: true only while the open project and the panel are still the ones the run started in. */
+export const runStillCurrent = ({ panelProject, rootProject, runProject }) =>
+  Boolean(runProject) && panelProject === runProject && rootProject === runProject
+
+/** Delete-anyway needs the refusal, the panel and the open project to be one and the same project. */
+export const canRunReckless = ({ unsafeProject, panelProject, rootProject }) =>
+  Boolean(unsafeProject) && unsafeProject === panelProject && panelProject === rootProject
