@@ -69,7 +69,7 @@ test('the header is slim while a project is open and the last-save line sits in 
 
 test('the message suggestion is wired as a placeholder and a Use suggestion button', () => {
   assert.match(html, /id="use-suggestion"[^>]*hidden/)
-  assert.match(app, /import \{ suggestMessage \} from '\.\/message-suggestion\.js'/)
+  assert.match(app, /import \{ suggestMessage, vagueMessageNudge \} from '\.\/message-suggestion\.js'/)
   assert.match(app, /elements\.message\.placeholder = suggestion \|\| 'Describe what you changed'/)
   assert.match(app, /elements\.useSuggestionButton\.addEventListener\('click'/)
   // The suggestion reaches the message only through the user's click on the button.

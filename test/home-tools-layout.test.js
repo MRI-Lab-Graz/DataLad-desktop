@@ -66,21 +66,16 @@ test('the health status line lives in the project strip and the Health card is g
   assert.doesNotMatch(app, /projectHealthCard/)
 })
 
-test('Home order: merge banner, attention rows, Save, then recent history', () => {
+test('Home order: merge banner, attention rows, then Save (no recent history here: it lives under Tools, History)', () => {
   assert.ok(at('id="merge-banner"') < at('id="attention-rows"'))
   assert.ok(at('id="attention-rows"') < at('id="save-project"'))
-  assert.ok(at('id="save-project"') < at('id="recent-commits-output"'))
+  assert.doesNotMatch(html, /id="recent-commits-output"/)
   assert.ok(at('id="merge-banner"') < at('id="project-tools"'))
 })
 
 test('Home cards carry no emoji badge', () => {
   const home = html.slice(at('id="project-home"'), at('id="project-tools"'))
   assert.doesNotMatch(home, /card-icon-badge/)
-})
-
-test('Full history jumps to Tools, History', () => {
-  at('id="history-full-link"')
-  assert.match(app, /historyFullLink\.addEventListener\('click', \(\) => showTools\('time-machine-zone'\)\)/)
 })
 
 test('attention rows come from computeAttentionRows and act through the existing buttons', () => {
@@ -120,7 +115,7 @@ test('focus follows the view swap', () => {
 })
 
 test('decorative arrows are hidden from screen readers', () => {
-  for (const id of ['open-tools', 'close-tools', 'history-full-link']) {
+  for (const id of ['open-tools', 'close-tools']) {
     const button = html.slice(at(`id="${id}"`), html.indexOf('</button>', at(`id="${id}"`)))
     assert.doesNotMatch(button.replace(/<span aria-hidden="true">[←▸]<\/span>/g, ''), /[←▸]/, id)
   }

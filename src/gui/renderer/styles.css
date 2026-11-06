@@ -2140,3 +2140,20 @@ select:disabled {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
 }
+
+.save-tips-off .save-tip {
+  display: none;
+}
+
+.save-validity-text {
+  margin: 4px 0;
+  font-weight: 600;
+}
+
+.save-validity-ok {
+  color: #1f6b34;
+}
+
+.save-validity-bad {
+  color: #9b1c1c;
+}

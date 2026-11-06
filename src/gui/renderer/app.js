@@ -8,7 +8,7 @@ import {
 } from './button-gating.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
-import { describeFolders, describeTypeBadge, describeValidity } from './project-card.js'
+import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
 import { rowDataActions } from './row-data-actions.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
@@ -40,7 +40,7 @@ import {
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
-import { suggestMessage } from './message-suggestion.js'
+import { suggestMessage, vagueMessageNudge } from './message-suggestion.js'
 
 const api = window.dataladDesktop
 
@@ -61,7 +61,6 @@ const state = {
     files: 0,
     branches: 0,
     workingTree: 0,
-    recentCommits: 0,
     projectHealth: 0,
     timeMachineHistory: 0,
     timeMachineDetail: 0
@@ -72,7 +71,6 @@ const state = {
   workingTreeSnapshot: null,
   selectedChangedPaths: new Set(),
   hasExplicitChangedSelection: false,
-  recentCommits: [],
   pendingCommands: new Set(),
   activeRuns: new Map(),
   sequenceStopRequested: false,
@@ -96,6 +94,7 @@ const state = {
   rootProjectIsBids: false,
   rootProjectPrism: null,
   rootProjectCheck: null,
+  rootProjectCheckedSignature: null,
   createProjectBidsCandidate: null
 }
 
@@ -135,9 +134,13 @@ const elements = {
   currentProjectNestedInfo: document.getElementById('current-project-nested-info'),
   currentProjectBadge: document.getElementById('current-project-badge'),
   currentProjectBidsBadge: document.getElementById('current-project-bids-badge'),
-  validityDetails: document.getElementById('validity-details'),
-  validityProblems: document.getElementById('validity-problems'),
-  validityRecheck: document.getElementById('validity-recheck'),
+  savePanel: document.getElementById('save-checkpoint-panel'),
+  saveStepValid: document.getElementById('save-step-valid'),
+  saveValidityText: document.getElementById('save-validity-text'),
+  saveValidityProblems: document.getElementById('save-validity-problems'),
+  saveValidityRecheck: document.getElementById('save-validity-recheck'),
+  messageNudge: document.getElementById('message-nudge'),
+  saveTipsToggle: document.getElementById('save-tips-toggle'),
   currentProjectPrismBadge: document.getElementById('current-project-prism-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
@@ -154,7 +157,6 @@ const elements = {
   openToolsButton: document.getElementById('open-tools'),
   closeToolsButton: document.getElementById('close-tools'),
   attentionRows: document.getElementById('attention-rows'),
-  historyFullLink: document.getElementById('history-full-link'),
   lastActionDetails: document.getElementById('last-action-details'),
   projectNavTiles: Array.from(document.querySelectorAll('#project-nav-group .onboarding-tile')),
   projectNavTileSync: document.getElementById('project-nav-tile-sync'),
@@ -196,7 +198,6 @@ const elements = {
   ignoreRulesApplyButton: document.getElementById('ignore-rules-apply'),
   ignoreRulesAddOsJunkButton: document.getElementById('ignore-rules-add-os-junk'),
   ignoreRulesOutput: document.getElementById('ignore-rules-output'),
-  recentCommitsOutput: document.getElementById('recent-commits-output'),
   saveProjectButton: document.getElementById('save-project'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
@@ -286,6 +287,7 @@ api.getAppVersion().then((version) => {
   document.querySelectorAll('[data-app-version]').forEach((el) => { el.textContent = version })
 })
 initBidsAutoNestToggle()
+initSaveTipsToggle()
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -628,7 +630,6 @@ function showTools(target = DEFAULT_TOOL) {
 
 elements.openToolsButton.addEventListener('click', () => (elements.projectTools.hidden ? showTools() : showHome({ focus: true })))
 elements.closeToolsButton.addEventListener('click', () => showHome({ focus: true }))
-elements.historyFullLink.addEventListener('click', () => showTools('time-machine-zone'))
 
 // Validation messages go to #command-output too, so a collapsed details must open when anything is written.
 new MutationObserver(() => {
@@ -1959,7 +1960,6 @@ async function detectProjectType(projectPath) {
     await refreshFileBrowser(elements.commandProjectPath.value.trim() || projectPath)
     if (!datasetsRefreshed) {
       await refreshWorkingTreeStatus(elements.commandProjectPath.value.trim() || projectPath)
-      await refreshRecentCommits(elements.commandProjectPath.value.trim() || projectPath)
       updateSaveButtonState()
     }
   } catch (error) {
@@ -2100,7 +2100,6 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
           void refreshBranchList(nextProjectPath)
         }
         void refreshWorkingTreeStatus(nextProjectPath)
-        void refreshRecentCommits(nextProjectPath)
         void refreshProjectHealth(nextProjectPath)
       }
 
@@ -2207,7 +2206,6 @@ async function refreshDatasetList(projectPath) {
     setCurrentProjectHeader(nextPath, classificationForPath(nextPath))
     await refreshBranchList(nextPath)
     await refreshWorkingTreeStatus(nextPath)
-    await refreshRecentCommits(nextPath)
     updateSaveButtonState()
     return true
   } catch (error) {
@@ -2638,38 +2636,6 @@ async function loadWorkingTreeStatus(
     }
 
     return null
-  }
-}
-
-async function refreshRecentCommits(projectPath, { includeCommandOutputOnFailure = true } = {}) {
-  if (!projectPath) {
-    state.recentCommits = []
-    renderRecentCommitList()
-    return []
-  }
-
-  const requestToken = nextRequestToken('recentCommits')
-
-  try {
-    const history = await api.listRecentCommits(projectPath, { limit: 20 })
-    if (!isLatestRequestToken('recentCommits', requestToken)) {
-      return history.commits ?? []
-    }
-
-    state.recentCommits = history.commits ?? []
-    renderRecentCommitList()
-    return state.recentCommits
-  } catch (error) {
-    if (!isLatestRequestToken('recentCommits', requestToken)) {
-      return []
-    }
-
-    state.recentCommits = []
-    renderRecentCommitList(`Could not load recent saves: ${String(error.message)}`)
-    if (includeCommandOutputOnFailure) {
-      elements.commandOutput.textContent = String(error.message)
-    }
-    return []
   }
 }
 
@@ -3208,40 +3174,6 @@ async function refreshOpenDiffs() {
   }
 }
 
-function renderRecentCommitList(overrideMessage = null) {
-  if (overrideMessage) {
-    elements.recentCommitsOutput.textContent = overrideMessage
-    return
-  }
-
-  if (!state.recentCommits.length) {
-    elements.recentCommitsOutput.textContent = 'No saves yet in this project.'
-    return
-  }
-
-  const rows = state.recentCommits
-    .map((entry) => {
-      const age = formatAge(Math.max(0, Date.now() - Number(entry.timestamp) * 1000))
-      const hash = entry.commitHash || 'unknown'
-      const subject = entry.subject || '(no subject)'
-      const author = entry.author || 'Unknown author'
-
-      return (
-        '<li class="history-item">' +
-        '<div class="history-item-head">' +
-        `<span class="history-hash">${escapeHtml(hash)}</span>` +
-        `<span class="history-age">${escapeHtml(age)}</span>` +
-        '</div>' +
-        `<div class="history-subject">${escapeHtml(subject)}</div>` +
-        `<div class="history-author">${escapeHtml(author)}</div>` +
-        '</li>'
-      )
-    })
-    .join('')
-
-  elements.recentCommitsOutput.innerHTML = `<ul class="history-list">${rows}</ul>`
-}
-
 function gatherSavePaths() {
   return [...state.selectedChangedPaths]
 }
@@ -3257,11 +3189,16 @@ function updateSaveButtonState() {
     mergeInProgress: Boolean(snapshot?.mergeInProgress),
     hasChanges: Boolean(snapshot && !snapshot.clean),
     hasIdentity: !shouldBlockForIdentity('save', state.gitIdentity),
+    validityBlocked: Boolean(currentSaveValidity()?.blocksSave),
     prismMode
   })
 
   elements.saveProjectButton.disabled = gating.disabled
   elements.saveProjectButton.hidden = Boolean(snapshot?.mergeInProgress)
+  renderSaveValidity() // "files changed since the check" follows every status refresh
+  const nudge = vagueMessageNudge(elements.message.value)
+  elements.messageNudge.hidden = !nudge
+  elements.messageNudge.textContent = nudge
   elements.saveGuidance.textContent = gating.guidance.text
   elements.saveGuidance.classList.toggle('hint-inline-warning', gating.guidance.warning)
 
@@ -3713,8 +3650,14 @@ async function refreshValidity(projectPath) {
     check = { verdict: 'unchecked', reason: 'failed' }
   }
   if (runId !== validityRunId || projectPath !== state.rootProjectPath) return
+  // The watcher may not have refreshed the list of changes yet: refresh it now, so "what was checked" is exact.
+  await refreshWorkingTreeStatus(projectPath).catch(() => {})
+  if (runId !== validityRunId || projectPath !== state.rootProjectPath) return
   validityRunId = null
   state.rootProjectCheck = check?.verdict === 'none' ? null : check
+  // What the files looked like when the check finished (null = not known yet: adopted at the next render).
+  // ponytail: edits made while the check is running are not detected; Save checks again itself.
+  state.rootProjectCheckedSignature = state.workingTreeSnapshot ? changeSignature(state.workingTreeSnapshot.files) : null
   renderValidity()
 }
 
@@ -3727,29 +3670,41 @@ function renderValidity() {
     badge.classList.toggle('badge-ok', out.tone === 'ok')
     badge.classList.toggle('badge-bad', out.tone === 'bad')
   }
-  const out = describeValidity({ label: 'PRISM', check })
-  const problems =
-    check?.verdict === 'invalid' && Array.isArray(check.errors)
-      ? check.errors.filter((e) => typeof e === 'string')
-      : check?.verdict === 'unchecked'
-        ? [out.title]
-        : []
-  elements.validityDetails.hidden = check?.verdict !== 'invalid' && check?.verdict !== 'unchecked'
-  elements.validityDetails.querySelector('summary').textContent = check?.verdict === 'unchecked' ? "Why wasn't it checked?" : 'Show what to fix'
-  elements.validityProblems.replaceChildren(
-    ...problems.map((line) => Object.assign(document.createElement('li'), { textContent: line }))
-  )
-  if (check?.verdict !== 'invalid') elements.validityDetails.open = false
+  renderSaveValidity()
+}
+
+// The result for the Save area: null when this project has none; "stale" once the changed files differ from the check.
+function currentSaveValidity() {
+  const snapshot = state.workingTreeSnapshot
+  if (state.rootProjectCheckedSignature === null && snapshot && state.rootProjectCheck?.verdict !== 'checking') {
+    state.rootProjectCheckedSignature = changeSignature(snapshot.files)
+  }
+  const stale = state.rootProjectCheckedSignature !== null && snapshot != null && state.rootProjectCheckedSignature !== changeSignature(snapshot.files)
+  return describeSaveValidity({ check: state.rootProjectCheck, stale })
+}
+
+function renderSaveValidity() {
+  const out = currentSaveValidity()
+  const check = state.rootProjectCheck
+  elements.saveStepValid.hidden = !out
+  if (!out) return
+  elements.saveValidityText.textContent = out.text
+  elements.saveValidityText.classList.toggle('save-validity-ok', out.tone === 'ok')
+  elements.saveValidityText.classList.toggle('save-validity-bad', out.tone === 'bad')
+  const problems = check.verdict === 'invalid' && Array.isArray(check.errors) ? check.errors.filter((e) => typeof e === 'string') : []
+  elements.saveValidityProblems.replaceChildren(...problems.map((line) => Object.assign(document.createElement('li'), { textContent: line })))
+  elements.saveValidityRecheck.disabled = check.verdict === 'checking'
 }
 
 for (const badge of [elements.currentProjectBidsBadge, elements.currentProjectPrismBadge]) {
   badge.addEventListener('click', () => {
-    if (elements.validityDetails.hidden) return
-    elements.validityDetails.open = true
-    elements.validityRecheck.focus()
+    if (elements.saveStepValid.hidden) return
+    if (!elements.projectTools.hidden) showHome()
+    elements.saveStepValid.scrollIntoView({ block: 'center' })
+    elements.saveValidityRecheck.focus()
   })
 }
-elements.validityRecheck.addEventListener('click', () => void refreshValidity(state.rootProjectPath))
+elements.saveValidityRecheck.addEventListener('click', () => void refreshValidity(state.rootProjectPath))
 
 function applyDatasetGatedButtons(classification) {
   state.currentProjectClassification = classification
@@ -4359,6 +4314,24 @@ function isBidsAutoNestEnabled() {
   } catch {
     return true
   }
+}
+
+// Tips are hints only (step numbers, explanations, the message nudge); the check and the message box stay. Default on.
+const SAVE_TIPS_STORAGE_KEY = 'dataladDesktop.saveTips'
+function initSaveTipsToggle() {
+  let on = true
+  try {
+    on = localStorage.getItem(SAVE_TIPS_STORAGE_KEY) !== '0'
+  } catch {}
+  const apply = () => elements.savePanel.classList.toggle('save-tips-off', !elements.saveTipsToggle.checked)
+  elements.saveTipsToggle.checked = on
+  apply()
+  elements.saveTipsToggle.addEventListener('change', () => {
+    apply()
+    try {
+      localStorage.setItem(SAVE_TIPS_STORAGE_KEY, elements.saveTipsToggle.checked ? '1' : '0')
+    } catch {}
+  })
 }
 
 function initBidsAutoNestToggle() {

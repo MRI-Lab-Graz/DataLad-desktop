@@ -24,6 +24,7 @@ export function computeSaveGating({
   hasChanges,
   hasIdentity = true,
   mergeInProgress = false,
+  validityBlocked = false,
   prismMode
 }) {
   if (mergeInProgress) {
@@ -47,6 +48,10 @@ export function computeSaveGating({
       disabled,
       guidance: { text: 'Select changed files before saving.', warning: true }
     }
+  }
+
+  if (validityBlocked) {
+    return { disabled: true, guidance: { text: 'Fix the problems above, then press Check again.', warning: true } }
   }
 
   if (!hasIdentity) {

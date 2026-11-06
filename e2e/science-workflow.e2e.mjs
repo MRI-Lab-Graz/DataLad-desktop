@@ -51,10 +51,9 @@ test.after(async () => {
   await app?.close()
 })
 
-test('Home shows Save and recent history with no navigation; Tools is closed', async () => {
+test('Home shows Save with no navigation; Tools is closed', async () => {
   const visible = (id) => app.page.evaluate((elementId) => document.getElementById(elementId).offsetParent !== null, id)
   assert.equal(await visible('save-project'), true)
-  assert.equal(await visible('recent-commits-output'), true)
   assert.equal(await visible('project-tools'), false)
 })
 

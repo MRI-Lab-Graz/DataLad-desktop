@@ -94,7 +94,7 @@ test('the project card has a "project" part and a "right now" part, with Tools a
   for (const id of ['current-project-title', 'current-project-path', 'current-project-nested-info', 'current-project-badge', 'current-project-bids-badge', 'current-project-prism-badge']) {
     assert.ok(strip.indexOf(`id="${id}"`) > about && strip.indexOf(`id="${id}"`) < now, `${id} is in the project part`)
   }
-  for (const id of ['project-status-line', 'last-commit-meta', 'last-action-state', 'validity-details']) {
+  for (const id of ['project-status-line', 'last-commit-meta', 'last-action-state']) {
     assert.ok(strip.indexOf(`id="${id}"`) > now, `${id} is in the right-now part`)
   }
   const tools = /<button id="open-tools"[^>]*>[\s\S]*?<\/button>/.exec(strip)?.[0] ?? ''
@@ -103,10 +103,10 @@ test('the project card has a "project" part and a "right now" part, with Tools a
   assert.match(tools, /aria-controls="project-tools"[^>]*aria-expanded="false"|aria-expanded="false"[^>]*aria-controls="project-tools"/)
 })
 
-test('the BIDS and PRISM badges are buttons that open the problem list; the list has a Check again button', () => {
+test('the BIDS and PRISM badges are buttons; their problem list and Check again live in the Save area', () => {
   assert.match(html, /<button[^>]*id="current-project-bids-badge"/)
   assert.match(html, /<button[^>]*id="current-project-prism-badge"/)
-  assert.match(html, /id="validity-recheck"/)
+  assert.doesNotMatch(html, /id="validity-details"/)
 })
 
 // --- wiring ---
@@ -120,16 +120,4 @@ test('the check runs when a project is opened and after a Save, cancels the one 
   assert.doesNotMatch(body, /innerHTML/)
   assert.match(app, /void refreshValidity\(projectPath\)/) // on open
   assert.match(app, /commandName === 'save'[^\n]*refreshValidity\(nextProjectPath\)/) // after a Save, also a blocked one
-})
-
-test('when the check could not run, the details box explains why instead of listing problems to fix', () => {
-  const body = app.slice(app.indexOf('function renderValidity('), app.indexOf('function renderValidity(') + 1800)
-  assert.match(body, /check\?\.verdict === 'unchecked'[\s\S]{0,200}out\.title|out\.title[\s\S]{0,200}'unchecked'/)
-  assert.match(body, /Why wasn't it checked\?/)
-})
-
-test('the project type texts no longer say "linked data" or "child data folders"', () => {
-  const body = app.slice(app.indexOf('function friendlyProjectTypeLabel('), app.indexOf('function renderProjectCheckOutput('))
-  assert.doesNotMatch(body, /linked|child/i)
-  assert.match(body, /tracked on their own/)
 })
