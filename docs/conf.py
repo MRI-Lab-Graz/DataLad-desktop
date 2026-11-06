@@ -35,7 +35,7 @@ html_title = "Worldline Desktop Documentation"
 
 html_theme_options = {
     "accent_color": "blue",
-    "github_url": "https://github.com/MRI-Lab-Graz/DataLad-desktop",
+    "github_url": "https://github.com/MRI-Lab-Graz/Worldline-desktop",
 }
 
 # -- MyST Parser configuration -----------------------------------------------

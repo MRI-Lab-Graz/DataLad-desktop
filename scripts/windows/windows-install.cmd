@@ -54,7 +54,7 @@ $InstallDir = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 # ---- Pins: the only places a version or a hash is written down ----
 $AppVersion = '__VERSION__'
 $AppZipSha256 = '__ZIP_SHA256__'
-$Repo = 'MRI-Lab-Graz/DataLad-desktop'
+$Repo = 'MRI-Lab-Graz/Worldline-desktop'
 $AppZipName = "Worldline-Desktop-$AppVersion-win-x64.zip"
 $AppZipUrl = "https://github.com/$Repo/releases/download/v$AppVersion/$AppZipName"
 $GitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe'

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Installs Worldline Desktop for the current user (Apple silicon). No administrator rights needed for this script.
 #
-# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh | bash
+# Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/macos-install.sh | bash
 # or download it and run:   bash macos-install.sh
 # The copy attached to a GitHub release has the version and the SHA-256 of that release's app zip filled in by CI.
 # The copy in the repository is a template: it runs the macos-install.sh of the latest release instead.
@@ -18,7 +18,7 @@ main() {
     # ---- Pins ----
     local APP_VERSION='__VERSION__'
     local APP_ZIP_SHA256='__ZIP_SHA256__'
-    local REPO='MRI-Lab-Graz/DataLad-desktop'
+    local REPO='MRI-Lab-Graz/Worldline-desktop'
     local APP_ZIP_NAME="Worldline-Desktop-${APP_VERSION}-mac-arm64.zip"
     local APP_ZIP_URL="https://github.com/${REPO}/releases/download/v${APP_VERSION}/${APP_ZIP_NAME}"
     local BREW_INSTALL_URL='https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'

@@ -6,11 +6,11 @@ The releases are not code-signed, so there is no installer to double-click. Inst
 checks it against a checksum written into the script itself, and sets everything up. You get no security warning.
 
 1. Get the one file for your system (each link always points to the newest release):
-   - **Windows:** [`windows-install.cmd`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/windows-install.cmd) (no admin rights; see
+   - **Windows:** [`windows-install.cmd`](https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/windows-install.cmd) (no admin rights; see
      [Windows: install with a script](#windows-install-with-a-script))
-   - **macOS (Apple silicon):** [`macos-install.sh`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh) (see
+   - **macOS (Apple silicon):** [`macos-install.sh`](https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/macos-install.sh) (see
      [macOS: install with a script](#macos-install-with-a-script))
-   - **Linux:** [`linux-install.sh`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh) (see
+   - **Linux:** [`linux-install.sh`](https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/linux-install.sh) (see
      [Linux: install with a script](#linux-install-with-a-script))
 2. Run it: double-click `windows-install.cmd`, or paste the one-liner from the section for your system.
 3. Launch **Worldline Desktop** like any other app.
@@ -47,7 +47,7 @@ A folder the app did not create itself (one you open, clone or pick as a USB/sha
 and scripts that git or DataLad would run. So the first time you open one, the app shows what it found and
 asks whether to trust it: **Trust this folder**, **Trust everything inside this folder** (handy for a lab share)
 or **Cancel**. Nothing from the folder runs before you answer. It asks again only if something in the folder
-changes. IT departments can pre-trust locations; see [SECURITY.md](https://github.com/MRI-Lab-Graz/DataLad-desktop/blob/main/SECURITY.md).
+changes. IT departments can pre-trust locations; see [SECURITY.md](https://github.com/MRI-Lab-Graz/Worldline-desktop/blob/main/SECURITY.md).
 
 ## macOS: install with a script
 
@@ -55,7 +55,7 @@ For Apple-silicon Macs, no administrator rights for the app, and no Gatekeeper w
 is not quarantined). Open **Terminal** and paste:
 
 ```bash
-curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh | bash
+curl -fsSL https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/macos-install.sh | bash
 ```
 
 Prefer to read it first? Download `macos-install.sh` from the release page, then run `bash macos-install.sh`.
@@ -73,7 +73,7 @@ To uninstall: `rm -rf "$HOME/Applications/Worldline Desktop.app"` (Homebrew's pa
 For 64-bit Intel/AMD computers, no administrator rights. Open a terminal and paste:
 
 ```bash
-curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh | bash
+curl -fsSL https://github.com/MRI-Lab-Graz/Worldline-desktop/releases/latest/download/linux-install.sh | bash
 ```
 
 The script checks the AppImage's SHA-256 against the value baked into it, saves it as `~/Applications/Worldline-Desktop.AppImage`
@@ -120,8 +120,8 @@ from the source code instead of a script install.
 **Clone and run:**
 
 ```bash
-git clone https://github.com/MRI-Lab-Graz/DataLad-desktop.git
-cd DataLad-desktop
+git clone https://github.com/MRI-Lab-Graz/Worldline-desktop.git
+cd Worldline-desktop
 npm install
 npm start
 ```

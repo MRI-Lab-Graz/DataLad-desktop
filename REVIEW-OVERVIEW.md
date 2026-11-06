@@ -1,6 +1,6 @@
 # Worldline Desktop: technical overview for review
 
-Repository: https://github.com/MRI-Lab-Graz/DataLad-desktop (branch `main`)
+Repository: https://github.com/MRI-Lab-Graz/Worldline-desktop (branch `main`)
 
 Written for: an experienced IT/security reviewer assessing fitness for non-technical users, mostly on Windows.
 
