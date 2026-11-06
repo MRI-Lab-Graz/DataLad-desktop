@@ -70,3 +70,61 @@ export function selectFiles(files, selection, mode) {
     })
   })
 }
+
+const DATASET_FILES = /^(participants\.(tsv|json)|dataset_description\.json|README(\..*)?|CHANGES(\..*)?)$/
+const dirOf = (path) => path.slice(0, path.lastIndexOf('/') + 1)
+const entityKey = (entities) => JSON.stringify(Object.entries(entities).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+
+/**
+ * The selected files plus what must travel with them: same-folder files with the same entities (json, events,
+ * bvec/bval ...). For get, also the top-level dataset files and task-*.json whose entities fit a selected file.
+ * Companions follow the mode's presence rule (get: missing only, drop: present only).
+ */
+export function withCompanions(selected, all, mode) {
+  const wantPresent = mode === 'drop'
+  const sel = selected.map((f) => parseBidsPath(f.path))
+  const sameName = new Set(sel.filter((p) => !p.datasetLevel).map((p) => dirOf(p.path) + '\0' + entityKey(p.entities)))
+  const out = new Map(selected.map((f) => [f.path, f]))
+  for (const file of all) {
+    if (file.present !== wantPresent || out.has(file.path)) continue
+    const p = parseBidsPath(file.path)
+    let take = !p.datasetLevel && sameName.has(dirOf(p.path) + '\0' + entityKey(p.entities))
+    if (!take && mode === 'get' && !file.path.includes('/')) {
+      take =
+        DATASET_FILES.test(file.path) ||
+        (p.ext === 'json' && Object.keys(p.entities).length > 0 &&
+          sel.some((s) => Object.entries(p.entities).every(([k, v]) => Object.hasOwn(s.entities, k) && s.entities[k] === v)))
+    }
+    if (take) out.set(file.path, file)
+  }
+  return [...out.values()]
+}
+
+export function summarize(files) {
+  let bytes = 0
+  let unknownSize = 0
+  for (const f of files) {
+    if (typeof f.bytes === 'number') bytes += f.bytes
+    else unknownSize++
+  }
+  return { count: files.length, bytes, unknownSize }
+}
+
+/** Splits paths into command-line sized groups (path lengths plus one separator each); order kept, paths never split. */
+export function batchPaths(paths, maxChars = 6000) {
+  const batches = []
+  let cur = []
+  let len = 0
+  for (const p of paths) {
+    const n = p.length + 1
+    if (cur.length && len + n > maxChars) {
+      batches.push(cur)
+      cur = []
+      len = 0
+    }
+    cur.push(p)
+    len += n
+  }
+  if (cur.length) batches.push(cur)
+  return batches
+}

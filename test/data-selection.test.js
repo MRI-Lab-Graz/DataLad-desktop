@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildFilterGroups, selectFiles } from '../src/gui/renderer/data-selection.js'
+import { buildFilterGroups, selectFiles, withCompanions, summarize, batchPaths } from '../src/gui/renderer/data-selection.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 10 })
 const files = [
@@ -114,4 +114,75 @@ test('non-ASCII names group and select', () => {
   const fs = [f('sub-ä01/anat/sub-ä01_T1w.nii.gz'), f('sub-ö02/anat/sub-ö02_T1w.nii.gz')]
   assert.deepEqual(buildFilterGroups(fs).find((x) => x.key === 'sub').values.length, 2)
   assert.equal(selectFiles(fs, { sub: new Set(['ä01']) }, 'get').length, 1)
+})
+
+const paths = (r) => r.map((x) => x.path).sort()
+const all3 = [
+  f('sub-01/func/sub-01_task-rest_bold.nii.gz'),
+  f('sub-01/func/sub-01_task-rest_bold.json'),
+  f('sub-01/func/sub-01_task-rest_events.tsv'),
+  f('sub-01/func/sub-01_task-nback_events.tsv'),
+  f('sub-01/func/sub-01_task-rest_bold.json.bak', true),
+  f('sub-01/dwi/sub-01_dwi.nii.gz'),
+  f('sub-01/dwi/sub-01_dwi.bvec'),
+  f('sub-01/dwi/sub-01_dwi.bval'),
+  f('participants.tsv'),
+  f('participants.json'),
+  f('dataset_description.json'),
+  f('README'),
+  f('CHANGES'),
+  f('task-rest_bold.json'),
+  f('task-nback_bold.json'),
+  f('task-rest_run-1_bold.json')
+]
+
+test('bold.nii.gz brings its json and events tsv', () => {
+  const r = withCompanions([all3[0]], all3, 'get')
+  for (const p of ['sub-01/func/sub-01_task-rest_bold.nii.gz', 'sub-01/func/sub-01_task-rest_bold.json', 'sub-01/func/sub-01_task-rest_events.tsv'])
+    assert.ok(paths(r).includes(p), p)
+  assert.ok(!paths(r).includes('sub-01/func/sub-01_task-nback_events.tsv'))
+  const dwi = withCompanions([all3[5]], all3, 'get')
+  assert.ok(paths(dwi).includes('sub-01/dwi/sub-01_dwi.bvec') && paths(dwi).includes('sub-01/dwi/sub-01_dwi.bval'))
+})
+
+test('get adds participants.tsv and dataset_description.json, drop does not', () => {
+  const get = paths(withCompanions([all3[0]], all3, 'get'))
+  for (const p of ['participants.tsv', 'participants.json', 'dataset_description.json', 'README', 'CHANGES']) assert.ok(get.includes(p), p)
+  const present = all3.map((x) => ({ ...x, present: true }))
+  const drop = paths(withCompanions([present[0]], present, 'drop'))
+  assert.ok(!drop.includes('participants.tsv') && !drop.includes('dataset_description.json') && !drop.includes('task-rest_bold.json'))
+  assert.ok(drop.includes('sub-01/func/sub-01_task-rest_bold.json'))
+})
+
+test('inherited top-level task json is added only when its entities fit', () => {
+  const get = paths(withCompanions([all3[0]], all3, 'get'))
+  assert.ok(get.includes('task-rest_bold.json'))
+  assert.ok(!get.includes('task-nback_bold.json'))
+  assert.ok(!get.includes('task-rest_run-1_bold.json'))
+})
+
+test('companions follow the presence rule, are deduplicated, and keep the selection', () => {
+  const r = withCompanions([all3[0], all3[1]], all3, 'get')
+  assert.equal(r.length, new Set(r.map((x) => x.path)).size)
+  assert.ok(!paths(r).includes('sub-01/func/sub-01_task-rest_bold.json.bak'))
+  const own = withCompanions([{ ...all3[0], present: true }], [{ ...all3[0], present: true }, ...all3.slice(1)], 'get')
+  assert.ok(paths(own).includes(all3[0].path))
+})
+
+test('summary counts unknown sizes separately', () => {
+  assert.deepEqual(summarize([f('a'), { path: 'b', present: false, bytes: null }, { path: 'c', present: false }]), { count: 3, bytes: 10, unknownSize: 2 })
+})
+
+test('batches stay under the limit and keep non-ASCII paths intact', () => {
+  const ps = Array.from({ length: 50 }, (_, i) => `sub-${i}/Ärzte_日本/file${i}.nii.gz`)
+  const b = batchPaths(ps, 200)
+  assert.deepEqual(b.flat(), ps)
+  assert.ok(b.length > 1)
+  for (const batch of b) assert.ok(batch.reduce((n, p) => n + p.length + 1, 0) <= 200)
+})
+
+test('an oversized path is a batch of one', () => {
+  const big = 'x'.repeat(50)
+  assert.deepEqual(batchPaths(['a', big, 'b'], 20), [['a'], [big], ['b']])
+  assert.deepEqual(batchPaths([]), [])
 })
