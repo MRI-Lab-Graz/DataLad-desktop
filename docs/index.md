@@ -5,7 +5,9 @@ macOS, Windows, and Linux, no command line required.
 
 Worldline Desktop puts a simple, visual workflow on top of [DataLad](https://www.datalad.org/)
 (and plain Git projects too): open a project, see what changed, write a short
-note, and save a checkpoint. Need data that isn't downloaded yet? One click.
+note, and save a step. Need data that isn't downloaded yet? One click.
+
+> Worldline Desktop is an independent project. It is not affiliated with or endorsed by the DataLad project.
 
 ![Worldline Desktop start screen with Open Project and Create Project](_static/screenshots/02-welcome.png)
 

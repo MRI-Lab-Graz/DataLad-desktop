@@ -13,17 +13,13 @@ A researcher opens Worldline Desktop and selects one of their projects. They rev
 5. Keep Git-only projects uncluttered by DataLad-specific UI.
 6. Keep language researcher-friendly; avoid annex/sibling internals unless required for recovery.
 7. Treat project status as live, not something the user must request: the working-tree view should reflect disk state automatically while a project is open, not only after an explicit refresh click.
-8. Do not build a terminal into the app: power users have the terminal. Saves they make there, including recorded `datalad run` commands, show up in Tools → History like any other save.
+8. Do not build a terminal into the app: power users have the terminal. Saves they make there, including recorded `datalad run` commands, show up in Work on this project → History like any other save.
 
 ## Project classification in UI
 
-Each active project should display one classification badge:
+The project card says in plain words what the project check found. DataLad is the normal case and gets no badge; only a plain **Git** folder (no data on demand) or an unknown one does.
 
-- **Git**
-- **Dataset**
-- **Superdataset**
-
-A BIDS dataset also gets a **BIDS** badge, and a PRISM project (`project.json` in its root) a **PRISM** badge; Save in a PRISM project only goes through when the PRISM validator reports the whole project valid.
+A BIDS dataset also gets a **BIDS** badge, and a PRISM project (`project.json` in its root) a **PRISM** badge, each showing **✓ valid** or the number of problems; Save in a PRISM project only goes through when the PRISM validator reports the whole project valid.
 
 ## DataLad action surface in MVP
 
@@ -34,7 +30,7 @@ For DataLad-enabled projects, the compact action group should include:
 - **Publish** (also sends the versions the researcher marked)
 - **Add a Remote** (only while the project has none: a USB drive, network share or empty repository)
 
-Alongside these, Tools → Branches & Ignore offers **Merge Into Current Branch**; conflicts are resolved per file in the Merge banner. Tools → History offers **Mark As Version** and shows recorded `datalad run` commands, and Tools → Health offers **Check Data Integrity**. Deliberately not offered: generic command forms, `datalad rerun`, metadata and credential management, container runs. Someone who needs them has the terminal.
+Alongside these, Work on this project → Branches & Ignore offers **Merge Into Current Branch**; conflicts are resolved per file in the Merge banner. Work on this project → History offers **Mark As Version** and shows recorded `datalad run` commands, and Work on this project → Health offers **Check Data Integrity**. Deliberately not offered: generic command forms, `datalad rerun`, metadata and credential management, container runs. Someone who needs them has the terminal.
 
 Clone/Install should live in onboarding and project-opening flow, not as a permanent toolbar action.
 

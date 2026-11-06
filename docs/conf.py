@@ -32,6 +32,8 @@ exclude_patterns = [
 html_theme = "shibuya"
 html_static_path = ["_static"]
 html_title = "Worldline Desktop Documentation"
+html_logo = "_static/logo.png"
+html_favicon = "_static/favicon.png"
 
 html_theme_options = {
     "accent_color": "blue",

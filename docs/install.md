@@ -26,7 +26,7 @@ checks it against a checksum written into the script itself, and sets everything
 > distribution (it never runs `sudo` itself). See [datalad.org](https://www.datalad.org/) for more. The app's
 > diagnostics screen tells you what's missing.
 
-**PRISM projects** (a `project.json` in the project folder) get a PRISM badge, and Save only goes through when
+**PRISM projects** (a `project.json` in the project folder) get a PRISM badge. The project card shows **✓ valid** or the number of problems, and in the Save area step **2 · Is it valid?** shows the result with a **Check again** button. Save only goes through when
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
 `project.json` is the exception. **BIDS projects** (a `dataset_description.json` and no `project.json`) are checked
 the same way before every save, with the BIDS validator. Both come with the one validator install, so there is no extra install. Files that are annexed but not downloaded do not count as errors. The
@@ -35,11 +35,13 @@ validator installs privately from **Setup → PRISM Validator** (needs internet 
 ## First launch: your name and email
 
 The first time you start the app it asks for your **name and email**. They are
-stored with every checkpoint you save, so teammates can see who made which change.
+stored with every save, so teammates can see who made which change.
 You enter them once; you can change them any time under **Setup → Your Name and Email**.
 Until they are set, Save is blocked (choose **Later** to look around first).
 
-![The Setup panel showing your name and email, the local environment check and the PRISM validator](_static/screenshots/01-setup.png)
+**Setup** also has a switch, **Show tips in the Save area** (on by default). It shows the step numbers, short explanations and a nudge when a save message is too vague. Turn it off once you know the routine: the validity check and the message box stay.
+
+![The Setup panel showing the preferences, your name and email, the local environment check and the PRISM validator](_static/screenshots/01-setup.png)
 
 ## Opening a folder: the trust question
 

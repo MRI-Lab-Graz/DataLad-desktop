@@ -11,7 +11,7 @@ foundation before any data cleaning or analysis.
 
 - Check local tool setup
 - Create a new DataLad project from the app
-- Confirm project classification and readiness
+- Confirm the project card shows a healthy DataLad project
 - Make the first minimal save
 
 ## Setup
@@ -47,10 +47,10 @@ keeps the first save scientifically auditable.
 
    ![Start screen: choose Create Project](../_static/screenshots/02-welcome.png)
 
-5. Verify the project opens and the badge reads **DataLad** (or **DataLad + Links** for a project with
-   a project that links other projects).
+5. Verify the project opens. The project card shows the project name, its folder and a line such as
+   "Project check finished: DataLad project." A plain Git folder (no DataLad) gets a **Git** badge instead.
 
-   ![The new project open, with its classification badge and the Home view with the Tools button](../_static/screenshots/03-project-open.png)
+   ![The new project open, with the project card, the Save area and the Work on this project button](../_static/screenshots/03-project-open.png)
 
 6. Add an initial `README.md` line in the project folder.
 7. Return to the app, review the changed-file list, and Save with message:
