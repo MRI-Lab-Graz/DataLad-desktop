@@ -20,6 +20,13 @@ test('the unit tests run on the macOS runner with a clean install, then npm test
   assert.ok(job.indexOf('npm ci') > 0 && job.indexOf('npm ci') < job.indexOf('npm test'))
 })
 
+// The job runs as a real user on a lab Mac: dependencies' install scripts (a supply-chain route) must not run.
+// The unit tests need none of them (checked: all pass without). The Electron e2e job will need them, and gets its own review.
+test('dependencies install without running their install scripts', () => {
+  assert.match(ci, /npm ci --ignore-scripts/)
+  assert.doesNotMatch(ci, /npm (ci|install)(?![^\n]*--ignore-scripts)/)
+})
+
 test('every job names a runner tag, so no job can land on a machine by accident', () => {
   const jobs = ci.split(/^(?=[a-z_]+:\s*$)/m).filter((b) => /^[a-z_]+:\s*\n\s+stage:/.test(b))
   assert.ok(jobs.length >= 1)
