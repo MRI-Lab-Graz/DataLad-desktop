@@ -6,7 +6,7 @@ const html = await readFile(new URL('../src/gui/renderer/index.html', import.met
 
 test('the header links to the Read the Docs tutorials, opened outside the app', () => {
   const link = /<a\b[^>]*id="open-docs"[^>]*>/.exec(html)?.[0] ?? ''
-  assert.match(link, /href="https:\/\/datalad-desktop\.readthedocs\.io\/"/)
+  assert.match(link, /href="https:\/\/worldline-desktop\.readthedocs\.io\/"/)
   assert.match(link, /target="_blank"/)
 })
 

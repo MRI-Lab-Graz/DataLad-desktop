@@ -10,12 +10,10 @@ const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 
 // The app is an independent project, not DataLad's own: its name, icon and settings must not pose as theirs.
 // The GitHub repo is now MRI-Lab-Graz/Worldline-desktop, so its old slug is no longer allowed anywhere.
-// The Read the Docs project (datalad-desktop.readthedocs.io) is renamed by the owner the same way.
+// Docs live at worldline-desktop.readthedocs.io; the old Read the Docs slug is no longer allowed.
 // appId (org.datalad.desktop) waits for the owner's admin to confirm a namespace we control.
 // (Regexes in other tests write the slug with escaped slashes and dots, hence the optional backslashes.)
 const ALLOWED = [
-  /datalad-desktop\\?\.readthedocs/g,
-  /projects\/datalad-desktop/g,
   /software-DataLad-desktop/g, // a local path inside a generated requirements comment
   /org\.datalad\.desktop/g
 ]
