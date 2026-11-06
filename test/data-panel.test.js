@@ -61,8 +61,8 @@ test('formatBytes', () => {
   assert.equal(formatBytes(5e12), '5.0 TB')
 })
 
-const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
-const preload = readFileSync(new URL('../src/gui/preload.js', import.meta.url), 'utf8')
+const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const preload = readFileSync(new URL('../src/gui/preload.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 test('listDataFiles IPC checks the project root before listing', () => {
   const at = main.indexOf("handle('adapter:listDataFiles'")
@@ -92,7 +92,7 @@ test('the empty message is not shown when files exist or the count is unknown', 
 })
 
 test('app.js passes the real file count and keeps the loading text', () => {
-  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(app, /fileCount: files\.length/)
   assert.match(app, /'Looking at your files…'/)
   assert.match(app, /read the file list[^\n]*\n\s*elements\.dataPanelBody\.textContent = ''\n\s*return/)

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
+const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const block = main.slice(main.indexOf("payload.commandName === 'dropReckless'"))
 
 test('main asks natively before dropReckless runs, and a refusal runs nothing', () => {

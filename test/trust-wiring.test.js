@@ -83,7 +83,7 @@ test('picking a clone SOURCE folder returns the path without asking to trust it 
   const purpose = body.search(/options\.purpose === 'source'/)
   assert.ok(purpose !== -1 && purpose < body.indexOf('trustGate().require(picked'))
   assert.ok(purpose < body.indexOf('pickedLocations.add('))
-  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(app, /wireFolderPicker\(elements\.pickGetRemoteNetworkPathButton[\s\S]{0,200}purpose: 'source'/)
   assert.match(app, /purpose: options\.purpose/)
 })

@@ -2948,7 +2948,7 @@ test('dropReckless refuses ../x', async () => {
 })
 
 test('--reckless is built only in the dropReckless case', () => {
-  const src = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
+  const src = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   const hits = [...src.matchAll(/'--reckless'/g)]
   assert.equal(hits.length, 1)
   const start = src.indexOf("case 'dropReckless'")
