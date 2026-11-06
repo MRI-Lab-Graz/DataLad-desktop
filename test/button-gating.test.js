@@ -12,19 +12,19 @@ import {
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
   const gating = computeDatasetGating('unknown')
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /not a DataLad dataset/)
+  assert.match(gating.title, /plain Git project/)
 })
 
 test('computeDatasetGating disables Get Data for a plain git project', () => {
   const gating = computeDatasetGating('git')
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /not a DataLad dataset/)
+  assert.match(gating.title, /plain Git project/)
 })
 
 test('computeDatasetGating enables Get Data for a dataset', () => {
   const gating = computeDatasetGating('dataset')
   assert.equal(gating.disabled, false)
-  assert.match(gating.title, /Download the actual content/)
+  assert.match(gating.title, /not yet on this computer/)
 })
 
 test('computeDatasetGating enables Get Data for a superdataset', () => {
@@ -40,7 +40,7 @@ test('computeDatasetGating disables Get Data for null/undefined classification',
 test('computeDatasetGating disables Get Data for a dataset with nothing left to fetch', () => {
   const gating = computeDatasetGating('dataset', { annexSupported: true, missingContentCount: 0 })
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /nothing to get/)
+  assert.match(gating.title, /Nothing to get/)
 })
 
 test('computeDatasetGating enables Get Data for a dataset with missing content', () => {

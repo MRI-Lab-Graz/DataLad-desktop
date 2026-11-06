@@ -55,3 +55,29 @@ test('the tab is called Sync and no longer mentions file content', () => {
   assert.match(section, /<h2 id="sync-data-title">Sync<\/h2>/)
   assert.doesNotMatch(section, /Get Data|Manual File Paths|Unlock/)
 })
+
+import { GET_DATA_READY_TITLE, FREE_UP_SPACE_TITLE, computeDatasetGating, computeAnnexToolGating } from '../src/gui/renderer/button-gating.js'
+
+test('every Files toolbar button explains itself on hover, in plain words', () => {
+  const panel = between(html, 'id="files-panel"', 'id="project-health-panel"')
+  const title = (id) => new RegExp(`<button id="${id}"[^>]*\\stitle="([^"]+)"`).exec(panel)?.[1] ?? ''
+  assert.match(title('open-active-folder'), /file manager|Explorer|Finder/i)
+  assert.match(title('refresh-files'), /reload/i)
+  for (const text of [GET_DATA_READY_TITLE, FREE_UP_SPACE_TITLE]) {
+    assert.ok(text.length > 40, 'a full sentence')
+    assert.doesNotMatch(text, /annex|placeholder|checksum|sibling|datalad/i, 'no jargon')
+  }
+  assert.match(GET_DATA_READY_TITLE, /not (yet )?on this computer/i)
+  assert.match(FREE_UP_SPACE_TITLE, /safely stored (somewhere else|elsewhere)/i)
+  assert.match(FREE_UP_SPACE_TITLE, /download (them|it) again/i)
+  assert.match(app, /computeAnnexToolGating\(\s*state\.currentProjectClassification,\s*FREE_UP_SPACE_TITLE/)
+})
+
+test('the reasons a Files button is switched off are also plain words', () => {
+  const reasons = [
+    computeDatasetGating('git').title,
+    computeDatasetGating('dataset', { annexSupported: true, missingContentCount: 0 }).title,
+    computeAnnexToolGating('git', 'x').title
+  ]
+  for (const text of reasons) assert.doesNotMatch(text, /annex|tracked|datalad|dataset/i, text)
+})

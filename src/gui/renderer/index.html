@@ -489,12 +489,12 @@
             <div class="section-actions">
               <button id="files-get-all" class="button button-ghost" type="button">Get all not-downloaded</button>
               <button id="files-free-all" class="button button-ghost" type="button">Free up space (all)</button>
-              <button id="open-active-folder" class="button button-ghost" type="button">Open Folder</button>
-              <button id="refresh-files" class="button button-ghost" type="button">Refresh Files</button>
+              <button id="open-active-folder" class="button button-ghost" type="button" title="Show the project folder in your file manager (Explorer on Windows, Finder on Mac).">Open Folder</button>
+              <button id="refresh-files" class="button button-ghost" type="button" title="Reload the list. It updates by itself, so you only need this if something looks out of date.">Refresh Files</button>
             </div>
           </div>
 
-          <p class="lede-small">Browse files in the selected project folder. Get downloads content, Free up space removes a local copy, and Unlock makes an editable copy if another program can't open a file.</p>
+          <p class="lede-small">Browse files in the selected project folder. Get downloads files that are not yet on this computer, Free up space deletes downloaded copies that are safely stored elsewhere, and Unlock makes an editable copy if another program can't open a file.</p>
           <label class="field">
             <span>Search In Files</span>
             <input id="files-search" type="text" placeholder="Type to filter files and folders" />

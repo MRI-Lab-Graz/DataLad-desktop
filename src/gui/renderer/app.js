@@ -1,6 +1,7 @@
 import {
   computeDatasetGating,
   computeAnnexToolGating,
+  FREE_UP_SPACE_TITLE,
   computeRemoteGating,
   remoteNameForProject,
   computeSyncSectionVisible,
@@ -3720,7 +3721,7 @@ function updateGetDataGating() {
 
   const dropGating = computeAnnexToolGating(
     state.currentProjectClassification,
-    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get brings it back.'
+    FREE_UP_SPACE_TITLE
   )
   elements.filesFreeAllButton.disabled = dropGating.disabled
   elements.filesFreeAllButton.title = dropGating.title

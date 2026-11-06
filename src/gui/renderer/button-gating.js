@@ -8,13 +8,17 @@ const NO_REMOTE_TITLE =
   'This project can still be used fully offline with Save.'
 
 const NOT_A_DATASET_TITLE =
-  'This is a plain Git project, not a DataLad dataset, so there is no annexed data to fetch.'
+  'This is a plain Git project, so there are no files stored elsewhere to download.'
 
-const GET_DATA_READY_TITLE =
-  'Download the actual content for large/tracked files that are present only as placeholders.'
+export const GET_DATA_READY_TITLE =
+  'Download the files that are listed in this project but are not yet on this computer. You need a connection to the place where they are stored.'
+
+export const FREE_UP_SPACE_TITLE =
+  'Delete the downloaded copies on this computer to free disk space. Only files that are safely stored somewhere else are removed. ' +
+  'Nothing is lost: you can download them again with Get.'
 
 const NOTHING_TO_GET_TITLE =
-  'All tracked file content is already downloaded here, so there is nothing to get.'
+  'Nothing to get: every file of this project is already on this computer, so there is nothing to download.'
 
 /**
  * @param {string|null|undefined} classification one of 'git' | 'dataset' | 'superdataset' | 'unknown' | null
@@ -39,7 +43,7 @@ export function computeDatasetGating(classification, health) {
 }
 
 const NOT_A_DATASET_ANNEX_TITLE =
-  'This is a plain Git project, not a DataLad dataset, so it has no separately stored data.'
+  'This is a plain Git project, so it has no downloaded copies to remove or check.'
 
 /**
  * Actions that only make sense on git-annex content (Free Up Space, Check Data Integrity).
