@@ -73,3 +73,45 @@ test('50000 files build groups in under 1000 ms', () => {
   buildFilterGroups(many)
   assert.ok(performance.now() - t < 1000)
 })
+
+test('groups: all twelve PRISM entities come in the exact required order', () => {
+  const ents = ['sub', 'ses', 'task', 'acq', 'run', 'rec', 'dir', 'echo', 'ce', 'part', 'space', 'desc']
+  const mk = (v) => {
+    const name = ents.map((e) => `${e}-${v}`).join('_') + '_bold.nii.gz'
+    return f(`sub-${v}/ses-${v}/func/${name}`)
+  }
+  const extra = (v) => f(`sub-${v}/ses-${v}/func/sub-${v}_zeta-${v}_alpha-${v}_bold.nii.gz`)
+  const g = buildFilterGroups([mk('a'), mk('b'), extra('a'), extra('b'), f('sub-a/ses-a/anat/sub-a_ses-a_T1w.json')])
+  assert.deepEqual(keys(g), ['sub', 'ses', 'modality', ...ents.slice(2), 'alpha', 'zeta', 'suffix', 'ext'])
+  const title = (k) => g.find((x) => x.key === k)
+  assert.equal(title('rec').title, 'Reconstruction')
+  assert.equal(title('dir').title, 'Direction')
+  assert.equal(title('echo').title, 'Echo')
+  assert.equal(title('ce').title, 'Contrast agent')
+  assert.equal(title('part').title, 'Part')
+  assert.equal(title('space').title, 'Space')
+  assert.equal(title('desc').title, 'Description')
+  assert.equal(title('rec').hint, 'rec-')
+  assert.equal(title('zeta').title, 'zeta')
+})
+
+test('prototype-named entity keys do not crash grouping or selection', () => {
+  const fs = [
+    f('sub-01/func/sub-01_constructor-a_toString-x_bold.nii'),
+    f('sub-02/func/sub-02_constructor-b_toString-y_bold.nii'),
+    f('sub-02/func/sub-02_bold.nii')
+  ]
+  const g = buildFilterGroups(fs)
+  assert.deepEqual(g.find((x) => x.key === 'constructor').values, ['a', 'b'])
+  assert.equal(g.find((x) => x.key === 'toString').title, 'toString')
+  const r = selectFiles(fs, { constructor: new Set(['a']) }, 'get')
+  assert.deepEqual(r.map((x) => x.path), [fs[0].path])
+  assert.deepEqual(selectFiles(fs, { valueOf: new Set(['a']) }, 'get'), [])
+  assert.deepEqual(selectFiles(fs, { toString: new Set(['x']) }, 'get').length, 1)
+})
+
+test('non-ASCII names group and select', () => {
+  const fs = [f('sub-ä01/anat/sub-ä01_T1w.nii.gz'), f('sub-ö02/anat/sub-ö02_T1w.nii.gz')]
+  assert.deepEqual(buildFilterGroups(fs).find((x) => x.key === 'sub').values.length, 2)
+  assert.equal(selectFiles(fs, { sub: new Set(['ä01']) }, 'get').length, 1)
+})
