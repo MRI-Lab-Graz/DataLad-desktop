@@ -495,6 +495,17 @@
           </div>
 
           <p class="lede-small">Browse files in the selected project folder. Get downloads content, Free up space removes a local copy, and Unlock makes an editable copy if another program can't open a file.</p>
+          <details id="data-panel-section" class="data-panel" hidden>
+            <summary>Choose data</summary>
+            <p class="lede-small">Tick what you need, then download just that to this computer, or free up the space it uses. Nothing happens until you press a button.</p>
+            <div id="data-panel-body"></div>
+            <p id="data-panel-free-summary" class="lede-small"></p>
+            <p id="data-panel-note" class="hint-inline-warning" role="status" aria-live="polite"></p>
+            <div id="data-reckless-offer" hidden>
+              <p class="hint-inline-warning">The files above could not be removed safely. If you are sure you do not need another copy, you can remove them anyway.</p>
+              <button id="data-reckless-open" class="button button-ghost" type="button">Delete without a safety check…</button>
+            </div>
+          </details>
           <label class="field">
             <span>Search In Files</span>
             <input id="files-search" type="text" placeholder="Type to filter files and folders" />
@@ -734,6 +745,22 @@
         <div class="row-actions">
           <button id="identity-later" class="button button-ghost button-inline" type="button">Later</button>
           <button id="identity-save" class="button button-inline" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="reckless-overlay" class="global-busy-overlay" hidden>
+      <form id="reckless-form" class="global-busy-card identity-card" role="dialog" aria-modal="true" aria-labelledby="reckless-title">
+        <h2 id="reckless-title">Delete without a safety check?</h2>
+        <p id="reckless-count" class="lede-small"></p>
+        <p class="lede-small">These files will be removed from this computer without checking that another copy exists. If there is no other copy, the data may be gone for good.</p>
+        <label class="field">
+          <span>Type the word delete to continue</span>
+          <input id="reckless-word" type="text" autocomplete="off" spellcheck="false" />
+        </label>
+        <div class="row-actions">
+          <button id="reckless-cancel" class="button button-ghost button-inline" type="button">Keep my files</button>
+          <button id="reckless-confirm" class="button button-inline" type="submit" disabled>Delete</button>
         </div>
       </form>
     </div>

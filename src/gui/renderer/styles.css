@@ -2174,3 +2174,28 @@ select:disabled {
 .save-validity-bad {
   color: #9b1c1c;
 }
+
+.data-panel {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line, #d0d7de);
+  border-radius: 12px;
+}
+
+.data-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.data-panel fieldset {
+  margin: 10px 0;
+  border: 0;
+  padding: 0;
+}
+
+.data-panel fieldset > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+}
