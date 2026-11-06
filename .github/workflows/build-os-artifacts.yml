@@ -51,16 +51,16 @@ jobs:
             echo "::error::Tag $GITHUB_REF does not match the package.json version $version"
             exit 1
           fi
-          zip="dist/DataLad-Desktop-$version-mac-arm64.zip"
-          ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
+          zip="dist/Worldline-Desktop-$version-mac-arm64.zip"
+          ditto -c -k --keepParent "dist/mac-arm64/Worldline Desktop.app" "$zip"
           node scripts/render-install-script.mjs "$version" "$zip" dist/macos-install.sh scripts/macos/macos-install.sh
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: datalad-desktop-macos
+          name: worldline-desktop-macos
           path: |
-            dist/DataLad-Desktop-*-mac-arm64.zip
+            dist/Worldline-Desktop-*-mac-arm64.zip
             dist/macos-install.sh
           if-no-files-found: error
           retention-days: 14
@@ -99,16 +99,16 @@ jobs:
           if ($env:GITHUB_REF -like 'refs/tags/v*' -and $env:GITHUB_REF -ne "refs/tags/v$version") {
             throw "Tag $env:GITHUB_REF does not match the package.json version $version"
           }
-          $zip = "dist/DataLad-Desktop-$version-win-x64.zip"
+          $zip = "dist/Worldline-Desktop-$version-win-x64.zip"
           Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
           node scripts/render-install-script.mjs $version $zip dist/windows-install.cmd scripts/windows/windows-install.cmd
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: datalad-desktop-windows-x64
+          name: worldline-desktop-windows-x64
           path: |
-            dist/DataLad-Desktop-*-win-x64.zip
+            dist/Worldline-Desktop-*-win-x64.zip
             dist/windows-install.cmd
           if-no-files-found: error
           retention-days: 14
@@ -152,7 +152,7 @@ jobs:
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: datalad-desktop-linux
+          name: worldline-desktop-linux
           path: |
             dist/*.AppImage
             dist/linux-install.sh
@@ -175,7 +175,7 @@ jobs:
       - name: Download packaged artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: datalad-desktop-*
+          pattern: worldline-desktop-*
           path: release-assets
           merge-multiple: true
 

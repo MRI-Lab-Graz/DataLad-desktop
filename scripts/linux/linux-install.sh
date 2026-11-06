@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installs DataLad Desktop for the current user (Linux, 64-bit Intel/AMD). No administrator rights needed.
+# Installs Worldline Desktop for the current user (Linux, 64-bit Intel/AMD). No administrator rights needed.
 #
 # Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh | bash
 # or download it and run:   bash linux-install.sh
@@ -23,7 +23,7 @@ main() {
     local APP_FILE="DataLad.Desktop-${APP_VERSION}.AppImage"
     local APP_URL="https://github.com/${REPO}/releases/download/v${APP_VERSION}/${APP_FILE}"
     local APP_DIR="$HOME/Applications"
-    local TARGET="$APP_DIR/DataLad-Desktop.AppImage"
+    local TARGET="$APP_DIR/Worldline-Desktop.AppImage"
     local MENU_DIR="$HOME/.local/share/applications"
     local from_dir=''
 
@@ -47,7 +47,7 @@ main() {
     [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] ||
         die 'This installer supports Linux on a 64-bit Intel/AMD computer only.'
 
-    log "DataLad Desktop $APP_VERSION"
+    log "Worldline Desktop $APP_VERSION"
 
     hash_of() {
         if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print toupper($1)}'
@@ -76,10 +76,10 @@ main() {
         check_hash "$work/new.AppImage"
         chmod +x "$work/new.AppImage"
         mv -f "$work/new.AppImage" "$TARGET"
-        cat > "$MENU_DIR/datalad-desktop.desktop" <<DESKTOP
+        cat > "$MENU_DIR/worldline-desktop.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=DataLad Desktop
+Name=Worldline Desktop
 Comment=Version control for your research data
 Exec="$TARGET"
 Terminal=false
@@ -102,7 +102,7 @@ DESKTOP
     fi
     command -v fusermount >/dev/null 2>&1 || command -v fusermount3 >/dev/null 2>&1 ||
         log 'AppImages need FUSE. If the app does not start: sudo apt install libfuse2 (Debian / Ubuntu) or sudo dnf install fuse (Fedora).'
-    log "Done. Start DataLad Desktop from your application menu or run $TARGET"
+    log "Done. Start Worldline Desktop from your application menu or run $TARGET"
 }
 
 main "$@"

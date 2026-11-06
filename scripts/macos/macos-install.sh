@@ -1,5 +1,5 @@
 #!/bin/bash
-# Installs DataLad Desktop for the current user (Apple silicon). No administrator rights needed for this script.
+# Installs Worldline Desktop for the current user (Apple silicon). No administrator rights needed for this script.
 #
 # Run it with:   curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/macos-install.sh | bash
 # or download it and run:   bash macos-install.sh
@@ -19,12 +19,12 @@ main() {
     local APP_VERSION='__VERSION__'
     local APP_ZIP_SHA256='__ZIP_SHA256__'
     local REPO='MRI-Lab-Graz/DataLad-desktop'
-    local APP_ZIP_NAME="DataLad-Desktop-${APP_VERSION}-mac-arm64.zip"
+    local APP_ZIP_NAME="Worldline-Desktop-${APP_VERSION}-mac-arm64.zip"
     local APP_ZIP_URL="https://github.com/${REPO}/releases/download/v${APP_VERSION}/${APP_ZIP_NAME}"
     local BREW_INSTALL_URL='https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
-    local APP_NAME='DataLad Desktop.app'
+    local APP_NAME='Worldline Desktop.app'
     local APP_DIR="$HOME/Applications"
-    local LOG_DIR="$HOME/Library/Logs/DataLad Desktop"
+    local LOG_DIR="$HOME/Library/Logs/Worldline Desktop"
     local from_dir=''
 
     die() { echo "ERROR: $*" >&2; exit 1; }
@@ -49,7 +49,7 @@ main() {
 
     mkdir -p "$LOG_DIR"
     exec > >(tee -a "$LOG_DIR/install.log") 2>&1
-    log "DataLad Desktop $APP_VERSION"
+    log "Worldline Desktop $APP_VERSION"
 
     check_hash() {
         local actual
@@ -74,7 +74,7 @@ main() {
         ditto -x -k "$zip" "$work/x"
         [ -d "$work/x/$APP_NAME" ] || die "The zip has no $APP_NAME at its root."
         if pgrep -f "$APP_NAME/Contents/MacOS" >/dev/null 2>&1; then
-            die 'DataLad Desktop is running. Quit it and run this installer again.'
+            die 'Worldline Desktop is running. Quit it and run this installer again.'
         fi
         if [ -e "$target" ]; then
             rm -rf "$old"

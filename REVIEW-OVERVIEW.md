@@ -1,4 +1,4 @@
-# DataLad Desktop: technical overview for review
+# Worldline Desktop: technical overview for review
 
 Repository: https://github.com/MRI-Lab-Graz/DataLad-desktop (branch `main`)
 

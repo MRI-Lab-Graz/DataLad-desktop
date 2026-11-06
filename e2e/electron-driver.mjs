@@ -1,4 +1,4 @@
-// Launches the real DataLad Desktop app and connects to it over Chrome
+// Launches the real Worldline Desktop app and connects to it over Chrome
 // DevTools Protocol so tests can drive the actual renderer DOM — not a
 // mock of it. Requires `playwright-core` (devDependency) but not a full
 // Playwright install. See test/e2e in package.json scripts for usage.
@@ -29,9 +29,9 @@ export async function launchApp({ identity = true, env = {}, trustedPaths = [], 
   delete childEnv.ELECTRON_RUN_AS_NODE
   // No human to click the app's native confirmations (a new project outside opened folders);
   // an unpackaged app honours this, a packaged one never does.
-  childEnv.DATALAD_DESKTOP_E2E_CONFIRM = '1'
+  childEnv.WORLDLINE_DESKTOP_E2E_CONFIRM = '1'
   // Tests must never reach the real PyPI or build a real environment; a test turns the check on with '0'.
-  childEnv.DATALAD_DESKTOP_DISABLE_UPDATE_CHECK = '1'
+  childEnv.WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK = '1'
 
   // Without this, the app launches against the real per-machine profile
   // (localStorage, settings.json), so anything a developer toggled while

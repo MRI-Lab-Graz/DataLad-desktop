@@ -1,4 +1,4 @@
-title = "DataLad Desktop gitleaks config"
+title = "Worldline Desktop gitleaks config"
 
 # Start from gitleaks' built-in rule set (API keys, tokens, private keys,
 # cloud credentials, etc.) and only add project-specific exclusions here —

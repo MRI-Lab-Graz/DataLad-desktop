@@ -52,11 +52,11 @@ const updateChecks = createAppUpdateChecks({
 // workspace the app started in, folders picked via the native dialog, and
 // paths that passed project detection or were created by clone/create.
 const authorizedRoots = initialAuthorizedRoots({ cwd: process.cwd(), isPackaged: app.isPackaged })
-const APP_NAME = 'DataLad Desktop'
-const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'datalad_desktop.png')
+const APP_NAME = 'Worldline Desktop'
+const APP_ICON_PATH = join(__dirname, 'assets', 'icons', 'worldline_desktop.png')
 // macOS Dock icons need transparent padding around a smaller squircle (Apple's
 // grid), unlike the full-bleed source PNG used for the window/Windows/Linux icon.
-const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'datalad_desktop_macos.png')
+const APP_DOCK_ICON_PATH_DARWIN = join(__dirname, 'assets', 'icons', 'worldline_desktop_macos.png')
 const APP_RENDERER_URL = pathToFileURL(join(__dirname, 'renderer', 'index.html')).toString()
 // Every IPC channel goes through here so only the app's own page can call it.
 const handle = (channel, fn) => ipcMain.handle(channel, guardedHandler(APP_RENDERER_URL, fn))
@@ -96,7 +96,7 @@ const pickedLocations = new Set()
 // E2E has no human: an unpackaged app started by the e2e driver answers "this folder" itself;
 // a packaged app never does.
 async function askToTrust({ path, kind, vectors, event }) {
-  if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
+  if (!app.isPackaged && process.env.WORLDLINE_DESKTOP_E2E_CONFIRM === '1') {
     return 'folder'
   }
   const prompt = describeTrustPrompt({ path, kind, vectors })
@@ -146,7 +146,7 @@ const runDeclinedResult = () => ({
 })
 
 async function confirmNative(event, { title, message, detail, confirmLabel }) {
-  if (!app.isPackaged && process.env.DATALAD_DESKTOP_E2E_CONFIRM === '1') {
+  if (!app.isPackaged && process.env.WORLDLINE_DESKTOP_E2E_CONFIRM === '1') {
     return true
   }
   const { response } = await dialog.showMessageBox(BrowserWindow.fromWebContents(event.sender), {

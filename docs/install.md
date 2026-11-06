@@ -13,7 +13,7 @@ checks it against a checksum written into the script itself, and sets everything
    - **Linux:** [`linux-install.sh`](https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh) (see
      [Linux: install with a script](#linux-install-with-a-script))
 2. Run it: double-click `windows-install.cmd`, or paste the one-liner from the section for your system.
-3. Launch **DataLad Desktop** like any other app.
+3. Launch **Worldline Desktop** like any other app.
 
 > **Windows script:** also checks for Git, DataLad and git-annex and installs any that are missing (this needs an
 > internet connection during setup; every download's checksum is verified before it runs). If a download is blocked by
@@ -30,7 +30,7 @@ checks it against a checksum written into the script itself, and sets everything
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
 `project.json` is the exception. **BIDS projects** (a `dataset_description.json` and no `project.json`) are checked
 the same way before every save, with the BIDS validator. Both come with the one validator install, so there is no extra install. Files that are annexed but not downloaded do not count as errors. The
-validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/DataLad Desktop/env` (macOS) or `~/.config/DataLad Desktop/env` (Linux); Windows uninstall removes it automatically. Once installed, the validator updates itself in the background a few seconds after the app starts (only to releases at least 3 days old, and only if the new one passes a self-check; otherwise the old one stays). The app also shows a notice when DataLad or git-annex have a newer version, with a **Skip this version** button; it never installs those. Administrators can turn all update checks off (`DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1`, see SECURITY.md).
+validator installs privately from **Setup → PRISM Validator** (needs internet once). To remove it on macOS/Linux, delete `~/Library/Application Support/Worldline Desktop/env` (macOS) or `~/.config/Worldline Desktop/env` (Linux); Windows uninstall removes it automatically. Once installed, the validator updates itself in the background a few seconds after the app starts (only to releases at least 3 days old, and only if the new one passes a self-check; otherwise the old one stays). The app also shows a notice when DataLad or git-annex have a newer version, with a **Skip this version** button; it never installs those. Administrators can turn all update checks off (`WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK=1`, see SECURITY.md).
 
 ## First launch: your name and email
 
@@ -63,10 +63,10 @@ Prefer to read it first? Download `macos-install.sh` from the release page, then
 The script checks the app's SHA-256 against the value baked into it, installs the app to `~/Applications`, and
 installs git-annex and DataLad with Homebrew when they are missing. If Homebrew itself is missing it asks before
 running Homebrew's own installer (which asks for your password). Run the script again any time to update or repair.
-The log is `~/Library/Logs/DataLad Desktop/install.log`. Intel Macs have no prebuilt app; run it
+The log is `~/Library/Logs/Worldline Desktop/install.log`. Intel Macs have no prebuilt app; run it
 [from source](#advanced-install-from-source).
 
-To uninstall: `rm -rf "$HOME/Applications/DataLad Desktop.app"` (Homebrew's packages stay).
+To uninstall: `rm -rf "$HOME/Applications/Worldline Desktop.app"` (Homebrew's packages stay).
 
 ## Linux: install with a script
 
@@ -76,11 +76,11 @@ For 64-bit Intel/AMD computers, no administrator rights. Open a terminal and pas
 curl -fsSL https://github.com/MRI-Lab-Graz/DataLad-desktop/releases/latest/download/linux-install.sh | bash
 ```
 
-The script checks the AppImage's SHA-256 against the value baked into it, saves it as `~/Applications/DataLad-Desktop.AppImage`
+The script checks the AppImage's SHA-256 against the value baked into it, saves it as `~/Applications/Worldline-Desktop.AppImage`
 and adds an entry to your application menu. It does not install Git, git-annex or DataLad: it lists what is missing and
 the command for your package manager. AppImages need FUSE (`libfuse2` on Debian/Ubuntu); the script tells you if it is
-missing. Run it again any time to update. To uninstall, delete `~/Applications/DataLad-Desktop.AppImage` and
-`~/.local/share/applications/datalad-desktop.desktop`.
+missing. Run it again any time to update. To uninstall, delete `~/Applications/Worldline-Desktop.AppImage` and
+`~/.local/share/applications/worldline-desktop.desktop`.
 
 ## Windows: install with a script
 
@@ -93,7 +93,7 @@ For one user, without administrator rights. From the release page download `wind
    installed for all users (in Program Files), git-annex needs an administrator once; the script says so;
 4. adds Start-menu and desktop shortcuts.
 
-Everything lands in `%LOCALAPPDATA%\DataLad Desktop`; the log is `DataLad Desktop install.log` next to that
+Everything lands in `%LOCALAPPDATA%\Worldline Desktop`; the log is `Worldline Desktop install.log` next to that
 folder. Start the app from the shortcut, not from a terminal that was already open, so it sees the new PATH.
 
 From a clone of the repository, run `scripts\windows\windows-install.cmd` instead: that copy has no release pinned, so it
@@ -101,7 +101,7 @@ installs the latest release and takes the zip's SHA-256 from that release's `SHA
 release page is stricter, because its hash is written into the script itself.
 
 To upgrade, run `windows-install.cmd` from a newer release: the old version is put back if the new one fails. Each release ships a tested pair of DataLad and git-annex, so this also brings DataLad and an older git-annex up to the tested versions; a newer git-annex of yours is left alone. To remove it,
-run `%LOCALAPPDATA%\DataLad Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
+run `%LOCALAPPDATA%\Worldline Desktop\uninstall.cmd`: it removes the app, its environment, the shortcuts and the PATH
 entry, and leaves Python, Git and git-annex alone. Your projects and the app's settings are not touched.
 
 ## Advanced: install from source

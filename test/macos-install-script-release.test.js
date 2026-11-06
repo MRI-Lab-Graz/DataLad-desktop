@@ -10,7 +10,7 @@ test('the macOS job zips the app with ditto, then renders macos-install.sh from 
   const zip = macJob.indexOf('ditto -c -k --keepParent')
   const render = macJob.indexOf('node scripts/render-install-script.mjs')
   assert.ok(zip !== -1 && render > zip)
-  assert.ok(macJob.includes('DataLad-Desktop-$version-mac-arm64.zip'))
+  assert.ok(macJob.includes('Worldline-Desktop-$version-mac-arm64.zip'))
   assert.ok(macJob.includes('scripts/macos/macos-install.sh'))
 })
 
@@ -19,8 +19,8 @@ test('a release tag must equal the package version, because the script downloads
 })
 
 test('the macOS artifact carries the arm64 zip and macos-install.sh', () => {
-  const upload = macJob.slice(macJob.indexOf('name: datalad-desktop-macos'))
-  for (const p of ['dist/DataLad-Desktop-*-mac-arm64.zip', 'dist/macos-install.sh']) {
+  const upload = macJob.slice(macJob.indexOf('name: worldline-desktop-macos'))
+  for (const p of ['dist/Worldline-Desktop-*-mac-arm64.zip', 'dist/macos-install.sh']) {
     assert.ok(upload.includes(p), `artifact does not include ${p}`)
   }
 })

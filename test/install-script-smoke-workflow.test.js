@@ -59,13 +59,13 @@ test('checks the pins against what the hosts serve today', () => {
 test('uninstalls through uninstall.cmd and checks the folder, shortcuts and user PATH are clean', () => {
   const uninstall = workflow.indexOf('uninstall.cmd')
   assert.ok(uninstall > workflow.indexOf('check-install-pins'))
-  assert.match(workflow, /DataLad Desktop\.lnk/)
+  assert.match(workflow, /Worldline Desktop\.lnk/)
   assert.match(workflow, /GetEnvironmentVariable\('Path', 'User'\)/)
 })
 
 test('prints the install log when a step fails', () => {
   assert.match(workflow, /if: failure\(\)/)
-  assert.match(workflow, /DataLad Desktop install\.log/)
+  assert.match(workflow, /Worldline Desktop install\.log/)
 })
 
 test('keeps read-only permissions', () => {

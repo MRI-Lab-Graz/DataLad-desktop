@@ -7,15 +7,15 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'none'"
     />
-    <title>DataLad Desktop</title>
-    <link rel="icon" type="image/png" href="../assets/icons/datalad_desktop.png" />
+    <title>Worldline Desktop</title>
+    <link rel="icon" type="image/png" href="../assets/icons/worldline_desktop.png" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <header id="app-header" class="hero card reveal reveal-1">
         <div class="hero-top">
-          <p class="eyebrow">DataLad Desktop <span data-app-version></span></p>
+          <p class="eyebrow">Worldline Desktop <span data-app-version></span></p>
           <div class="hero-meta-stack">
             <div class="hero-meta-text">
               <div class="hero-actions">
@@ -42,10 +42,13 @@
                 </a>
               </div>
             </div>
-            <img src="../assets/icons/datalad_desktop.png" alt="DataLad Desktop logo" class="hero-logo" />
+            <picture>
+              <source media="(prefers-reduced-motion: reduce)" srcset="../assets/icons/worldline_desktop.png" />
+              <img src="../assets/icons/worldline_desktop_streams.gif" alt="Worldline Desktop logo" class="hero-logo" />
+            </picture>
           </div>
         </div>
-        <h1>DataLad Desktop</h1>
+        <h1>Worldline Desktop</h1>
         <p class="lede">
           Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
         </p>
@@ -58,6 +61,7 @@
         <div class="section-head">
           <h2 id="settings-title">Setup</h2>
           <p class="lede-small">Version <span data-app-version></span></p>
+          <p class="lede-small">An independent project, not affiliated with or endorsed by the DataLad project.</p>
           <button id="close-settings" class="button button-ghost button-inline" type="button">Close</button>
         </div>
 

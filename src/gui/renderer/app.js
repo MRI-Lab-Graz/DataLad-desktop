@@ -42,7 +42,7 @@ import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
 import { suggestMessage, vagueMessageNudge } from './message-suggestion.js'
 
-const api = window.dataladDesktop
+const api = window.worldlineDesktop
 
 const state = {
   currentBranch: null,
@@ -101,10 +101,10 @@ const state = {
 const BIDS_PROCEDURE = 'text2git'
 
 const MAX_RECENT_PROJECTS = 8
-const RECENT_PROJECTS_STORAGE_KEY = 'dataladDesktop.recentProjects'
-const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'dataladDesktop.recentProjectEmojis'
-const RECENT_PROJECT_TITLES_STORAGE_KEY = 'dataladDesktop.recentProjectTitles'
-const BIDS_AUTO_NEST_STORAGE_KEY = 'dataladDesktop.bidsAutoNest'
+const RECENT_PROJECTS_STORAGE_KEY = 'worldlineDesktop.recentProjects'
+const RECENT_PROJECT_EMOJIS_STORAGE_KEY = 'worldlineDesktop.recentProjectEmojis'
+const RECENT_PROJECT_TITLES_STORAGE_KEY = 'worldlineDesktop.recentProjectTitles'
+const BIDS_AUTO_NEST_STORAGE_KEY = 'worldlineDesktop.bidsAutoNest'
 const PROJECT_EMOJI_CHOICES = ['🧪', '🧬', '🧠', '🛰️', '📊', '📁', '📝', '🔬', '🗂️', '🧭', '📚', '🦉']
 
 const elements = {
@@ -4317,7 +4317,7 @@ function isBidsAutoNestEnabled() {
 }
 
 // Tips are hints only (step numbers, explanations, the message nudge); the check and the message box stay. Default on.
-const SAVE_TIPS_STORAGE_KEY = 'dataladDesktop.saveTips'
+const SAVE_TIPS_STORAGE_KEY = 'worldlineDesktop.saveTips'
 function initSaveTipsToggle() {
   let on = true
   try {

@@ -95,7 +95,7 @@ test('failures give no notice and never throw', async () => {
 
 // --- final fix wave ---
 test('no DataLad notice for the DataLad the app installed itself (a datalad-env folder)', async () => {
-  for (const dir of ['C:\\Users\\a\\AppData\\Local\\DataLad Desktop\\DataLad-Env\\Scripts\\', '/Applications/x/datalad-env/bin/']) {
+  for (const dir of ['C:\\Users\\a\\AppData\\Local\\Worldline Desktop\\DataLad-Env\\Scripts\\', '/Applications/x/datalad-env/bin/']) {
     const n = await collectNotices(await mk({ dir, platform: 'win32' }))
     assert.deepEqual(n.map((x) => x.tool), [], dir)
   }

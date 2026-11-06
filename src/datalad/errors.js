@@ -2,7 +2,7 @@ const DEFAULT_ERROR = {
   code: 'UNKNOWN',
   title: 'DataLad command failed',
   message:
-    'DataLad Desktop could not finish this action. Please try again or review the technical details.',
+    'Worldline Desktop could not finish this action. Please try again or review the technical details.',
   technicalDetails: ''
 }
 
@@ -297,7 +297,7 @@ export function mapCommandError(commandName, runResult) {
       code: 'AUTH_FAILED',
       title: 'Authentication failed',
       message:
-        'DataLad Desktop could not authenticate with the remote destination. Check your credentials and try again.',
+        'Worldline Desktop could not authenticate with the remote destination. Check your credentials and try again.',
       technicalDetails: details
     }
   }

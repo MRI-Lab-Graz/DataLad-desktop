@@ -46,7 +46,7 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $out = Join-Path $env:RUNNER_TEMP 'release'
           New-Item -ItemType Directory $out | Out-Null
-          $zip = Join-Path $out "DataLad-Desktop-$version-win-x64.zip"
+          $zip = Join-Path $out "Worldline-Desktop-$version-win-x64.zip"
           Compress-Archive -Path 'dist/win-unpacked/*' -DestinationPath $zip
           node scripts/render-install-script.mjs $version $zip (Join-Path $out 'windows-install.cmd') scripts/windows/windows-install.cmd
           # The file is started from a folder with awkward characters, like a student's Downloads folder might be.
@@ -79,13 +79,13 @@ jobs:
           datalad --version
           git annex version
           $source = (Get-Command datalad).Source
-          $expected = Join-Path $env:LOCALAPPDATA 'DataLad Desktop\datalad-env\Scripts'
+          $expected = Join-Path $env:LOCALAPPDATA 'Worldline Desktop\datalad-env\Scripts'
           if ($source -notlike "$expected\*") { throw "datalad resolved outside the private env: $source" }
 
       - name: Drive the installed app
         shell: pwsh
         run: |
-          $env:DLAD_APP_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'DataLad Desktop\DataLad Desktop.exe'
+          $env:DLAD_APP_EXECUTABLE = Join-Path $env:LOCALAPPDATA 'Worldline Desktop\Worldline Desktop.exe'
           node --test e2e/packaged.e2e.mjs
 
       - name: Pins still match what the hosts serve
@@ -95,21 +95,21 @@ jobs:
       - name: Uninstall with uninstall.cmd
         shell: pwsh
         run: |
-          $dir = Join-Path $env:LOCALAPPDATA 'DataLad Desktop'
+          $dir = Join-Path $env:LOCALAPPDATA 'Worldline Desktop'
           '' | & "$dir\uninstall.cmd"
           for ($i = 0; $i -lt 30 -and (Test-Path $dir); $i++) { Start-Sleep -Seconds 2 }
           if (Test-Path $dir) { throw 'Uninstall left the install folder behind' }
           foreach ($folder in 'Programs', 'Desktop') {
-            if (Test-Path (Join-Path ([Environment]::GetFolderPath($folder)) 'DataLad Desktop.lnk')) { throw "Uninstall left a $folder shortcut behind" }
+            if (Test-Path (Join-Path ([Environment]::GetFolderPath($folder)) 'Worldline Desktop.lnk')) { throw "Uninstall left a $folder shortcut behind" }
           }
-          if (([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -match 'DataLad Desktop') { throw 'Uninstall left a user PATH entry behind' }
+          if (([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -match 'Worldline Desktop') { throw 'Uninstall left a user PATH entry behind' }
 
       - name: Install log (on failure)
         if: failure()
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          Get-Content (Join-Path $env:LOCALAPPDATA 'DataLad Desktop install.log')
+          Get-Content (Join-Path $env:LOCALAPPDATA 'Worldline Desktop install.log')
           Get-Command git, git-annex, datalad -ErrorAction SilentlyContinue | Format-Table Name, Source
 
   install-script-macos:
@@ -145,8 +145,8 @@ jobs:
           version=$(node -p "require('./package.json').version")
           out="$RUNNER_TEMP/release"
           mkdir -p "$out"
-          zip="$out/DataLad-Desktop-$version-mac-arm64.zip"
-          ditto -c -k --keepParent "dist/mac-arm64/DataLad Desktop.app" "$zip"
+          zip="$out/Worldline-Desktop-$version-mac-arm64.zip"
+          ditto -c -k --keepParent "dist/mac-arm64/Worldline Desktop.app" "$zip"
           node scripts/render-install-script.mjs "$version" "$zip" "$out/macos-install.sh" scripts/macos/macos-install.sh
 
       # No terminal on the runner: Homebrew is already there, so the prompt is never reached.
@@ -156,17 +156,17 @@ jobs:
 
       - name: Script left a verified app and working tools
         run: |
-          codesign --verify --deep --strict "$HOME/Applications/DataLad Desktop.app"
-          if xattr "$HOME/Applications/DataLad Desktop.app" | grep -q com.apple.quarantine; then echo 'quarantine flag present'; exit 1; fi
+          codesign --verify --deep --strict "$HOME/Applications/Worldline Desktop.app"
+          if xattr "$HOME/Applications/Worldline Desktop.app" | grep -q com.apple.quarantine; then echo 'quarantine flag present'; exit 1; fi
           git --version
           datalad --version
           git annex version
 
       - name: Drive the installed app
         run: |
-          export DLAD_APP_EXECUTABLE="$HOME/Applications/DataLad Desktop.app/Contents/MacOS/DataLad Desktop"
+          export DLAD_APP_EXECUTABLE="$HOME/Applications/Worldline Desktop.app/Contents/MacOS/Worldline Desktop"
           node --test e2e/packaged.e2e.mjs
 
       - name: Install log (on failure)
         if: failure()
-        run: cat "$HOME/Library/Logs/DataLad Desktop/install.log"
+        run: cat "$HOME/Library/Logs/Worldline Desktop/install.log"

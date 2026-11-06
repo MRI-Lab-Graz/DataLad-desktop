@@ -29,9 +29,9 @@ test('smoke job launches the packaged app after building it, on both OSes', () =
   const buildAt = workflow.indexOf('npm run package:dir')
   const runAt = workflow.indexOf('e2e/packaged.e2e.mjs')
   assert.ok(buildAt !== -1 && runAt > buildAt, 'packaged spec must run after package:dir')
-  assert.match(workflow, /DLAD_APP_EXECUTABLE: dist\/win-unpacked\/DataLad Desktop\.exe/)
+  assert.match(workflow, /DLAD_APP_EXECUTABLE: dist\/win-unpacked\/Worldline Desktop\.exe/)
   assert.match(
     workflow,
-    /DLAD_APP_EXECUTABLE: dist\/mac-arm64\/DataLad Desktop\.app\/Contents\/MacOS\/DataLad Desktop/
+    /DLAD_APP_EXECUTABLE: dist\/mac-arm64\/Worldline Desktop\.app\/Contents\/MacOS\/Worldline Desktop/
   )
 })

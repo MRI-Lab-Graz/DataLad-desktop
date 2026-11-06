@@ -41,7 +41,7 @@ test('createFetchJson: timeout signal, plain User-Agent only, rejects non-2xx, p
   assert.deepEqual(await fetchJson('https://pypi.org/pypi/datalad/json'), { a: 1 })
   assert.equal(calls[0].url, 'http://127.0.0.1:9/pypi/datalad/json')
   assert.ok(calls[0].init.signal instanceof AbortSignal)
-  assert.deepEqual(calls[0].init.headers, { 'User-Agent': 'DataLad-Desktop' })
+  assert.deepEqual(calls[0].init.headers, { 'User-Agent': 'Worldline-Desktop' })
   await assert.rejects(fetchJson('https://pypi.org/bad'))
 })
 

@@ -80,7 +80,7 @@ async function launch(options) {
 
 test('a newer DataLad shows a notice; Skip this version hides it, also after a restart', () =>
   step('Update notice skip', async () => {
-    const env = { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' }
+    const env = { DLAD_UPDATE_FEED: feed, WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '0' }
     await launch({ env })
     const { userDataDir } = app
     await waitForDatalad()
@@ -112,7 +112,7 @@ test('a newer DataLad shows a notice; Skip this version hides it, also after a r
 
 test('a real click on Skip this version removes that row', () =>
   step('Update notice click', async () => {
-    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
+    await launch({ env: { DLAD_UPDATE_FEED: feed, WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
     await waitForDatalad()
     await app.page.locator('#update-notice .update-row', { hasText: 'DataLad' }).first().getByRole('button', { name: 'Skip this version' }).click()
     await app.page.waitForFunction(
@@ -126,7 +126,7 @@ test('with updates disabled nothing is shown and nothing is requested', () =>
   step('Update disabled', async () => {
     const WAIT = 8_000
     requests = 0
-    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' } })
+    await launch({ env: { DLAD_UPDATE_FEED: feed, WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '1' } })
     await new Promise((r) => setTimeout(r, WAIT))
     assert.equal(await visible(), false)
     assert.equal(requests, 0)
@@ -134,7 +134,7 @@ test('with updates disabled nothing is shown and nothing is requested', () =>
     // Positive control: the same launch with the switch on makes requests within the same wait, so zero above is not just a slow start.
     await app.close()
     app = null
-    await launch({ env: { DLAD_UPDATE_FEED: feed, DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
+    await launch({ env: { DLAD_UPDATE_FEED: feed, WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '0' } })
     await new Promise((r) => setTimeout(r, WAIT))
     assert.ok(requests > 0, 'with the switch off the same wait sees a request')
   }))

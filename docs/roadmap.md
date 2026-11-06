@@ -1,4 +1,4 @@
-# Roadmap: DataLad Desktop
+# Roadmap: Worldline Desktop
 
 ## Current state
 
@@ -59,7 +59,7 @@ The near-term roadmap is a single track: stabilize and secure this standalone ap
 
 ### Phase 6: Shell decision — decided
 
-**Decision: standalone.** DataLad Desktop stays its own independent Electron app; it will not be rebased onto or claim parity with GitHub Desktop. The explicit product framing going forward is: a stable, easy-to-use, secure, multi-platform version-control app in its own right.
+**Decision: standalone.** Worldline Desktop stays its own independent Electron app; it will not be rebased onto or claim parity with GitHub Desktop. The explicit product framing going forward is: a stable, easy-to-use, secure, multi-platform version-control app in its own right.
 
 Follow-up from this decision (tracked here, not left implicit):
 - Product/UX docs have been updated to stop implying GitHub Desktop compatibility (`docs/product/researcher-workflow.md`, `docs/architecture/datalad-adapter.md`).

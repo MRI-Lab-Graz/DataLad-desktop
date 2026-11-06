@@ -19,7 +19,7 @@ test('the Rust crates, bridge, parity tests and workflow are gone', () => {
 })
 
 test('nothing loads or configures a native adapter', () => {
-  assert.doesNotMatch(read('src/gui/main.js'), /(^|[^a-z])rust|DATALAD_DESKTOP_USE_RUST_ADAPTER/i)
+  assert.doesNotMatch(read('src/gui/main.js'), /(^|[^a-z])rust|WORLDLINE_DESKTOP_USE_RUST_ADAPTER/i)
   assert.doesNotMatch(read('package.json'), /(^|[^a-z])rust|cargo/i)
 })
 

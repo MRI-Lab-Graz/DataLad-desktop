@@ -37,7 +37,7 @@ async function invokeRejects(channelCall, ...args) {
       try {
         // eslint-disable-next-line no-new-func
         const fn = new Function('api', 'args', `return api.${call}(...args)`)
-        await fn(window.dataladDesktop, callArgs)
+        await fn(window.worldlineDesktop, callArgs)
         return { rejected: false }
       } catch (error) {
         return { rejected: true, message: String(error?.message ?? error) }

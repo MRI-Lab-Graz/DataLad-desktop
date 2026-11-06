@@ -66,7 +66,7 @@ function slowCommand(pidFile) {
 
 function runRecorded(command, runId) {
   return app.page.evaluate(
-    (args) => window.dataladDesktop.runCommand('run', args.request, args.runId),
+    (args) => window.worldlineDesktop.runCommand('run', args.request, args.runId),
     { request: { projectPath, message: 'slow run', command }, runId }
   )
 }
@@ -77,7 +77,7 @@ test('cancelCommand stops a running recorded command and its process', async () 
   const running = runRecorded(slowCommand(pidFile), runId)
 
   const pid = Number(await waitFor(() => readIfExists(pidFile)))
-  assert.equal(await app.page.evaluate((id) => window.dataladDesktop.cancelCommand(id), runId), true)
+  assert.equal(await app.page.evaluate((id) => window.worldlineDesktop.cancelCommand(id), runId), true)
 
   const result = await running
   assert.equal(result.cancelled, true)
@@ -85,7 +85,7 @@ test('cancelCommand stops a running recorded command and its process', async () 
   await waitFor(() => !isAlive(pid))
 
   // The run is finished, so a second cancel (a click racing completion) is a harmless false.
-  assert.equal(await app.page.evaluate((id) => window.dataladDesktop.cancelCommand(id), runId), false)
+  assert.equal(await app.page.evaluate((id) => window.worldlineDesktop.cancelCommand(id), runId), false)
 })
 
 test('output of a running command is streamed as activity events for its runId', async () => {
@@ -93,7 +93,7 @@ test('output of a running command is streamed as activity events for its runId',
   const runId = 'e2e-activity-1'
   await app.page.evaluate(() => {
     window.__activity = []
-    window.dataladDesktop.onCommandActivity((event) => window.__activity.push(event))
+    window.worldlineDesktop.onCommandActivity((event) => window.__activity.push(event))
   })
   const running = runRecorded(slowCommand(pidFile), runId)
 
@@ -103,7 +103,7 @@ test('output of a running command is streamed as activity events for its runId',
     { timeout: 15_000 }
   )
 
-  await app.page.evaluate((id) => window.dataladDesktop.cancelCommand(id), runId)
+  await app.page.evaluate((id) => window.worldlineDesktop.cancelCommand(id), runId)
   await running
 })
 

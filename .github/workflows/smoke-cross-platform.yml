@@ -81,11 +81,11 @@ jobs:
       - name: Run packaged app smoke test (Windows)
         if: runner.os == 'Windows' && github.event_name != 'pull_request'
         env:
-          DLAD_APP_EXECUTABLE: dist/win-unpacked/DataLad Desktop.exe
+          DLAD_APP_EXECUTABLE: dist/win-unpacked/Worldline Desktop.exe
         run: node --test e2e/packaged.e2e.mjs
 
       - name: Run packaged app smoke test (macOS)
         if: runner.os == 'macOS' && github.event_name != 'pull_request'
         env:
-          DLAD_APP_EXECUTABLE: dist/mac-arm64/DataLad Desktop.app/Contents/MacOS/DataLad Desktop
+          DLAD_APP_EXECUTABLE: dist/mac-arm64/Worldline Desktop.app/Contents/MacOS/Worldline Desktop
         run: node --test e2e/packaged.e2e.mjs

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2b40"/>
+      <stop offset="1" stop-color="#0f1a29"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <g fill="none" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <!-- main worldline -->
+    <path d="M200 720 C290 720 320 580 400 580 C500 580 520 440 600 440 C690 440 730 310 830 310" stroke="#e8f1ff"/>
+    <!-- new branch from the second point -->
+    <path d="M400 580 C500 580 520 720 620 720 L830 720" stroke="#2dd4bf"/>
+  </g>
+  <!-- points in time -->
+  <circle cx="200" cy="720" r="48" fill="#e8f1ff"/>
+  <circle cx="400" cy="580" r="48" fill="#e8f1ff"/>
+  <circle cx="600" cy="440" r="48" fill="#e8f1ff"/>
+  <circle cx="830" cy="310" r="64" fill="#e8f1ff"/>
+  <circle cx="830" cy="310" r="26" fill="#0f1a29"/>
+  <circle cx="830" cy="720" r="64" fill="#2dd4bf"/>
+  <circle cx="830" cy="720" r="26" fill="#0f1a29"/>
+</svg>
