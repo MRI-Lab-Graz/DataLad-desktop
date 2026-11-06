@@ -29,7 +29,14 @@ test('no tracked file is a stray build output', () => {
   assert.deepEqual(tracked.filter((f) => /^(latest.*|builder-debug)\.yml$/.test(f)), [])
 })
 
-// One release pipeline (GitHub Actions). The GitLab copy built unsigned, ran no tests and was not hardened.
-test('there is no second, unhardened release pipeline', () => {
-  assert.equal(existsSync(new URL('../.gitlab-ci.yml', import.meta.url)), false)
+// One release pipeline (GitHub Actions) until the GitLab one is as hardened. An early GitLab copy built unsigned, ran
+// no tests and posted releases with a job token. A GitLab pipeline that only tests is fine; one that publishes is not (yet).
+const PUBLISHES = /release_gitlab|stage:\s*release|\/releases|CI_JOB_TOKEN|JOB-TOKEN|--publish\s*=?\s*always/
+test('a GitLab pipeline may test, but must not publish releases yet', () => {
+  const file = new URL('../.gitlab-ci.yml', import.meta.url)
+  if (existsSync(file)) assert.doesNotMatch(readFileSync(file, 'utf8'), PUBLISHES)
+})
+test('the publishing check does catch the early GitLab release pipeline', () => {
+  const early = `release_gitlab:\n  stage: release\n  script:\n    - curl --header "JOB-TOKEN: $CI_JOB_TOKEN" "$CI_API_V4_URL/projects/1/releases"`
+  assert.match(early, PUBLISHES)
 })
