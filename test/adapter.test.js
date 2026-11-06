@@ -2814,7 +2814,7 @@ test('listDataFiles lists annexed files of the root and each subdataset with pre
   runner.set('git', ['-C', sub, 'config', '--get', 'annex.uuid'], ok('u2\n'))
   runner.set('git', ['-C', sub, 'annex', 'find', '--in=here', fmt], ok(''))
   runner.set('git', ['-C', sub, 'annex', 'find', '--not', '--in=here', fmt], ok('func/run1.nii\t\n'))
-  // sub-02: annex.uuid unmocked -> fails -> skipped
+  runner.set('git', ['-C', join(root, 'sub-02'), 'config', '--get', 'annex.uuid'], { exitCode: 1, failed: true }) // unset -> skipped
 
   const files = await new DataLadAdapter({ runner }).listDataFiles(root)
 
@@ -2824,4 +2824,74 @@ test('listDataFiles lists annexed files of the root and each subdataset with pre
     { path: 'sub-01/func/run1.nii', present: false, bytes: null }
   ])
   assert.equal(runner.calls.filter((c) => c.args.includes('find')).length, 4)
+})
+
+// Runner for many subdatasets: counts repos in flight, finishes later repos first.
+async function manyReposRunner(count) {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-many-'))
+  let modules = ''
+  for (let i = 0; i < count; i++) modules += `[submodule "s${i}"]\n\tpath = s${i}\n\turl = ../s${i}\n`
+  await writeFile(join(root, '.gitmodules'), modules)
+  const state = { inFlight: new Set(), max: 0 }
+  const runner = {
+    async run(command, args = []) {
+      const repo = args[1]
+      const ok = (stdout = '') => ({ command, args, exitCode: 0, stdout, stderr: '', failed: false })
+      if (args.includes('--is-inside-work-tree')) return ok('true\n')
+      if (args.includes('annex.uuid')) {
+        state.inFlight.add(repo)
+        state.max = Math.max(state.max, state.inFlight.size)
+        const n = Number(/s(\d+)$/.exec(repo)?.[1] ?? 0)
+        await new Promise((resolve) => setTimeout(resolve, (count - n) * 3)) // later repos finish first
+        return ok('u\n')
+      }
+      if (args.includes('annex')) {
+        const done = () => state.inFlight.delete(repo)
+        if (args.includes('--not')) { done(); return ok('') }
+        return ok(`f.dat\t1\n`)
+      }
+      return ok()
+    }
+  }
+  return { root, runner, state }
+}
+
+test('listDataFiles works on several repos at once, never more than 8, and keeps the order', async () => {
+  const { root, runner, state } = await manyReposRunner(20)
+  const files = await new DataLadAdapter({ runner }).listDataFiles(root)
+  assert.ok(state.max > 1, 'repos should run concurrently')
+  assert.ok(state.max <= 8, `at most 8 at once, saw ${state.max}`)
+  assert.deepEqual(files.map((f) => f.path), ['f.dat', ...Array.from({ length: 20 }, (_, i) => `s${i}/f.dat`)])
+})
+
+test('listDataFiles keeps a tab inside a file name', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-tab-'))
+  const runner = new FakeRunner()
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { stdout: 'u\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], { stdout: 'a\tb.dat\t7\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], { stdout: '' })
+  assert.deepEqual(await new DataLadAdapter({ runner }).listDataFiles(root), [{ path: 'a\tb.dat', present: true, bytes: 7 }])
+})
+
+test('listDataFiles throws a plain error when git annex find fails, but skips a repo with annex.uuid unset', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-fail-'))
+  const runner = new FakeRunner()
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { stdout: 'u\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], { stdout: 'a.dat\t1\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], { exitCode: 1, failed: true })
+  await assert.rejects(new DataLadAdapter({ runner }).listDataFiles(root), /could not list the data files/i)
+
+  const unset = new FakeRunner()
+  unset.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  unset.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { exitCode: 1, failed: true })
+  assert.deepEqual(await new DataLadAdapter({ runner: unset }).listDataFiles(root), [])
+
+  const broken = new FakeRunner() // uuid check fails for another reason (exit 128)
+  broken.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  broken.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { exitCode: 128, failed: true })
+  await assert.rejects(new DataLadAdapter({ runner: broken }).listDataFiles(root), /could not list the data files/i)
 })

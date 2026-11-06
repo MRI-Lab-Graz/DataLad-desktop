@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DataLadAdapter } from '../src/datalad/adapter.js'
@@ -35,4 +35,33 @@ test('listDataFiles reports a present and a dropped annexed file, and omits plai
       { path: 'ünï.dat', present: false, bytes: 15 }
     ]
   )
+})
+
+test('listDataFiles prefixes subdataset paths and skips a subdataset without annex', { skip: !hasAnnex && 'git-annex is not installed' }, async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dlad-list-annex-sub-'))
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+  const setup = (cwd) => {
+    git(cwd, 'init', '-q', '-b', 'main')
+    git(cwd, 'config', 'user.email', 'ana@example.org')
+    git(cwd, 'config', 'user.name', 'Ana')
+    git(cwd, 'config', 'commit.gpgsign', 'false')
+  }
+  setup(dir)
+  await mkdir(join(dir, 'sub-01'))
+  await mkdir(join(dir, 'plain'))
+  setup(join(dir, 'sub-01'))
+  setup(join(dir, 'plain'))
+  git(join(dir, 'sub-01'), 'annex', 'init', 'test')
+  await writeFile(join(dir, 'sub-01', 'scan.nii'), 'abc')
+  git(join(dir, 'sub-01'), 'annex', 'add', 'scan.nii')
+  git(join(dir, 'sub-01'), 'commit', '-qm', 'scan')
+  await writeFile(join(dir, 'plain', 'a.txt'), 'x')
+  git(join(dir, 'plain'), 'add', 'a.txt')
+  git(join(dir, 'plain'), 'commit', '-qm', 'a')
+  git(dir, 'submodule', 'add', './sub-01')
+  git(dir, 'submodule', 'add', './plain')
+
+  const files = await new DataLadAdapter({ runner: new ProcessRunner() }).listDataFiles(dir)
+
+  assert.deepEqual(files, [{ path: 'sub-01/scan.nii', present: true, bytes: 3 }])
 })

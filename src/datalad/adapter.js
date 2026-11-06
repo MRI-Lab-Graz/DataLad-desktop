@@ -674,23 +674,44 @@ export class DataLadAdapter {
   // Read-only: only a repo whose annex.uuid is set is asked (`git annex find` would otherwise initialise annex there).
   async listDataFiles(projectPath) {
     const format = '--format=${file}\\t${bytesize}\\n'
-    const files = []
-    for (const dataset of await this.listDatasets(projectPath)) {
+    const datasets = await this.listDatasets(projectPath)
+    const fail = (dataset) => {
+      throw new Error(`Could not list the data files of ${dataset.relativePath === '.' ? 'the project' : dataset.relativePath}.`)
+    }
+    const listOne = async (dataset) => {
       const repo = dataset.path
       const prefix = dataset.relativePath === '.' ? '' : `${dataset.relativePath}/`
-      if ((await this.runner.run('git', ['-C', repo, 'config', '--get', 'annex.uuid'])).failed) {
-        continue
+      const uuid = await this.runner.run('git', ['-C', repo, 'config', '--get', 'annex.uuid'])
+      if (uuid.failed) {
+        return uuid.exitCode === 1 ? [] : fail(dataset) // exit 1 = key not set = no annex here
       }
-      for (const [present, flags] of [[true, ['--in=here']], [false, ['--not', '--in=here']]]) {
-        const found = await this.runner.run('git', ['-C', repo, 'annex', 'find', ...flags, format])
-        for (const line of found.failed ? [] : (found.stdout ?? '').split(/\r?\n/).filter(Boolean)) {
-          const [path, size] = line.split('\t')
-          const bytes = /^\d+$/.test(size ?? '') ? Number(size) : null
-          files.push({ path: prefix + path, present, bytes })
-        }
+      const found = await Promise.all([
+        this.runner.run('git', ['-C', repo, 'annex', 'find', '--in=here', format]),
+        this.runner.run('git', ['-C', repo, 'annex', 'find', '--not', '--in=here', format])
+      ])
+      if (found.some((result) => result.failed)) {
+        fail(dataset)
       }
+      return found.flatMap((result, index) =>
+        (result.stdout ?? '').split(/\r?\n/).filter(Boolean).map((line) => {
+          const tab = line.lastIndexOf('\t') // a file name may hold a tab; the size is the last field
+          const size = line.slice(tab + 1)
+          return { path: prefix + line.slice(0, tab), present: index === 0, bytes: /^\d+$/.test(size) ? Number(size) : null }
+        })
+      )
     }
-    return files
+    // At most 8 repos at a time (Windows spawns are slow); results stay in listDatasets order.
+    const results = new Array(datasets.length)
+    let next = 0
+    await Promise.all(
+      Array.from({ length: Math.min(8, datasets.length) }, async () => {
+        while (next < datasets.length) {
+          const index = next++
+          results[index] = await listOne(datasets[index])
+        }
+      })
+    )
+    return results.flat()
   }
 
   async #collectSubdatasets(rootPath, currentPath, relativePrefix, datasets) {
