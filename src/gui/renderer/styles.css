@@ -1,4 +1,5 @@
 :root {
+  --header-control-height: 2.5rem; /* header buttons and the small logo share one height */
   --bg-warm: #ffffff;
   --bg-accent: #f6f6f6;
   --ink: #242322;
@@ -424,6 +425,12 @@ body {
   gap: 0.5rem;
 }
 
+.hero-actions .button {
+  height: var(--header-control-height);
+  display: inline-flex;
+  align-items: center;
+}
+
 .setup-section .power-toggle-wrap {
   justify-content: flex-start;
   margin-top: 0.5rem;
@@ -435,6 +442,7 @@ a.button {
 }
 
 .hero-logo {
+  display: block;
   width: 128px;
   height: 128px;
   border-radius: 16px;
@@ -2037,10 +2045,10 @@ select:disabled {
 }
 
 .hero-slim .hero-logo {
-  width: 36px;
-  height: 36px;
+  width: var(--header-control-height);
+  height: var(--header-control-height);
   padding: 3px;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 .continue-button {
@@ -2139,6 +2147,15 @@ select:disabled {
 .update-notice .button:focus-visible {
   outline: 3px solid var(--ink);
   outline-offset: 2px;
+}
+
+#save-checkpoint-panel {
+  counter-reset: save-step;
+}
+
+.save-step-num::before {
+  counter-increment: save-step;
+  content: counter(save-step) ' · ';
 }
 
 .save-tips-off .save-tip {

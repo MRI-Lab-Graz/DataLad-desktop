@@ -36,11 +36,16 @@ and then integrated for a unified analysis save.
    - In **Work on this project → Branches & Ignore → Branch**, choose one feature branch under **Merge Into Current Branch** and click **Merge**.
    - Repeat for the other two feature branches.
    - If the same file changed on both branches, the **Merge in progress** banner appears above **What changed**. For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
+
+   ![The Merge in progress banner above Save, with the choices for each file](../_static/screenshots/09-merge-conflict.png)
+
 4. Review status for unexpected cross-modality edits.
 5. Add integration notes explaining alignment assumptions.
 6. Save the integration step with the message:
    - `integration: combine imaging clinical survey v1`
 7. Publish integration branch to shared remote.
+
+   ![Sync: Update and Publish, with the remote named below](../_static/screenshots/11-sync.png)
 
 ## Failure injection
 

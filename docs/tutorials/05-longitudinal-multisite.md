@@ -39,6 +39,9 @@ must ingest new waves while preserving site-level traceability.
 5. Use Update before each integration merge to reduce divergence.
    - If Update leaves conflicts, the **Merge in progress** banner appears above **What changed**.
    - For each file choose **Keep this branch's version**, **Keep `<branch>`'s version**, or edit the file yourself and choose **I fixed it myself**; then click **Finish Merge** (or **Cancel Merge** to go back). The choices for each conflicting file, including **Keep it deleted**, **Cancel Merge** and what **I fixed it myself** needs, are explained in [Tutorial 3](03-team-feature-branches.md).
+
+   ![Sync: Update and Publish, with the remote named below](../_static/screenshots/11-sync.png)
+
 6. Publish only after each wave integration passes review.
 
 ## Failure injection

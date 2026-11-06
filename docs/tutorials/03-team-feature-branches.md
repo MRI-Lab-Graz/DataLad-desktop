@@ -35,6 +35,8 @@ The team must avoid conflicts on main while integrating safely.
 4. Save all changes first; Merge refuses to start with unsaved changes.
    - In **Work on this project → Branches & Ignore → Branch**, switch to `main`.
    - Choose `feature/preprocessing` under **Merge Into Current Branch** and click **Merge**.
+
+   ![Branches & Ignore: switch branch, create branch, Merge Into Current Branch](../_static/screenshots/08-branches-merge.png)
 5. Repeat for `feature/statistics`, then `feature/figures`.
 6. Confirm final `main` status is clean and complete.
 

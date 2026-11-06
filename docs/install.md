@@ -26,7 +26,7 @@ checks it against a checksum written into the script itself, and sets everything
 > distribution (it never runs `sudo` itself). See [datalad.org](https://www.datalad.org/) for more. The app's
 > diagnostics screen tells you what's missing.
 
-**PRISM projects** (a `project.json` in the project folder) get a PRISM badge. The project card shows **✓ valid** or the number of problems, and in the Save area step **2 · Is it valid?** shows the result with a **Check again** button. Save only goes through when
+**PRISM projects** (a `project.json` in the project folder) get a PRISM badge. The project card shows **✓ valid** or the number of problems, and in the Save area the step **Is it valid?** shows the result with a **Check again** button. Save only goes through when
 the PRISM validator (which includes the BIDS check) reports the whole project valid; the save that adds
 `project.json` is the exception. **BIDS projects** (a `dataset_description.json` and no `project.json`) are checked
 the same way before every save, with the BIDS validator. Both come with the one validator install, so there is no extra install. Files that are annexed but not downloaded do not count as errors. The

@@ -28,7 +28,10 @@ is to separate data cleaning from analysis edits and preserve traceability.
 1. Open project and review all pending changes.
 2. Make save 1 containing only data and metadata edits.
 3. Use Save message:
+
    - `cleaning: normalize participant table and update dictionary`
+
+   ![Save area with only the data and metadata files ticked, the notebook left out](../_static/screenshots/07-save-pick-files.png)
 4. Verify notebook changes are still unsaved.
 5. Make save 2 containing only notebook edits.
 6. Use Save message:

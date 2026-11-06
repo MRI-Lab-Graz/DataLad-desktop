@@ -66,3 +66,18 @@ test('the check refreshes the list of changed files before it remembers it, so a
   assert.ok(refresh > 0 && refresh < body.indexOf('rootProjectCheckedSignature ='), 'status refreshed first')
   assert.match(body.slice(refresh, body.indexOf('rootProjectCheckedSignature =')), /runId !== validityRunId/) // still the newest run after waiting
 })
+
+test('step numbers are counted by the page, so a hidden validity step leaves no gap (1, 2 not 1, 3)', () => {
+  assert.doesNotMatch(panel, /<span class="save-tip">\d · <\/span>/) // no typed digits
+  assert.equal((panel.match(/class="save-tip save-step-num"/g) ?? []).length, 3)
+  assert.match(css, /#save-checkpoint-panel\s*\{[^}]*counter-reset:\s*save-step/)
+  assert.match(css, /\.save-step-num::before\s*\{[^}]*counter-increment:\s*save-step[^}]*counter\(save-step\)/)
+})
+
+test('the small logo in the header is as tall as the buttons beside it', () => {
+  const size = /--header-control-height:\s*([\d.]+rem)/.exec(css)?.[1]
+  assert.ok(size, 'one shared size')
+  assert.match(css, /\.hero-actions \.button\s*\{[^}]*(min-)?height:\s*var\(--header-control-height\)/)
+  assert.match(css, /\.hero-logo\s*\{[^}]*display:\s*block/) // an inline image adds a line gap and sits off-centre
+  assert.match(css, /\.hero-slim \.hero-logo\s*\{[^}]*width:\s*var\(--header-control-height\)[^}]*height:\s*var\(--header-control-height\)/)
+})
