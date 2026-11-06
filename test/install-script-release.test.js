@@ -10,7 +10,7 @@ const publishJob = release.slice(release.indexOf('  publish-release:'))
 
 test('the Windows job zips the unpacked app with the app at the zip root', () => {
   assert.ok(windowsJob.includes("Compress-Archive -Path 'dist/win-unpacked/*'"))
-  assert.ok(windowsJob.includes('DataLad-Desktop-$version-win-x64.zip'))
+  assert.ok(windowsJob.includes('Worldline-Desktop-$version-win-x64.zip'))
 })
 
 test('windows-install.cmd is rendered from the zip that ships with it, after the zip exists', () => {
@@ -27,8 +27,8 @@ test('a release tag must equal the package version, because the script downloads
 })
 
 test('the Windows artifact carries the zip and windows-install.cmd under the release pattern name', () => {
-  const upload = windowsJob.slice(windowsJob.indexOf('name: datalad-desktop-windows-x64'))
-  for (const path of ['dist/DataLad-Desktop-*-win-x64.zip', 'dist/windows-install.cmd']) {
+  const upload = windowsJob.slice(windowsJob.indexOf('name: worldline-desktop-windows-x64'))
+  for (const path of ['dist/Worldline-Desktop-*-win-x64.zip', 'dist/windows-install.cmd']) {
     assert.ok(upload.includes(path), `artifact does not include ${path}`)
   }
 })
@@ -53,6 +53,6 @@ test('linux-install.sh is rendered from the AppImage that ships with it, after t
 })
 
 test('the Linux artifact carries the AppImage and linux-install.sh', () => {
-  const upload = linuxJob.slice(linuxJob.indexOf('name: datalad-desktop-linux'))
+  const upload = linuxJob.slice(linuxJob.indexOf('name: worldline-desktop-linux'))
   for (const path of ['dist/*.AppImage', 'dist/linux-install.sh']) assert.ok(upload.includes(path), `artifact does not include ${path}`)
 })

@@ -558,7 +558,7 @@ export class DataLadAdapter {
     const startedEmpty = before === null || before.length === 0
     for (const args of [
       ['init', '--bare', '--', folderPath],
-      ['--git-dir', folderPath, 'annex', 'init', 'DataLad Desktop backup'] // bare repo: the runner's safe.bareRepository=explicit needs this
+      ['--git-dir', folderPath, 'annex', 'init', 'Worldline Desktop backup'] // bare repo: the runner's safe.bareRepository=explicit needs this
     ]) {
       const result = await this.runner.run('git', args)
       if (result.failed) {

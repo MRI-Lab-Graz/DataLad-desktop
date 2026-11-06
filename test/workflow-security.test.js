@@ -69,7 +69,7 @@ test('CI tool downloads are verified against a pinned SHA-256 before use', () =>
   assert.ok(checks.indexOf('sha256sum -c') < checks.indexOf('tar -xzf'), 'verify before extracting')
 })
 
-// publish-release downloads `datalad-desktop-*` with merge-multiple; an unsigned artifact
+// publish-release downloads `worldline-desktop-*` with merge-multiple; an unsigned artifact
 // matching that pattern would collide with the signed one and could be published instead.
 test('the unsigned Windows artifact cannot match the release download pattern', () => {
   const [, pattern] = /pattern: (\S+)/.exec(release)

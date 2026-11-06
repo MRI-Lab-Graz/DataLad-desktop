@@ -9,7 +9,7 @@ const overview = readFileSync(new URL('../REVIEW-OVERVIEW.md', import.meta.url),
 test('SECURITY.md names the admin policy and it exists in code', () => {
   assert.match(doc, /policy\.json/)
   assert.match(doc, /trustedRoots/)
-  assert.doesNotMatch(doc, /DATALAD_DESKTOP_DISABLE_CONSOLE|consoleDisabled/)
+  assert.doesNotMatch(doc, /WORLDLINE_DESKTOP_DISABLE_CONSOLE|consoleDisabled/)
 })
 
 test('every source file SECURITY.md points at exists', () => {
@@ -20,7 +20,7 @@ test('every source file SECURITY.md points at exists', () => {
 
 test('the security docs no longer describe the removed Rust adapter or an unverified installer', () => {
   for (const text of [doc, overview]) {
-    assert.doesNotMatch(text, /Rust adapter|rust-core|DATALAD_DESKTOP_USE_RUST_ADAPTER/)
+    assert.doesNotMatch(text, /Rust adapter|rust-core|WORLDLINE_DESKTOP_USE_RUST_ADAPTER/)
     assert.doesNotMatch(text, /no hash check|unpinned/i)
   }
 })
@@ -35,7 +35,7 @@ test('SECURITY.md states the limits honestly', () => {
 test('SECURITY.md documents the system locations that policyFiles really uses', async () => {
   const { policyFiles } = await import('../src/gui/policy.js')
   const env = { ProgramData: 'C:\\ProgramData' }
-  assert.ok(doc.includes('%ProgramData%\\DataLad Desktop'))
+  assert.ok(doc.includes('%ProgramData%\\Worldline Desktop'))
   assert.ok(doc.includes(policyFiles({ platform: 'darwin', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
   assert.ok(doc.includes(policyFiles({ platform: 'linux', env, resourcesDir: '/r' })[0].replace('/policy.json', '/')))
 })
@@ -128,23 +128,23 @@ test('SECURITY.md documents that file diffs never run repository-named programs,
 
 test('SECURITY.md documents Run & record: native confirmation, the admin switch, and its honest limit', () => {
   assert.match(doc, /Run & record/)
-  assert.match(doc, /DATALAD_DESKTOP_DISABLE_RUN/)
+  assert.match(doc, /WORLDLINE_DESKTOP_DISABLE_RUN/)
   assert.match(doc, /runDisabled/)
   assert.match(doc, /native (dialog|confirmation)/i)
   assert.match(doc, /not a sandbox/i)
   const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
-  assert.match(policy, /DATALAD_DESKTOP_DISABLE_RUN/)
+  assert.match(policy, /WORLDLINE_DESKTOP_DISABLE_RUN/)
 })
 
 test('SECURITY.md documents the validator auto-update, the update notices and the admin switch, and the code has them', () => {
   assert.match(doc, /prism-validator/)
   assert.match(doc, /3 days/)
   assert.match(doc, /only announced/i)
-  assert.match(doc, /DATALAD_DESKTOP_DISABLE_UPDATE_CHECK/)
+  assert.match(doc, /WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK/)
   assert.match(doc, /updateCheckDisabled/)
   const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
   assert.match(policy, /updateCheckDisabled/)
-  assert.match(policy, /DATALAD_DESKTOP_DISABLE_UPDATE_CHECK/)
+  assert.match(policy, /WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK/)
   const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8')
   assert.match(upd, /PRISM_COOLDOWN_DAYS/)
   assert.match(upd, /--only-binary/)
@@ -155,7 +155,7 @@ test('SECURITY.md lists the update network requests, and the code uses those hos
   assert.match(doc, /`formulae\.brew\.sh` \(git-annex, and DataLad when it came from Homebrew\)/)
   assert.match(doc, /`datalad` only when DataLad is found on this computer/)
   assert.match(doc, /`uv venv` may download a Python build from GitHub when `uv` has no cached copy/)
-  assert.match(doc, /IP address and the plain User-Agent `DataLad-Desktop`/)
+  assert.match(doc, /IP address and the plain User-Agent `Worldline-Desktop`/)
   assert.match(doc, /uv's standard User-Agent/)
   assert.match(doc, /checked again from its final place/)
   assert.doesNotMatch(doc, /Nothing runs while a Save/)

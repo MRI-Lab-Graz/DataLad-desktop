@@ -1,19 +1,22 @@
-# DataLad Desktop
+# Worldline Desktop
 
 [![Documentation](https://readthedocs.org/projects/datalad-desktop/badge/?version=latest)](https://datalad-desktop.readthedocs.io/) [**Read the docs →**](https://datalad-desktop.readthedocs.io/)
 
 A stable, easy-to-use, secure version control app for research data — for
-macOS, Windows, and Linux, no command line required. DataLad Desktop is its
+macOS, Windows, and Linux, no command line required. Worldline Desktop is its
 own independent app, not a fork of or add-on to any other Git client.
 
-## What is DataLad Desktop?
+Worldline Desktop is an independent project. It is not affiliated with or endorsed by the DataLad project; it simply works
+with DataLad datasets.
+
+## What is Worldline Desktop?
 
 [DataLad](https://www.datalad.org/) is a powerful tool for tracking and
 sharing scientific data, built on Git and git-annex. It's great at what it
 does, but it's a command-line tool — and most researchers don't want to learn
 Git internals just to keep their project's history safe.
 
-DataLad Desktop puts a simple, visual workflow on top of DataLad (and plain
+Worldline Desktop puts a simple, visual workflow on top of DataLad (and plain
 Git projects too): open a project, see what changed, write a short note, and
 save. Need data that isn't downloaded yet? One click. Working
 across nested sub-projects? The app shows you exactly what changed and where.
@@ -76,7 +79,7 @@ git identity, so your own settings and projects are never touched, and it prints
 - `DLAD_APP_EXECUTABLE=<path to the packaged app> npm run walkthrough` tests a built app instead of the
   source. The app always asks for a native confirmation before creating a project in a new folder, and a
   script cannot click that, so the project-creation steps are skipped for a packaged app. On PowerShell:
-  `$env:DLAD_APP_EXECUTABLE="C:\path\DataLad Desktop.exe"; npm run walkthrough`
+  `$env:DLAD_APP_EXECUTABLE="C:\path\Worldline Desktop.exe"; npm run walkthrough`
 - Tutorials 02-06 are not covered yet. `npm test` fails when a new tutorial is added without a walkthrough
   or an explicit "not covered" entry.
 

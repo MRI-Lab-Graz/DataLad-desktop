@@ -1,13 +1,13 @@
-# DataLad Desktop Documentation
+# Worldline Desktop Documentation
 
 A stable, easy-to-use, secure version control app for research data — for
 macOS, Windows, and Linux, no command line required.
 
-DataLad Desktop puts a simple, visual workflow on top of [DataLad](https://www.datalad.org/)
+Worldline Desktop puts a simple, visual workflow on top of [DataLad](https://www.datalad.org/)
 (and plain Git projects too): open a project, see what changed, write a short
 note, and save a checkpoint. Need data that isn't downloaded yet? One click.
 
-![DataLad Desktop start screen with Open Project and Create Project](_static/screenshots/02-welcome.png)
+![Worldline Desktop start screen with Open Project and Create Project](_static/screenshots/02-welcome.png)
 
 ```{toctree}
 :maxdepth: 2

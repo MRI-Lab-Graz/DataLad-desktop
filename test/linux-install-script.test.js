@@ -66,10 +66,10 @@ test('an unrendered template runs the latest release linux-install.sh, passing i
 test('installs the AppImage as an executable file and adds an app-menu entry', posix, async () => {
   const r = await run({ tools: allTools })
   assert.equal(r.status, 0, r.out)
-  const image = join(r.home, 'Applications', 'DataLad-Desktop.AppImage')
+  const image = join(r.home, 'Applications', 'Worldline-Desktop.AppImage')
   assert.equal(await readFile(image, 'utf8'), IMAGE)
   assert.ok(((await stat(image)).mode & 0o111) !== 0, 'AppImage is not executable')
-  const entry = await readFile(join(r.home, '.local', 'share', 'applications', 'datalad-desktop.desktop'), 'utf8')
+  const entry = await readFile(join(r.home, '.local', 'share', 'applications', 'worldline-desktop.desktop'), 'utf8')
   assert.match(entry, /^\[Desktop Entry\]/)
   assert.ok(entry.includes(`Exec="${image}"`), entry)
 })
@@ -78,7 +78,7 @@ test('a file that does not match the SHA-256 is refused and nothing is installed
   const r = await run({ tools: allTools, image: 'tampered' })
   assert.notEqual(r.status, 0)
   assert.match(r.out, /SHA-256/)
-  await assert.rejects(stat(join(r.home, 'Applications', 'DataLad-Desktop.AppImage')))
+  await assert.rejects(stat(join(r.home, 'Applications', 'Worldline-Desktop.AppImage')))
 })
 
 test('refuses systems other than Linux x86_64 with a plain sentence', posix, async () => {

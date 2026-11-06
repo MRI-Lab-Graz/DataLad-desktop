@@ -7,19 +7,19 @@ import { isAbsolute, join } from 'node:path'
 // trustedRoots: absolute folders an administrator pre-trusts, e.g. a lab share. A file we cannot parse names none.
 // runDisabled: turns Run & record off. The env var suits managed launchers; a policy file that exists but cannot be
 // read is "locked down", never "absent" (fail closed).
-// updateCheckDisabled: turns the update checks (the prism-validator update and the DataLad/git-annex notices) off; env var DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1,
+// updateCheckDisabled: turns the update checks (the prism-validator update and the DataLad/git-annex notices) off; env var WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK=1,
 // same fail-closed rule as runDisabled.
 export function policyFiles({ platform = process.platform, env = process.env, resourcesDir }) {
   const system = {
-    win32: join(env.ProgramData ?? 'C:\\ProgramData', 'DataLad Desktop', 'policy.json'),
-    darwin: '/Library/Application Support/DataLad Desktop/policy.json'
-  }[platform] ?? '/etc/datalad-desktop/policy.json'
+    win32: join(env.ProgramData ?? 'C:\\ProgramData', 'Worldline Desktop', 'policy.json'),
+    darwin: '/Library/Application Support/Worldline Desktop/policy.json'
+  }[platform] ?? '/etc/worldline-desktop/policy.json'
   return [system, join(resourcesDir, 'policy.json')]
 }
 
 export function loadPolicy({ env = process.env, files = [] }) {
-  let runDisabled = env.DATALAD_DESKTOP_DISABLE_RUN === '1'
-  let updateCheckDisabled = env.DATALAD_DESKTOP_DISABLE_UPDATE_CHECK === '1'
+  let runDisabled = env.WORLDLINE_DESKTOP_DISABLE_RUN === '1'
+  let updateCheckDisabled = env.WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK === '1'
   const trustedRoots = new Set()
   for (const file of files) {
     let parsed

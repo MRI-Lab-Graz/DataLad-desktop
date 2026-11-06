@@ -8,7 +8,7 @@ test('install guide leads with the macOS one-liner and also documents download-t
   assert.match(doc, /## macOS: install with a script/)
   assert.match(doc, /curl -fsSL https:\/\/github\.com\/MRI-Lab-Graz\/DataLad-desktop\/releases\/latest\/download\/macos-install\.sh \| bash/)
   assert.match(doc, /bash macos-install\.sh/)
-  assert.match(doc, /rm -rf "\$HOME\/Applications\/DataLad Desktop\.app"/)
+  assert.match(doc, /rm -rf "\$HOME\/Applications\/Worldline Desktop\.app"/)
   assert.match(doc, /Apple silicon/)
 })
 
@@ -42,6 +42,6 @@ test('the version and changelog agree on 0.5.5 and the example URL uses it', asy
 test('install guide has a Linux section with the one-liner, where the file lands and how to remove it', () => {
   assert.match(doc, /## Linux: install with a script/)
   assert.match(doc, /releases\/latest\/download\/linux-install\.sh \| bash/)
-  assert.match(doc, /~\/Applications\/DataLad-Desktop\.AppImage/)
-  assert.match(doc, /datalad-desktop\.desktop/)
+  assert.match(doc, /~\/Applications\/Worldline-Desktop\.AppImage/)
+  assert.match(doc, /worldline-desktop\.desktop/)
 })

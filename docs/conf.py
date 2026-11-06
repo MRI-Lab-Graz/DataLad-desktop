@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
-project = "DataLad Desktop"
+project = "Worldline Desktop"
 copyright = "2025-2026, MRI-Lab-Graz"
 author = "MRI-Lab-Graz"
 with open(os.path.join(os.path.dirname(__file__), "..", "package.json")) as f:
@@ -31,7 +31,7 @@ exclude_patterns = [
 # -- Options for HTML output -------------------------------------------------
 html_theme = "shibuya"
 html_static_path = ["_static"]
-html_title = "DataLad Desktop Documentation"
+html_title = "Worldline Desktop Documentation"
 
 html_theme_options = {
     "accent_color": "blue",

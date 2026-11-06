@@ -118,7 +118,7 @@ test('the app zip is verified before it is extracted', async () => {
 })
 
 test('the install folder defaults to LOCALAPPDATA', async () => {
-  assert.match(await readPs(), /\$InstallDir = \(Join-Path \$env:LOCALAPPDATA 'DataLad Desktop'\)/)
+  assert.match(await readPs(), /\$InstallDir = \(Join-Path \$env:LOCALAPPDATA 'Worldline Desktop'\)/)
 })
 
 test('the version and hash pins sit above the first function', async () => {
@@ -233,7 +233,7 @@ test('shortcuts are made in the Start menu and on the desktop, pointing at the i
   assert.match(fn, /WScript\.Shell/)
   assert.match(fn, /GetFolderPath\('Programs'\)/)
   assert.match(fn, /GetFolderPath\('Desktop'\)/)
-  assert.match(fn, /Join-Path \$InstallDir 'DataLad Desktop\.exe'/)
+  assert.match(fn, /Join-Path \$InstallDir 'Worldline Desktop\.exe'/)
 })
 
 test('the old install is restored when a step after the swap fails', async () => {
@@ -273,7 +273,7 @@ test('the user PATH entry is removed from the user PATH only', async () => {
 test('uninstall removes the install folder, the shortcuts and the PATH entry, and nothing shared', async () => {
   const fn = body(await readPs(), 'Invoke-Uninstall')
   assert.match(fn, /Remove-UserPath \(Join-Path \$InstallDir 'datalad-env\\Scripts'\)/)
-  assert.match(fn, /DataLad Desktop\.lnk/)
+  assert.match(fn, /Worldline Desktop\.lnk/)
   assert.match(fn, /Remove-Item -LiteralPath \$InstallDir -Recurse -Force/)
   assert.doesNotMatch(fn, /git-annex|unins\d+|msiexec|winget|choco|Git\\/i, 'Python, Git and git-annex are shared tools and stay')
 })
@@ -306,10 +306,10 @@ test('the install folder is normalised so a trailing backslash or dot (from unin
 // ---- review fixes: what a researcher can reasonably do wrong, and what must not break silently ----
 // -InstallDir D:\Software is what most installers expect to be a parent folder. Treating it as a previous install
 // would rename it to .old and delete it, with the researcher's files inside.
-test('an existing folder that is not a DataLad Desktop install is refused, before anything is renamed or deleted', async () => {
+test('an existing folder that is not a Worldline Desktop install is refused, before anything is renamed or deleted', async () => {
   const ps = await readPs()
   const fn = body(ps, 'Assert-SafeInstallDir')
-  assert.match(fn, /DataLad Desktop\.exe/)
+  assert.match(fn, /Worldline Desktop\.exe/)
   assert.match(fn, /Get-ChildItem -LiteralPath \$InstallDir -Force/)
   assert.match(fn, /throw/)
   const main = mainBlock(ps)
@@ -356,7 +356,7 @@ test('the previous install is only moved back when the failed folder is really g
 })
 
 test('the log says which version was installed', async () => {
-  assert.match(body(await readPs(), 'Install-App'), /Write-Log "Installed DataLad Desktop \$AppVersion in/)
+  assert.match(body(await readPs(), 'Install-App'), /Write-Log "Installed Worldline Desktop \$AppVersion in/)
 })
 
 // Windows PowerShell 5.1 reads a BOM-less file as the ANSI code page: one em dash in a comment garbles the script

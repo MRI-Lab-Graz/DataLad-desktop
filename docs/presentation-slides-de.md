@@ -1,4 +1,4 @@
-# DataLad Desktop – Präsentation
+# Worldline Desktop – Präsentation
 
 ---
 
@@ -30,7 +30,7 @@
 
 ---
 
-## Folie 4 — DataLad Desktop: GUI, die nicht im Weg steht
+## Folie 4 — Worldline Desktop: GUI, die nicht im Weg steht
 
 - Visuelle Arbeitsbaum-Ansicht – geänderte Dateien auf einen Blick, ohne Kommandozeile
 - Checkpoints mit einem Klick speichern: kurze Nachricht schreiben, Dateien auswählen, fertig

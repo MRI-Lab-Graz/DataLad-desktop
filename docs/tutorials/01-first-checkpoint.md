@@ -29,7 +29,7 @@ changes in the newly created project and make a clean first save.
 
 ## Walkthrough tasks
 
-1. Open the project in DataLad Desktop.
+1. Open the project in Worldline Desktop.
 2. Confirm project classification badge next to the project name: **Git**, **DataLad**, or **DataLad + Links**. A project made in Tutorial 00 reads **DataLad**.
 3. Review changed and untracked files in the working-tree list.
    Click **Show changes** under a file to see exactly what changed in it before you save.

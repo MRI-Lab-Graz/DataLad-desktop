@@ -38,7 +38,7 @@ test('the message box has a nudge for vague messages that is only a hint (a tip)
 
 test('tips can be switched off in Setup (default on, remembered here); only tips disappear', () => {
   assert.match(html, /<input[^>]*id="save-tips-toggle"[^>]*role="switch"[^>]*checked/)
-  assert.match(app, /dataladDesktop\.saveTips/)
+  assert.match(app, /worldlineDesktop\.saveTips/)
   assert.match(app, /classList\.toggle\('save-tips-off'/)
   assert.match(css, /\.save-tips-off\s+\.save-tip\s*\{\s*display:\s*none/)
   for (const id of ['save-step-valid', 'save-validity-recheck', 'message', 'save-project', 'save-guidance']) {

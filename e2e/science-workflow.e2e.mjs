@@ -122,7 +122,7 @@ test('a version marked in git reaches the remote on Publish', async () => {
       })(),
       rawTagRefs: sh('git', ['for-each-ref', '--format=%(refname:short)%00%(taggeremail)', 'refs/tags'], projectPath),
       gitVersion: sh('git', ['--version']).trim(),
-      listOwnTags: await app.page.evaluate((p) => window.dataladDesktop.listOwnTags(p).catch((e) => `error: ${e.message}`), projectPath),
+      listOwnTags: await app.page.evaluate((p) => window.worldlineDesktop.listOwnTags(p).catch((e) => `error: ${e.message}`), projectPath),
       remoteTags: tags
     }, null, 2)
   if (!/v1\.0/.test(tags)) {

@@ -14,7 +14,7 @@ let project
 
 const sh = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8' })
 const call = (request, runId) =>
-  app.page.evaluate((args) => window.dataladDesktop.runCommand('run', args.request, args.runId), { request, runId })
+  app.page.evaluate((args) => window.worldlineDesktop.runCommand('run', args.request, args.runId), { request, runId })
 const openHistory = () =>
   app.page.evaluate(() => {
     if (document.getElementById('project-tools').hidden) document.getElementById('open-tools').click()
@@ -95,12 +95,12 @@ test('a missing input gives a friendly error and a path leaving the project is r
 })
 
 test('the admin switch removes the button and the main process refuses', async () => {
-  const locked = await launchApp({ env: { DATALAD_DESKTOP_DISABLE_RUN: '1' }, trustedPaths: [project] })
+  const locked = await launchApp({ env: { WORLDLINE_DESKTOP_DISABLE_RUN: '1' }, trustedPaths: [project] })
   try {
     await locked.openProject(project)
     assert.equal(await locked.page.evaluate(() => document.getElementById('open-run').hidden), true)
     await assert.rejects(
-      () => locked.page.evaluate((p) => window.dataladDesktop.runCommand('run', { projectPath: p, message: 'x', command: 'node summarize.js' }, 'e2e-run-locked'), project),
+      () => locked.page.evaluate((p) => window.worldlineDesktop.runCommand('run', { projectPath: p, message: 'x', command: 'node summarize.js' }, 'e2e-run-locked'), project),
       /disabled by your administrator/
     )
   } finally {

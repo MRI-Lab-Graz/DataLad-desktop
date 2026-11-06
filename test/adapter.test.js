@@ -2266,7 +2266,7 @@ test('prepareFolderRemote creates an annex-ready bare repository so the first Pu
   const runner = new FakeRunner()
   runner.set('git', ['init', '--bare', '--', '/Volumes/USB/study'], {})
   // explicit --git-dir: the runner sets safe.bareRepository=explicit, which refuses `-C <bare repo>`
-  runner.set('git', ['--git-dir', '/Volumes/USB/study', 'annex', 'init', 'DataLad Desktop backup'], {})
+  runner.set('git', ['--git-dir', '/Volumes/USB/study', 'annex', 'init', 'Worldline Desktop backup'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).prepareFolderRemote('/Volumes/USB/study'), {
     ok: true, folderPath: '/Volumes/USB/study'

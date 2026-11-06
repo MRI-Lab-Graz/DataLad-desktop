@@ -21,7 +21,7 @@ export function createFetchJson({ fetch = globalThis.fetch, override } = {}) {
   return async (url) => {
     const res = await fetch(feedUrl(url, override), {
       signal: AbortSignal.timeout(10_000),
-      headers: { 'User-Agent': 'DataLad-Desktop' }
+      headers: { 'User-Agent': 'Worldline-Desktop' }
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()

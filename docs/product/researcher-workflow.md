@@ -2,7 +2,7 @@
 
 ## Primary user story
 
-A researcher opens DataLad Desktop and selects one of their projects. They review changes, write a commit message, and commit work. Sometimes they create a branch. If file content is missing, they click **Get Data**. If they need remote updates, they click **Update Project**. When done, they click **Publish**.
+A researcher opens Worldline Desktop and selects one of their projects. They review changes, write a commit message, and commit work. Sometimes they create a branch. If file content is missing, they click **Get Data**. If they need remote updates, they click **Update Project**. When done, they click **Publish**.
 
 ## UX rules
 

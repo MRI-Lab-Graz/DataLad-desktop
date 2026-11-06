@@ -14,7 +14,7 @@ const block = (start) => {
 }
 
 test('the e2e auto-confirm seam is never active in a packaged app', () => {
-  assert.match(main, /!app\.isPackaged && process\.env\.DATALAD_DESKTOP_E2E_CONFIRM === '1'/)
+  assert.match(main, /!app\.isPackaged && process\.env\.WORLDLINE_DESKTOP_E2E_CONFIRM === '1'/)
 })
 
 test('authorizeRoot is passed to the trust gate and called nowhere else', () => {

@@ -20,9 +20,9 @@ test('loadPolicy ignores keys it does not know, such as the old consoleDisabled'
 test('policyFiles puts the admin policy in a system location that survives updates, per platform', () => {
   const resources = '/opt/app/resources'
   const win = policyFiles({ platform: 'win32', env: { ProgramData: 'D:\\PD' }, resourcesDir: resources })
-  assert.ok(win[0].endsWith('policy.json') && win[0].includes('PD') && win[0].includes('DataLad Desktop'))
-  assert.deepEqual(policyFiles({ platform: 'darwin', env: {}, resourcesDir: resources })[0], '/Library/Application Support/DataLad Desktop/policy.json')
-  assert.deepEqual(policyFiles({ platform: 'linux', env: {}, resourcesDir: resources })[0], '/etc/datalad-desktop/policy.json')
+  assert.ok(win[0].endsWith('policy.json') && win[0].includes('PD') && win[0].includes('Worldline Desktop'))
+  assert.deepEqual(policyFiles({ platform: 'darwin', env: {}, resourcesDir: resources })[0], '/Library/Application Support/Worldline Desktop/policy.json')
+  assert.deepEqual(policyFiles({ platform: 'linux', env: {}, resourcesDir: resources })[0], '/etc/worldline-desktop/policy.json')
   for (const platform of ['win32', 'darwin', 'linux']) {
     assert.ok(policyFiles({ platform, env: {}, resourcesDir: resources }).some((f) => f.startsWith(join(resources))), 'resources policy still honoured')
   }
@@ -56,8 +56,8 @@ test('loadPolicy: an unreadable policy file contributes no trusted roots', async
   assert.deepEqual(loadPolicy({ env: {}, files: [bad] }).trustedRoots, [])
 })
 
-test('loadPolicy: DATALAD_DESKTOP_DISABLE_RUN=1 or runDisabled in policy.json turns Run & record off', async () => {
-  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_RUN: '1' }, files: ['/nonexistent'] }).runDisabled, true)
+test('loadPolicy: WORLDLINE_DESKTOP_DISABLE_RUN=1 or runDisabled in policy.json turns Run & record off', async () => {
+  assert.equal(loadPolicy({ env: { WORLDLINE_DESKTOP_DISABLE_RUN: '1' }, files: ['/nonexistent'] }).runDisabled, true)
   assert.equal(loadPolicy({ env: {}, files: ['/nonexistent'] }).runDisabled, false)
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const off = join(dir, 'a.json')
@@ -75,9 +75,9 @@ test('loadPolicy fails closed: a policy.json that exists but cannot be read turn
   assert.equal(loadPolicy({ env: {}, files: [bad] }).runDisabled, true)
 })
 
-test('loadPolicy: DATALAD_DESKTOP_DISABLE_UPDATE_CHECK=1 or updateCheckDisabled in policy.json turns update checks off', async () => {
-  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '1' }, files: ['/nonexistent'] }).updateCheckDisabled, true)
-  assert.equal(loadPolicy({ env: { DATALAD_DESKTOP_DISABLE_UPDATE_CHECK: '0' }, files: ['/nonexistent'] }).updateCheckDisabled, false)
+test('loadPolicy: WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK=1 or updateCheckDisabled in policy.json turns update checks off', async () => {
+  assert.equal(loadPolicy({ env: { WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '1' }, files: ['/nonexistent'] }).updateCheckDisabled, true)
+  assert.equal(loadPolicy({ env: { WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK: '0' }, files: ['/nonexistent'] }).updateCheckDisabled, false)
   assert.equal(loadPolicy({ env: {}, files: ['/nonexistent'] }).updateCheckDisabled, false)
   const dir = await mkdtemp(join(tmpdir(), 'policy-'))
   const off = join(dir, 'a.json')

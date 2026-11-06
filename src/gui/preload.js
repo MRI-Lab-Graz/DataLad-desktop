@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
-contextBridge.exposeInMainWorld('dataladDesktop', {
+contextBridge.exposeInMainWorld('worldlineDesktop', {
   platform: process.platform,
   checkEnvironment: () => ipcRenderer.invoke('adapter:checkEnvironment'),
   detectProject: (projectPath) => ipcRenderer.invoke('adapter:detectProject', projectPath),

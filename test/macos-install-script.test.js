@@ -79,7 +79,7 @@ test('exits before doing anything on an Intel Mac or on Linux', posix, async () 
 
 test('a zip whose SHA-256 does not match is refused and nothing is installed', posix, async () => {
   const from = await mkdtemp(join(tmpdir(), 'dlad-from-'))
-  await writeFile(join(from, 'DataLad-Desktop-9.9.9-mac-arm64.zip'), 'not the real app')
+  await writeFile(join(from, 'Worldline-Desktop-9.9.9-mac-arm64.zip'), 'not the real app')
   const r = await run(renderInstallScript(sh, { version: '9.9.9', zipSha256: HASH }), ['--from-dir', from])
   assert.notEqual(r.status, 0)
   assert.match(r.out, /SHA-256/)

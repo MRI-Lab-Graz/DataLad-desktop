@@ -1,5 +1,5 @@
 @echo off
-REM Installs DataLad Desktop for the current user. No administrator rights needed.
+REM Installs Worldline Desktop for the current user. No administrator rights needed.
 REM
 REM This is ONE file: download it and double-click it, or run it from any shell. Options such as -Uninstall or
 REM -InstallDir "D:\Apps" are passed on. Below the marker line the file continues with a PowerShell script; the few batch
@@ -20,7 +20,7 @@ set "DLAD_EXIT=%errorlevel%"
 del "%DLAD_PS1%" 2>nul
 
 if not "%DLAD_EXIT%"=="0" echo.
-if not "%DLAD_EXIT%"=="0" echo Setup failed - see the messages above and "DataLad Desktop install.log" next to the install folder.
+if not "%DLAD_EXIT%"=="0" echo Setup failed - see the messages above and "Worldline Desktop install.log" next to the install folder.
 if not "%DLAD_EXIT%"=="0" pause
 if not "%DLAD_EXIT%"=="0" exit /b 1
 
@@ -28,7 +28,7 @@ echo.
 pause
 exit /b 0
 #PS-BEGIN
-# Installs DataLad Desktop for the current user. No administrator rights needed.
+# Installs Worldline Desktop for the current user. No administrator rights needed.
 #
 # This is the second half of windows-install.cmd; the first half (batch) cuts it out and runs it. The copy attached to a
 # GitHub release has the version and the SHA-256 of that release's app zip filled in by CI. The copy in the repository is
@@ -37,11 +37,11 @@ exit /b 0
 # Options:
 #   -FromDir <folder>   take files that exist there (named as on the release page) instead of downloading them;
 #                       their SHA-256 is still checked
-#   -InstallDir <path>  install somewhere else (default: LocalAppData\DataLad Desktop)
+#   -InstallDir <path>  install somewhere else (default: LocalAppData\Worldline Desktop)
 #   -Uninstall          remove an existing install
 param(
     [string]$FromDir,
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'DataLad Desktop'),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Worldline Desktop'),
     [switch]$Uninstall
 )
 
@@ -55,7 +55,7 @@ $InstallDir = [IO.Path]::GetFullPath($InstallDir).TrimEnd('\')
 $AppVersion = '__VERSION__'
 $AppZipSha256 = '__ZIP_SHA256__'
 $Repo = 'MRI-Lab-Graz/DataLad-desktop'
-$AppZipName = "DataLad-Desktop-$AppVersion-win-x64.zip"
+$AppZipName = "Worldline-Desktop-$AppVersion-win-x64.zip"
 $AppZipUrl = "https://github.com/$Repo/releases/download/v$AppVersion/$AppZipName"
 $GitUrl = 'https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.5/Git-2.55.0.5-64-bit.exe'
 $GitSha256 = 'D065A4E23C3D9A6B5073D609B5BE0830227EC3CA053C083BA385061DDFAF94C6'
@@ -75,7 +75,7 @@ $script:Swapped = $false
 # refuses it needs a log to write to first.
 $LogParent = [IO.Path]::GetDirectoryName($InstallDir)
 if (-not $LogParent) { $LogParent = $env:LOCALAPPDATA }
-$LogPath = Join-Path $LogParent 'DataLad Desktop install.log'
+$LogPath = Join-Path $LogParent 'Worldline Desktop install.log'
 
 function Write-Log([string]$Message) {
     Write-Host $Message
@@ -109,19 +109,19 @@ function Get-VerifiedFile([string]$Url, [string]$Sha256, [string]$OutFile) {
 # is no folder of its own.
 function Assert-SafeInstallDir {
     if ([IO.Path]::GetPathRoot("$InstallDir\") -eq "$InstallDir\") {
-        throw "'$InstallDir' is a drive or share root. Give the install a folder of its own, for example '$InstallDir\DataLad Desktop'."
+        throw "'$InstallDir' is a drive or share root. Give the install a folder of its own, for example '$InstallDir\Worldline Desktop'."
     }
     $hasContent = (Test-Path -LiteralPath $InstallDir) -and (Get-ChildItem -LiteralPath $InstallDir -Force | Select-Object -First 1)
-    if ($hasContent -and -not (Test-Path -LiteralPath (Join-Path $InstallDir 'DataLad Desktop.exe'))) {
-        throw "'$InstallDir' already exists and is not a DataLad Desktop install, so it is left alone. Choose a folder of its own."
+    if ($hasContent -and -not (Test-Path -LiteralPath (Join-Path $InstallDir 'Worldline Desktop.exe'))) {
+        throw "'$InstallDir' already exists and is not a Worldline Desktop install, so it is left alone. Choose a folder of its own."
     }
 }
 
 function Assert-AppNotRunning {
-    $running = Get-Process -Name 'DataLad Desktop' -ErrorAction SilentlyContinue |
+    $running = Get-Process -Name 'Worldline Desktop' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase) }
     if ($running) {
-        throw 'DataLad Desktop is running. Close it and run this script again.'
+        throw 'Worldline Desktop is running. Close it and run this script again.'
     }
 }
 
@@ -132,7 +132,7 @@ function Resolve-LatestRelease {
     $tag = (Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 60).tag_name
     if ($tag -notmatch '^v([0-9A-Za-z][0-9A-Za-z.+-]*)$') { throw "Unexpected release tag '$tag'." }
     $version = $Matches[1]
-    $name = "DataLad-Desktop-$version-win-x64.zip"
+    $name = "Worldline-Desktop-$version-win-x64.zip"
     $sums = Invoke-RestMethod -Uri "https://github.com/$Repo/releases/download/$tag/SHA256SUMS.txt" -TimeoutSec 60
     if ("$sums" -notmatch "(?m)^([0-9A-Fa-f]{64}) [ *]$([regex]::Escape($name))\s*$") { throw "SHA256SUMS.txt of $tag does not list $name." }
     $script:AppVersion = $version
@@ -153,15 +153,15 @@ function Install-App {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     Expand-Archive -LiteralPath $zip -DestinationPath $work -Force
     Remove-Item -LiteralPath $zip -Force
-    if (-not (Test-Path -LiteralPath (Join-Path $work 'DataLad Desktop.exe'))) {
-        throw "The app zip does not contain 'DataLad Desktop.exe'."
+    if (-not (Test-Path -LiteralPath (Join-Path $work 'Worldline Desktop.exe'))) {
+        throw "The app zip does not contain 'Worldline Desktop.exe'."
     }
     if (Test-Path -LiteralPath $InstallDir) {
         Move-Item -LiteralPath $InstallDir -Destination $old
     }
     Move-Item -LiteralPath $work -Destination $InstallDir
     $script:Swapped = $true
-    Write-Log "Installed DataLad Desktop $AppVersion in '$InstallDir'."
+    Write-Log "Installed Worldline Desktop $AppVersion in '$InstallDir'."
 }
 
 # Written into the install folder so it can be removed without this download; it runs from TEMP because it deletes
@@ -170,7 +170,7 @@ function Install-Uninstaller {
     Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $InstallDir 'install.ps1') -Force
     $cmd = @'
 @echo off
-REM Removes DataLad Desktop. Runs a copy of the install script from TEMP, because this folder is deleted.
+REM Removes Worldline Desktop. Runs a copy of the install script from TEMP, because this folder is deleted.
 setlocal
 copy /y "%~dp0install.ps1" "%TEMP%\dlad-uninstall.ps1" >nul
 REM This file is deleted while it runs, and cmd re-reads a batch file after every command. (goto) 2>nul ends the batch
@@ -186,10 +186,10 @@ function Remove-UserPath([string]$Dir) {
 }
 
 function New-Shortcuts {
-    $target = Join-Path $InstallDir 'DataLad Desktop.exe'
+    $target = Join-Path $InstallDir 'Worldline Desktop.exe'
     $shell = New-Object -ComObject WScript.Shell
     foreach ($dir in @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'))) {
-        $link = $shell.CreateShortcut((Join-Path $dir 'DataLad Desktop.lnk'))
+        $link = $shell.CreateShortcut((Join-Path $dir 'Worldline Desktop.lnk'))
         $link.TargetPath = $target
         $link.WorkingDirectory = $env:USERPROFILE
         $link.Save()
@@ -226,14 +226,14 @@ function Complete-Upgrade {
 function Invoke-Uninstall {
     Assert-AppNotRunning
     foreach ($dir in @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'))) {
-        Remove-Item -LiteralPath (Join-Path $dir 'DataLad Desktop.lnk') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $dir 'Worldline Desktop.lnk') -Force -ErrorAction SilentlyContinue
     }
     Remove-UserPath (Join-Path $InstallDir 'datalad-env\Scripts')
     if (Test-Path -LiteralPath $InstallDir) {
         Remove-Item -LiteralPath $InstallDir -Recurse -Force
     }
     Remove-Item -LiteralPath "$InstallDir.new", "$InstallDir.old" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Log 'DataLad Desktop was removed. Shared tools were left alone.'
+    Write-Log 'Worldline Desktop was removed. Shared tools were left alone.'
 }
 
 # This process keeps the PATH it started with; installers update the registry. Look at what a new terminal will see.
