@@ -291,6 +291,11 @@ handle('adapter:findUnnestedBidsCandidates', async (_event, projectPath) => {
   return adapter.findUnnestedBidsCandidates(projectPath)
 })
 
+handle('adapter:listDataFiles', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.listDataFiles(projectPath)
+})
+
 handle('adapter:untrackPath', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
@@ -378,12 +383,16 @@ handle('adapter:runCommand', async (event, payload) => {
     // The page's typed word is not enough: the main process asks too. Never reachable through plain `drop`.
     assertCommandRequest('dropReckless', payload.request)
     const count = payload.request.paths.length
+    // Names come from the dataset: no control characters (they could fake lines in the dialog).
+    const shown = payload.request.paths.slice(0, 5).map((p) => '\n  ' + String(p).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' '))
     const confirmed = await confirmNative(event, {
       title: 'Delete without a safety check?',
       message: `In ${payload.request.projectPath}:`,
       detail:
         `${count} ${count === 1 ? 'file or folder' : 'files or folders'} will be removed from this computer WITHOUT checking that another copy exists. ` +
-        'If there is no other copy, the data may be gone for good.',
+        'If there is no other copy, the data may be gone for good.\n' +
+        shown.join('') +
+        (count > 5 ? `\n  and ${count - 5} more` : ''),
       confirmLabel: 'Delete'
     })
     if (!confirmed) {
