@@ -138,3 +138,14 @@ export function computeSyncActionsQuietMessage(health) {
     ? 'Nothing to sync right now — use Add a Remote below to enable Update and Publish.'
     : null
 }
+
+/**
+ * The Choose data buttons (Download / Free up): off while any command runs, and when nothing is chosen.
+ * @param {{ commandRunning: boolean, count: number }} state
+ * @returns {{ disabled: boolean, title: string }}
+ */
+export function computeDataPanelGating({ commandRunning, count }) {
+  if (commandRunning) return { disabled: true, title: 'Another action is running. Wait for it to finish or stop it first.' }
+  if (count === 0) return { disabled: true, title: 'Tick what you want first.' }
+  return { disabled: false, title: '' }
+}
