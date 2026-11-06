@@ -6,6 +6,7 @@ import {
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage,
+  filesToolbarVisibility,
   remoteNameForProject,
   computeDataPanelGating
 } from '../src/gui/renderer/button-gating.js'
@@ -13,19 +14,19 @@ import {
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
   const gating = computeDatasetGating('unknown')
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /not a DataLad dataset/)
+  assert.match(gating.title, /plain Git project/)
 })
 
 test('computeDatasetGating disables Get Data for a plain git project', () => {
   const gating = computeDatasetGating('git')
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /not a DataLad dataset/)
+  assert.match(gating.title, /plain Git project/)
 })
 
 test('computeDatasetGating enables Get Data for a dataset', () => {
   const gating = computeDatasetGating('dataset')
   assert.equal(gating.disabled, false)
-  assert.match(gating.title, /Download the actual content/)
+  assert.match(gating.title, /not yet on this computer/)
 })
 
 test('computeDatasetGating enables Get Data for a superdataset', () => {
@@ -41,7 +42,7 @@ test('computeDatasetGating disables Get Data for null/undefined classification',
 test('computeDatasetGating disables Get Data for a dataset with nothing left to fetch', () => {
   const gating = computeDatasetGating('dataset', { annexSupported: true, missingContentCount: 0 })
   assert.equal(gating.disabled, true)
-  assert.match(gating.title, /nothing to get/)
+  assert.match(gating.title, /Nothing to get/)
 })
 
 test('computeDatasetGating enables Get Data for a dataset with missing content', () => {
@@ -189,4 +190,24 @@ test('computeDataPanelGating disables the panel buttons while a command runs or 
   assert.equal(computeDataPanelGating({ commandRunning: false, count: 0 }).disabled, true)
   assert.equal(computeDataPanelGating({ commandRunning: false, count: 5 }).disabled, false)
   assert.match(computeDataPanelGating({ commandRunning: true, count: 5 }).title, /running/i)
+})
+
+test('Free up space (all) only shows when the project has a remote to keep the other copy', () => {
+  assert.equal(filesToolbarVisibility({ hasUpstream: true }, 'dataset').freeUp, true)
+  for (const health of [null, undefined, {}, { hasUpstream: false }]) assert.equal(filesToolbarVisibility(health, 'dataset').freeUp, false)
+})
+
+test('Get all shows with a remote, or when files are missing (they must live somewhere), never otherwise', () => {
+  assert.equal(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 0 }, 'dataset').getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 3 }, 'dataset').getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 0 }, 'dataset').getAll, false)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: null }, 'dataset').getAll, false)
+  assert.equal(filesToolbarVisibility(null, 'dataset').getAll, false)
+})
+
+test('a plain Git project (or an unknown one) never shows either button, even with a remote: it has no stored data', () => {
+  for (const kind of ['git', 'unknown', null, undefined]) {
+    assert.deepEqual(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 2 }, kind), { getAll: false, freeUp: false }, String(kind))
+  }
+  assert.deepEqual(filesToolbarVisibility({ hasUpstream: true }, 'superdataset'), { getAll: true, freeUp: true })
 })

@@ -223,7 +223,7 @@ async function attachToWindow(browser, child) {
   async function buttonState(id) {
     return page.evaluate((elementId) => {
       const el = document.getElementById(elementId)
-      return { disabled: el.disabled, title: el.title, text: el.textContent.trim(), classes: el.className }
+      return { disabled: el.disabled, hidden: el.hidden, title: el.title, text: el.textContent.trim(), classes: el.className }
     }, id)
   }
 

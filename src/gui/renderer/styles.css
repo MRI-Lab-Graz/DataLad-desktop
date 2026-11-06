@@ -443,6 +443,7 @@ a.button {
 
 .hero-logo {
   display: block;
+  transform: rotate(var(--logo-turn, 0deg)); /* turned a random quarter at start-up, see logo-turn.js */
   width: 128px;
   height: 128px;
   border-radius: 16px;
