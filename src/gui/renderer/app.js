@@ -10,7 +10,7 @@ import {
 import { formatBytes, renderDataPanel } from './data-panel.js'
 import { buildFilterGroups, summarize } from './data-selection.js'
 import {
-  describeGetAll, canRunReckless, describeNotRemoved, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
+  describeActionNote, describeGetAll, canRunReckless, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
   runSelectedBatches, runStillCurrent
 } from './data-actions.js'
 import { escapeHtml } from './escape-html.js'
@@ -1947,20 +1947,22 @@ function loadDataPanelIfOpen() {
   return elements.dataPanelSection.open ? loadDataPanel() : undefined
 }
 
-async function loadDataPanel() {
+// keepNote: the caller just set a result note (failure, stop); the reload must not wipe it.
+async function loadDataPanel({ keepNote = false } = {}) {
   const projectPath = state.rootProjectPath
   if (!projectPath) return
   if (state.dataPanel.project !== projectPath) {
     state.dataPanel = { project: projectPath, files: [], selection: {}, unsafePaths: [], unsafeProject: null }
     elements.dataRecklessOffer.hidden = true
   }
-  elements.dataPanelNote.textContent = 'Looking at your files…'
+  if (!keepNote) elements.dataPanelNote.textContent = 'Looking at your files…'
   try {
     const files = await api.listDataFiles(projectPath)
     if (state.dataPanel.project !== projectPath) return
     state.dataPanel.files = files
-    elements.dataPanelNote.textContent = files.length ? '' : 'This project has no separately stored data files.'
+    if (!keepNote) elements.dataPanelNote.textContent = '' // an empty list is explained by the panel itself
   } catch (error) {
+    if (state.dataPanel.project !== projectPath || state.rootProjectPath !== projectPath) return
     elements.dataPanelNote.textContent = `Could not read the file list: ${String(error.message)}`
     elements.dataPanelBody.textContent = ''
     return
@@ -2040,23 +2042,13 @@ async function runDataPanelAction(mode, button) {
   })
   // The user may have opened another project meanwhile: then this result must not touch the panel.
   if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
-  if (outcome.ok) {
-    elements.dataPanelNote.textContent = ''
-  } else if (outcome.stopped) {
-    elements.dataPanelNote.textContent = 'Stopped. The rest was not touched.'
-  } else {
-    if (mode === 'drop' && needsRecklessOffer(outcome)) {
-      state.dataPanel.unsafeProject = projectPath
-      state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
-      elements.dataRecklessOffer.hidden = false
-    }
-    const left = outcome.failedPaths.length + outcome.remainingPaths.length
-    elements.dataPanelNote.textContent =
-      mode === 'drop'
-        ? describeNotRemoved(outcome)
-        : `${left} ${left === 1 ? 'file was' : 'files were'} not downloaded. Details are shown below.`
+  if (!outcome.ok && !outcome.stopped && mode === 'drop' && needsRecklessOffer(outcome)) {
+    state.dataPanel.unsafeProject = projectPath
+    state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
+    elements.dataRecklessOffer.hidden = false
   }
-  await loadDataPanel()
+  elements.dataPanelNote.textContent = describeActionNote(mode, outcome)
+  await loadDataPanel({ keepNote: true })
   await refreshFileBrowser(projectPath)
 }
 
@@ -2114,10 +2106,8 @@ async function runRecklessDrop() {
     onProgress: showPartProgress
   })
   if (!runStillCurrent({ panelProject: state.dataPanel.project, rootProject: state.rootProjectPath, runProject: projectPath })) return
-  elements.dataPanelNote.textContent = outcome.ok
-    ? ''
-    : `${outcome.failedPaths.length + outcome.remainingPaths.length} files were not removed. Details are shown below.`
-  await loadDataPanel()
+  elements.dataPanelNote.textContent = describeActionNote('reckless', outcome)
+  await loadDataPanel({ keepNote: true })
   await refreshFileBrowser(projectPath)
 }
 

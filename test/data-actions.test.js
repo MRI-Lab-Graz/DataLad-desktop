@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   runSelectedBatches, planPaths, needsRecklessOffer, isDeleteWord, panelMatchesProject, describeNotRemoved,
-  describeRecklessDialog, planGetAll, describeGetAll, runStillCurrent, canRunReckless
+  describeRecklessDialog, planGetAll, describeGetAll, runStillCurrent, canRunReckless, describeActionNote
 } from '../src/gui/renderer/data-actions.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 1 })
@@ -131,10 +131,10 @@ test('describeNotRemoved says nothing about untried files when none are left', a
 
 test('the dialog text says how many files and how many system confirmations', () => {
   const t = describeRecklessDialog(['a', 'b'])
-  assert.match(t, /2 files/)
+  assert.match(t, /up to 2 files/i)
   assert.match(t, /1 time/)
   const big = describeRecklessDialog(many.map((x) => x.path))
-  assert.match(big, /30 files/)
+  assert.match(big, /up to 30 files/i)
   assert.match(big, /\d+ times/)
 })
 
@@ -153,7 +153,7 @@ test('Get all confirm text gives the count and size, or says it is unknown', () 
   assert.match(describeGetAll([f('a'), f('b')]), /2 files.*2 B/)
   assert.match(describeGetAll([{ path: 'a', present: false, bytes: null }]), /size is not known/)
   assert.match(describeGetAll(null), /not known/)
-  assert.match(describeGetAll([f('a', true)]), /Nothing/)
+  assert.match(describeGetAll([f('a', true)]), /No files/)
 })
 
 test('a run only writes panel state while its project is still the open one', () => {
@@ -169,4 +169,23 @@ test('delete-anyway runs only in the project where the refusal happened', () => 
   assert.equal(canRunReckless({ unsafeProject: '/A', panelProject: '/B', rootProject: '/B' }), false)
   assert.equal(canRunReckless({ unsafeProject: '/A', panelProject: '/A', rootProject: '/B' }), false)
   assert.equal(canRunReckless({ unsafeProject: null, panelProject: null, rootProject: null }), false)
+})
+
+test('describeActionNote: the note after an action, kept for the reload that follows', () => {
+  const ok = { ok: true, stopped: false, failedPaths: [], remainingPaths: [] }
+  assert.equal(describeActionNote('get', ok), '')
+  assert.equal(describeActionNote('drop', ok), '')
+  assert.equal(describeActionNote('drop', { ...ok, ok: false, stopped: true }), 'Stopped. The rest was not touched.')
+  const bad = { ok: false, stopped: false, failedPaths: ['a'], remainingPaths: ['b', 'c'] }
+  assert.match(describeActionNote('get', bad), /3 files were not downloaded/)
+  assert.match(describeActionNote('get', { ...bad, remainingPaths: [] }), /1 file was not downloaded/)
+  assert.match(describeActionNote('drop', bad), /not tried; press Free up space again/)
+  assert.match(describeActionNote('reckless', bad), /3 files were not removed/)
+  assert.equal(describeActionNote('reckless', ok), '')
+})
+
+test('Get all and empty-list wording never claims everything is downloaded', () => {
+  const t = describeGetAll([f('a', true)])
+  assert.match(t, /No files that still need downloading were found in the list/)
+  assert.doesNotMatch(t, /Nothing is missing|already on this computer/)
 })

@@ -80,15 +80,15 @@ test('reckless dialog previews the first 5 paths', () => {
 
 test('empty file list explains itself, buttons stay disabled', () => {
   const html = render({ groups: [], summary: none, fileCount: 0 })
-  assert.match(html, /<p role="status">No files that live elsewhere were found in this project, so there is nothing to download or free up here\.<\/p>/)
+  assert.match(html, /<p role="status">No downloadable files were found\. If this project was copied without its sub-datasets, they are not shown yet\.<\/p>/)
   assert.doesNotMatch(html, /<fieldset/)
   assert.match(html, /id="data-panel-download"[^>]*disabled/)
   assert.match(html, /id="data-panel-free"[^>]*disabled/)
 })
 
 test('the empty message is not shown when files exist or the count is unknown', () => {
-  assert.doesNotMatch(render({ summary: none, fileCount: 3 }), /No files that live elsewhere/)
-  assert.doesNotMatch(render({ summary: none }), /No files that live elsewhere/)
+  assert.doesNotMatch(render({ summary: none, fileCount: 3 }), /No downloadable files were found/)
+  assert.doesNotMatch(render({ summary: none }), /No downloadable files were found/)
 })
 
 test('app.js passes the real file count and keeps the loading text', () => {

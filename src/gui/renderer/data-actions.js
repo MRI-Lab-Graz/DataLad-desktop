@@ -52,9 +52,19 @@ export function describeNotRemoved(outcome) {
   )
 }
 
+/** The note shown after an action (and kept through the reload that follows); '' when all went well. mode: get, drop or reckless. */
+export function describeActionNote(mode, outcome) {
+  if (outcome.ok) return ''
+  if (outcome.stopped) return 'Stopped. The rest was not touched.'
+  const left = outcome.failedPaths.length + outcome.remainingPaths.length
+  if (mode === 'drop') return describeNotRemoved(outcome)
+  if (mode === 'reckless') return `${files(left)} ${left === 1 ? 'was' : 'were'} not removed. Details are shown below.`
+  return `${files(left)} ${left === 1 ? 'was' : 'were'} not downloaded. Details are shown below.`
+}
+
 export function describeRecklessDialog(paths) {
   const times = batchPaths(paths).length
-  return `${files(paths.length)} in this project. You may be asked to confirm in a system window ${times === 1 ? '1 time' : `${times} times`}.`
+  return `Up to ${files(paths.length)} in this project. You may be asked to confirm in a system window ${times === 1 ? '1 time' : `${times} times`}.`
 }
 
 /** True only while the panel's data belongs to the project that is open now. */
@@ -67,7 +77,7 @@ export const planGetAll = (all) => all.filter((f) => !f.present).map((f) => f.pa
 export function describeGetAll(all) {
   if (!all) return 'How many files and how big they are is not known.'
   const todo = all.filter((f) => !f.present)
-  if (!todo.length) return 'Nothing is missing: all files are already on this computer.'
+  if (!todo.length) return 'No files that still need downloading were found in the list.'
   const { bytes, unknownSize } = summarize(todo)
   return `${files(todo.length)} will be downloaded, ${unknownSize ? 'size is not known for all of them' : `about ${formatBytes(bytes)}`}.`
 }

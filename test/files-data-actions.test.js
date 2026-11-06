@@ -152,7 +152,7 @@ test('only refused paths feed the delete dialog, with the plain messages from da
   const run = between(app, 'async function runDataPanelAction', '\n}\n')
   assert.match(run, /unsafePaths = outcome\.failedPaths/)
   assert.doesNotMatch(run, /unsafePaths = \[\.\.\./)
-  assert.match(run, /describeNotRemoved\(outcome\)/)
+  assert.match(run, /describeActionNote\(mode, outcome\)/)
   assert.match(app, /describeRecklessDialog\(/)
   assert.match(run, /onProgress/)
 })
@@ -177,4 +177,19 @@ test('a project switch during a run cannot carry its refusal into another projec
   assert.match(between(app, 'function resetDataPanel', '\n}\n'), /unsafeProject: null/)
   const getAll = between(app, 'async function runDataAction', '\n}\n')
   assert.match(getAll.slice(getAll.indexOf('await runSelectedBatches(')), /runStillCurrent\(/)
+})
+
+test('the action note survives the reload that follows an action, and the empty list has one message only', () => {
+  for (const fn of ['async function runDataPanelAction', 'async function runRecklessDrop']) {
+    const body = between(app, fn, '\n}\n')
+    assert.match(body, /await loadDataPanel\(\{ keepNote: true \}\)/, fn)
+    assert.match(body, /describeActionNote\(/, fn)
+  }
+  const load = between(app, 'async function loadDataPanel', '\n}\n')
+  assert.match(load, /keepNote/)
+  assert.doesNotMatch(load, /no separately stored/)
+  const catchPart = load.slice(load.indexOf('} catch'))
+  assert.match(catchPart, /state\.dataPanel\.project !== projectPath \|\| state\.rootProjectPath !== projectPath\) return/) // no error note for another project
+  assert.doesNotMatch(html, /The files above/)
+  assert.match(html, /last Free up space/)
 })

@@ -36,7 +36,7 @@ function renderGroup(group, selected) {
   )
 }
 
-const EMPTY = 'No files that live elsewhere were found in this project, so there is nothing to download or free up here.'
+const EMPTY = 'No downloadable files were found. If this project was copied without its sub-datasets, they are not shown yet.'
 
 // fileCount: how many files were listed at all (0 = explain the empty panel; undefined = unknown, say nothing).
 export function renderDataPanel({ groups, selection, summary, mode, fileCount }) {
