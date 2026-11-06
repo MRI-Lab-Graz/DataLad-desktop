@@ -670,6 +670,29 @@ export class DataLadAdapter {
     return datasets
   }
 
+  // Annexed files of the project and its installed subdatasets, with whether the content is on this computer.
+  // Read-only: only a repo whose annex.uuid is set is asked (`git annex find` would otherwise initialise annex there).
+  async listDataFiles(projectPath) {
+    const format = '--format=${file}\\t${bytesize}\\n'
+    const files = []
+    for (const dataset of await this.listDatasets(projectPath)) {
+      const repo = dataset.path
+      const prefix = dataset.relativePath === '.' ? '' : `${dataset.relativePath}/`
+      if ((await this.runner.run('git', ['-C', repo, 'config', '--get', 'annex.uuid'])).failed) {
+        continue
+      }
+      for (const [present, flags] of [[true, ['--in=here']], [false, ['--not', '--in=here']]]) {
+        const found = await this.runner.run('git', ['-C', repo, 'annex', 'find', ...flags, format])
+        for (const line of found.failed ? [] : (found.stdout ?? '').split(/\r?\n/).filter(Boolean)) {
+          const [path, size] = line.split('\t')
+          const bytes = /^\d+$/.test(size ?? '') ? Number(size) : null
+          files.push({ path: prefix + path, present, bytes })
+        }
+      }
+    }
+    return files
+  }
+
   async #collectSubdatasets(rootPath, currentPath, relativePrefix, datasets) {
     const subdatasetPaths = await this.#readSubdatasetPathsFromGitModules(currentPath)
     for (const relativePath of subdatasetPaths) {

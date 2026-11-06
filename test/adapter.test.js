@@ -2796,3 +2796,32 @@ test('isInsideFolder is true below the folder, false beside or above it, and wor
   assert.equal(isInsideFolder(join(root, 'a'), join(root, 'b.txt')), false)
   assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a')), false)
 })
+
+test('listDataFiles lists annexed files of the root and each subdataset with presence and size, and skips repos without annex', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-files-'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "a"]\n\tpath = sub-01\n\turl = ../a\n[submodule "b"]\n\tpath = sub-02\n\turl = ../b\n'
+  )
+  const runner = new FakeRunner()
+  const ok = (stdout) => ({ stdout })
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], ok('true\n'))
+  const sub = join(root, 'sub-01')
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], ok('u1\n'))
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], ok('big.dat\t2048\nnäme.txt\t5\n'))
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], ok(''))
+  runner.set('git', ['-C', sub, 'config', '--get', 'annex.uuid'], ok('u2\n'))
+  runner.set('git', ['-C', sub, 'annex', 'find', '--in=here', fmt], ok(''))
+  runner.set('git', ['-C', sub, 'annex', 'find', '--not', '--in=here', fmt], ok('func/run1.nii\t\n'))
+  // sub-02: annex.uuid unmocked -> fails -> skipped
+
+  const files = await new DataLadAdapter({ runner }).listDataFiles(root)
+
+  assert.deepEqual(files, [
+    { path: 'big.dat', present: true, bytes: 2048 },
+    { path: 'näme.txt', present: true, bytes: 5 },
+    { path: 'sub-01/func/run1.nii', present: false, bytes: null }
+  ])
+  assert.equal(runner.calls.filter((c) => c.args.includes('find')).length, 4)
+})
