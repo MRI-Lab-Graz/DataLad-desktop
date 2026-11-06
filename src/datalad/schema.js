@@ -19,6 +19,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  dropReckless: {
+    required: ['projectPath', 'paths'],
+    optional: []
+  },
   createTag: {
     required: ['projectPath', 'tagName', 'message', 'commitHash'],
     optional: []
@@ -126,7 +130,7 @@ function isProjectRelativePath(value) {
   return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
 }
 
-// Commands that hand `paths` straight to datalad as dataset content paths ('dropReckless' arrives with the drop-anyway task).
+// Commands that hand `paths` straight to datalad as dataset content paths.
 const PROJECT_PATH_COMMANDS = new Set(['get', 'drop', 'installSubdatasets', 'dropReckless'])
 
 // Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),

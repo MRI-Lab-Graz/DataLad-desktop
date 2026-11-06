@@ -110,7 +110,8 @@ test('SECURITY.md documents the controls of the science-workflow commands, and t
   assert.match(doc, /protocol\.ext\.allow=never/)
   assert.match(runner, /\['protocol\.ext\.allow', 'never'\]/)
   assert.match(doc, /never with `--reckless`/)
-  assert.doesNotMatch(adapter, /['"`]--reckless/) // as an argument; a comment may name it
+  assert.equal(adapter.match(/['"`]--reckless/g).length, 1) // as an argument: only the separate dropReckless case; a comment may name it
+  assert.match(doc, /dropReckless/)
   assert.match(doc, /never `--tags`/)
   assert.doesNotMatch(adapter, /'--tags'/)
   assert.match(doc, /isUnsafeBackupLocation/)

@@ -30,6 +30,7 @@ export const CURATED_COMMANDS = new Set([
   'discardChanges',
   'unlock',
   'drop',
+  'dropReckless',
   'createTag',
   'pushTags',
   'verify',
@@ -1863,13 +1864,21 @@ export class DataLadAdapter {
         }
       }
       case 'drop': {
-        // datalad refuses to drop the last verified copy by itself (no --reckless here, ever).
+        // datalad refuses to drop the last verified copy by itself. Reckless exists only as the separate dropReckless command.
         const projectPath = request.projectPath
         const paths = request.paths ?? []
         return {
           command: 'datalad',
-          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--', ...paths] : ['-C', projectPath, 'drop'],
+          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--what', 'filecontent', '--', ...paths] : ['-C', projectPath, 'drop', '--what', 'filecontent'],
           options: { cwd: projectPath }
+        }
+      }
+      case 'dropReckless': {
+        // Skips datalad's check that another copy exists. Only reachable after the typed word and the native confirmation.
+        return {
+          command: 'datalad',
+          args: ['-C', request.projectPath, 'drop', '--what', 'filecontent', '--reckless', 'kill', '--', ...request.paths],
+          options: { cwd: request.projectPath }
         }
       }
       default:

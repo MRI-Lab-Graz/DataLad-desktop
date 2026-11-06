@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename, parse } from 'node:path'
@@ -2111,7 +2112,7 @@ test('ignoreOsNoiseFiles never writes through a symlinked info folder', { skip: 
 
 test('runCommand routes drop for selected paths through datalad drop', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('drop', {
     projectPath: '/tmp/project',
@@ -2119,17 +2120,17 @@ test('runCommand routes drop for selected paths through datalad drop', async () 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'sub-01/anat.nii.gz'])
 })
 
 test('runCommand drops the whole dataset content when no paths are given', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'drop'], { stdout: 'drop(ok): . (directory)\n' })
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent'], { stdout: 'drop(ok): . (directory)\n' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project' })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--what', 'filecontent'])
 })
 
 test('runCommand creates an annotated version tag at a save point', async () => {
@@ -2935,9 +2936,45 @@ for (const commandName of ['get', 'drop']) {
   test(`${commandName} accepts project-relative paths`, async () => {
     for (const p of ['sub-01/ses-1/func/a.nii.gz', 'sübjekt/ä.txt']) {
       const runner = new FakeRunner()
-      runner.set('datalad', ['-C', '/tmp/project', commandName, '--', p], {})
+      runner.set('datalad', ['-C', '/tmp/project', commandName, ...(commandName === 'drop' ? ['--what', 'filecontent'] : []), '--', p], {})
       const result = await new DataLadAdapter({ runner }).runCommand(commandName, { projectPath: '/tmp/project', paths: [p] })
       assert.equal(result.ok, true, p)
     }
   })
 }
+
+test('drop uses --what filecontent and never --reckless', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'a.bin'], {})
+  await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project', paths: ['a.bin'] })
+  assert.ok(!runner.calls[0].args.includes('--reckless'))
+  assert.ok(runner.calls[0].args.includes('filecontent'))
+})
+
+test('dropReckless builds the reckless command', async () => {
+  const runner = new FakeRunner()
+  const args = ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--reckless', 'kill', '--', 'a.bin', 'b/c.bin']
+  runner.set('datalad', args, {})
+  await new DataLadAdapter({ runner }).runCommand('dropReckless', { projectPath: '/tmp/project', paths: ['a.bin', 'b/c.bin'] })
+  assert.deepEqual(runner.calls[0].args, args)
+  assert.equal(runner.calls[0].options.cwd, '/tmp/project')
+})
+
+test('dropReckless is refused without paths', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project', paths: [] }), /non-empty/)
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project' }), /paths/)
+})
+
+test('dropReckless refuses ../x', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project', paths: ['../x'] }), /inside the project/)
+})
+
+test('--reckless is built only in the dropReckless case', () => {
+  const src = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
+  const hits = [...src.matchAll(/'--reckless'/g)]
+  assert.equal(hits.length, 1)
+  const start = src.indexOf("case 'dropReckless'")
+  assert.ok(start > 0 && hits[0].index > start && hits[0].index < src.indexOf('default:', start))
+})
