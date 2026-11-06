@@ -1,6 +1,8 @@
 import {
   computeDatasetGating,
   computeAnnexToolGating,
+  FREE_UP_SPACE_TITLE,
+  filesToolbarVisibility,
   computeRemoteGating,
   remoteNameForProject,
   computeSyncSectionVisible,
@@ -10,6 +12,7 @@ import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
 import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
 import { rowDataActions } from './row-data-actions.js'
+import { quarterTurn } from './logo-turn.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
 import { summarizeFsck } from './integrity.js'
 import { displayCommand, isRunCommit, parseRunRecord } from './run-record.js'
@@ -288,6 +291,7 @@ api.getAppVersion().then((version) => {
 })
 initBidsAutoNestToggle()
 initSaveTipsToggle()
+document.documentElement.style.setProperty('--logo-turn', `${quarterTurn()}deg`)
 
 wireFolderPicker(elements.pickProjectPathButton, elements.projectPath, {
   title: 'Select project folder',
@@ -3715,12 +3719,15 @@ function applyDatasetGatedButtons(classification) {
 function updateGetDataGating() {
   const gating = computeDatasetGating(state.currentProjectClassification, state.projectHealthSnapshot)
 
+  const visible = filesToolbarVisibility(state.projectHealthSnapshot, state.currentProjectClassification)
+  elements.filesGetAllButton.hidden = !visible.getAll
+  elements.filesFreeAllButton.hidden = !visible.freeUp
   elements.filesGetAllButton.disabled = gating.disabled
   elements.filesGetAllButton.title = gating.title
 
   const dropGating = computeAnnexToolGating(
     state.currentProjectClassification,
-    'Remove the local copy of downloaded data to free disk space. Only works when another copy (remote or backup) is confirmed; Get brings it back.'
+    FREE_UP_SPACE_TITLE
   )
   elements.filesFreeAllButton.disabled = dropGating.disabled
   elements.filesFreeAllButton.title = dropGating.title
@@ -3804,6 +3811,10 @@ async function refreshProjectHealth(projectPath) {
 
       state.projectHealthSnapshot = health
       renderProjectHealth()
+      // The rows show Free up space only with a remote: redraw them if that answer arrived late or changed.
+      if (state.fileRowsHaveRemote !== undefined && state.fileRowsHaveRemote !== Boolean(health.hasUpstream)) {
+        void refreshFileBrowser(projectPath)
+      }
       return health
     } catch (error) {
       if (!isLatestRequestToken('projectHealth', requestToken)) {
@@ -4457,12 +4468,14 @@ function renderFileTreeNodes(children, expandAll, depth) {
     return left.name.localeCompare(right.name)
   })
 
+  const hasRemote = Boolean(state.projectHealthSnapshot?.hasUpstream)
+  state.fileRowsHaveRemote = hasRemote // health may arrive after the rows: see fetchProjectHealth
   const items = nodes
     .map((node) => {
       const openButton = node.absolutePath
         ? `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>`
         : ''
-      const dataButtons = rowDataActions(node)
+      const dataButtons = rowDataActions(node, { hasRemote })
         .map(
           ({ action, label, title }) =>
             `<button type="button" class="button button-ghost button-mini" data-data-action="${action}" data-data-path="${escapeHtml(node.relativePath)}" title="${escapeHtml(title)}">${label}</button>`

@@ -25,7 +25,7 @@ A BIDS dataset also gets a **BIDS** badge, and a PRISM project (`project.json` i
 
 For DataLad-enabled projects, the compact action group should include:
 
-- **Get**, **Free up space** and **Unlock**, on the file and folder rows of the Files tab (Get fetches content; Free up space is its counterpart and only removes data another copy holds; Unlock makes an editable copy)
+- **Get**, **Free up space** and **Unlock**, on the file and folder rows of the Files tab (Get fetches content; Free up space is its counterpart and only removes data another copy holds, so it only appears when the project has a remote; Get all shows with a remote or when files are missing; Unlock makes an editable copy)
 - **Update Project**
 - **Publish** (also sends the versions the researcher marked)
 - **Add a Remote** (only while the project has none: a USB drive, network share or empty repository)

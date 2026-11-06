@@ -1,5 +1,5 @@
 // Real-Electron smoke tests for the workflow button gating fixed in this
-// session: Update/Publish need a remote, Get all needs a DataLad dataset,
+// session: Update/Publish need a remote, Get all and Free up space only show where they can work,
 // long-running actions must show a busy state instead of sitting silently.
 // Not picked up by `npm test` (node's default test-file pattern requires
 // ".test." in the name) — run explicitly via `npm run test:e2e`.
@@ -26,7 +26,7 @@ test.after(async () => {
   await app?.close()
 })
 
-test('plain git project with no remote: Update, Publish and Get all disabled', async () => {
+test('plain git project with no remote: Update and Publish disabled; Get all and Free up space hidden', async () => {
   const projectPath = await createPlainGitRepo(root)
   await app.openProject(projectPath)
 
@@ -38,11 +38,11 @@ test('plain git project with no remote: Update, Publish and Get all disabled', a
   assert.match(update.title, /No remote is configured/)
   assert.equal(publish.disabled, true)
   assert.match(publish.title, /No remote is configured/)
-  assert.equal(getData.disabled, true)
-  assert.match(getData.title, /not a DataLad dataset/)
+  assert.equal(getData.hidden, true)
+  assert.equal((await app.buttonState('files-free-all')).hidden, true)
 })
 
-test('plain git project with a remote: Update/Publish enabled, Get all still disabled', async () => {
+test('plain git project with a remote: Update/Publish enabled; Get all and Free up space still hidden (no stored data)', async () => {
   const projectPath = await createGitRepoWithRemote(root)
   await app.openProject(projectPath)
 
@@ -54,7 +54,8 @@ test('plain git project with a remote: Update/Publish enabled, Get all still dis
   assert.match(update.title, /origin\/main/)
   assert.equal(publish.disabled, false)
   assert.match(publish.title, /origin\/main/)
-  assert.equal(getData.disabled, true)
+  assert.equal(getData.hidden, true)
+  assert.equal((await app.buttonState('files-free-all')).hidden, true)
 
   const remoteInfo = await app.page.evaluate(() => {
     const el = document.getElementById('remote-info')
@@ -64,30 +65,26 @@ test('plain git project with a remote: Update/Publish enabled, Get all still dis
   assert.match(remoteInfo.text, /Remote: origin\/main/)
 })
 
-test('DataLad dataset with no remote: nothing to fetch so Get all is disabled, Update/Publish still disabled', async () => {
+test('DataLad dataset with no remote and nothing missing: Get all and Free up space hidden, Update/Publish disabled', async () => {
   const projectPath = await createDatasetFixture(root)
   await app.openProject(projectPath)
 
   const getData = await app.buttonState('files-get-all')
   const update = await app.buttonState('update-project')
 
-  // The fixture never had any annexed content, so once a real git-annex
-  // resolves health (it's not installed on most CI runners, but is on a
-  // contributor's machine or the Windows/macOS smoke job), `git annex find
-  // --not --in here` reports nothing missing and Get Data is correctly
-  // disabled as a no-op, not because this isn't a recognized dataset.
-  assert.equal(getData.disabled, true)
-  assert.match(getData.title, /nothing to get/)
+  // No remote and no missing files: there is nothing to fetch and no other copy to free space against, so both
+  // buttons are not shown at all (the wording of the disabled state is covered by unit tests).
+  assert.equal(getData.hidden, true)
+  assert.equal((await app.buttonState('files-free-all')).hidden, true)
   assert.equal(update.disabled, true)
 })
 
-test('DataLad superdataset: nothing to fetch so Get all is disabled', async () => {
+test('DataLad superdataset with no remote and nothing missing: Get all hidden', async () => {
   const projectPath = await createSuperdatasetFixture(root)
   await app.openProject(projectPath)
 
   const getData = await app.buttonState('files-get-all')
-  assert.equal(getData.disabled, true)
-  assert.match(getData.title, /nothing to get/)
+  assert.equal(getData.hidden, true)
 })
 
 test('Check Setup shows a busy state while running, then recovers', async () => {
