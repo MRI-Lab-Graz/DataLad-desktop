@@ -9,7 +9,10 @@ import {
 } from './button-gating.js'
 import { formatBytes, renderDataPanel } from './data-panel.js'
 import { buildFilterGroups, summarize } from './data-selection.js'
-import { isDeleteWord, needsRecklessOffer, planPaths, runSelectedBatches } from './data-actions.js'
+import {
+  describeGetAll, describeNotRemoved, describeRecklessDialog, isDeleteWord, needsRecklessOffer, panelMatchesProject, planGetAll, planPaths,
+  runSelectedBatches
+} from './data-actions.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
 import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
@@ -1817,19 +1820,38 @@ async function runDataAction(action, button, relativePath) {
   }
 
   if (action === 'get' && paths.length === 0) {
-    let files = null
-    try {
-      files = await api.listDataFiles(projectPath)
-    } catch {
-      // unknown count and size: say so below
+    if (state.rootProjectIsBids && projectPath === state.rootProjectPath) {
+      // Same path as the Choose data panel: every missing file, in batches, stopping at the first failure.
+      let files = null
+      try {
+        files = await api.listDataFiles(projectPath)
+      } catch {
+        // count and size unknown: the confirm says so
+      }
+      if (!window.confirm(`Download everything that is not on this computer yet?\n\n${describeGetAll(files)}\nThis can take a long time and use a lot of disk space.\n\nContinue?`)) {
+        return
+      }
+      if (!files) {
+        await runWorkflowCommand('get', { projectPath, paths: [] }, button)
+      } else {
+        const outcome = await runSelectedBatches({
+          mode: 'get',
+          paths: planGetAll(files),
+          run: (_name, batch) => runWorkflowCommand('get', { projectPath, paths: batch }, button, undefined, { progressTotal: batch.length }),
+          shouldStop: shouldStopSequence,
+          onProgress: showPartProgress
+        })
+        if (!outcome.ok) {
+          const left = outcome.failedPaths.length + outcome.remainingPaths.length
+          setLastActionState(outcome.stopped ? 'Stopped. The rest was not touched.' : `${left} files were not downloaded. Details are shown below.`, 'warning')
+        }
+      }
+      await refreshFileBrowser(projectPath)
+      void loadDataPanelIfOpen()
+      return
     }
-    const todo = files?.filter((f) => !f.present)
-    const how = !todo
-      ? 'How many files and how big they are is not known.'
-      : todo.length === 0
-        ? 'No files are listed as missing.'
-        : `Up to ${todo.length} ${todo.length === 1 ? 'file' : 'files'} are not downloaded yet, ` +
-          (summarize(todo).unknownSize ? 'size is not known for all of them.' : `about ${formatBytes(summarize(todo).bytes)}.`)
+    const missing = projectPath === state.rootProjectPath ? state.projectHealthSnapshot?.missingContentCount : null
+    const how = typeof missing === 'number' ? `${missing} ${missing === 1 ? 'file' : 'files'} in this folder are not downloaded yet.` : 'How many files and how big they are is not known.'
     if (!window.confirm(`Download everything that is not on this computer yet?\n\n${how}\nThis can take a long time and use a lot of disk space.\n\nContinue?`)) {
       return
     }
@@ -1860,6 +1882,10 @@ const dataPanelPlan = (mode) => planPaths(state.dataPanel.files, state.dataPanel
 function describeCount(files) {
   const { count, bytes, unknownSize } = summarize(files)
   return `${count} ${count === 1 ? 'file' : 'files'}${unknownSize >= count ? ', size unknown' : `, about ${formatBytes(bytes)}`}`
+}
+
+const showPartProgress = ({ batch, batches }) => {
+  if (batches > 1) elements.dataPanelNote.textContent = `Part ${batch} of ${batches} done…`
 }
 
 function updateDataPanelVisibility() {
@@ -1903,6 +1929,20 @@ function renderDataPanelNow() {
     : ''
   updateDataPanelButtons()
   if (focusedId) document.getElementById(focusedId)?.focus() // the list is redrawn on every tick; keep keyboard focus
+}
+
+function resetDataPanel() {
+  state.dataPanel = { project: state.rootProjectPath, files: [], selection: {}, unsafePaths: [] }
+  elements.dataRecklessOffer.hidden = true
+  closeRecklessDialog()
+  elements.dataPanelNote.textContent = ''
+  elements.dataPanelFreeSummary.textContent = ''
+  elements.dataPanelBody.textContent = ''
+  if (elements.dataPanelSection.open) void loadDataPanel()
+}
+
+function loadDataPanelIfOpen() {
+  return elements.dataPanelSection.open ? loadDataPanel() : undefined
 }
 
 async function loadDataPanel() {
@@ -1966,6 +2006,10 @@ elements.dataPanelBody.addEventListener('click', (event) => {
 async function runDataPanelAction(mode, button) {
   const projectPath = state.rootProjectPath
   if (!projectPath) return
+  if (!panelMatchesProject(state.dataPanel, projectPath)) {
+    elements.dataPanelNote.textContent = 'The project changed. Close and open Choose data again.'
+    return
+  }
   const { files, selection } = state.dataPanel
   const byPath = new Map(files.map((f) => [f.path, f]))
   const planned = dataPanelPlan(mode).map((p) => byPath.get(p))
@@ -1986,21 +2030,22 @@ async function runDataPanelAction(mode, button) {
     files,
     selection,
     run: (_name, paths) => runWorkflowCommand(mode, { projectPath, paths }, button, undefined, { progressTotal: paths.length }),
-    shouldStop: shouldStopSequence
+    shouldStop: shouldStopSequence,
+    onProgress: showPartProgress
   })
   if (outcome.ok) {
     elements.dataPanelNote.textContent = ''
   } else if (outcome.stopped) {
     elements.dataPanelNote.textContent = 'Stopped. The rest was not touched.'
   } else {
-    const left = outcome.failedPaths.length + outcome.remainingPaths.length
     if (mode === 'drop' && needsRecklessOffer(outcome)) {
-      state.dataPanel.unsafePaths = [...outcome.failedPaths, ...outcome.remainingPaths]
+      state.dataPanel.unsafePaths = outcome.failedPaths // only what the safe drop refused, never the untried rest
       elements.dataRecklessOffer.hidden = false
     }
+    const left = outcome.failedPaths.length + outcome.remainingPaths.length
     elements.dataPanelNote.textContent =
       mode === 'drop'
-        ? `${left} ${left === 1 ? 'file was' : 'files were'} not removed. Usually no other copy could be confirmed, or the remote cannot be reached. Details are shown below.`
+        ? describeNotRemoved(outcome)
         : `${left} ${left === 1 ? 'file was' : 'files were'} not downloaded. Details are shown below.`
   }
   await loadDataPanel()
@@ -2019,7 +2064,7 @@ function closeRecklessDialog() {
 elements.dataRecklessOpen.addEventListener('click', () => {
   const count = state.dataPanel.unsafePaths.length
   if (!count) return
-  elements.recklessCount.textContent = `${count} ${count === 1 ? 'file' : 'files'} in this project.`
+  elements.recklessCount.textContent = describeRecklessDialog(state.dataPanel.unsafePaths)
   elements.recklessWord.value = ''
   elements.recklessConfirm.disabled = true
   recklessFocus.remember()
@@ -2042,6 +2087,11 @@ elements.recklessForm.addEventListener('submit', (event) => {
 async function runRecklessDrop() {
   if (!isDeleteWord(elements.recklessWord.value)) return // fails closed
   const projectPath = state.rootProjectPath
+  if (!panelMatchesProject(state.dataPanel, projectPath)) {
+    closeRecklessDialog()
+    elements.dataPanelNote.textContent = 'The project changed, so nothing was deleted.'
+    return
+  }
   const paths = [...state.dataPanel.unsafePaths]
   closeRecklessDialog()
   if (!projectPath || !paths.length) return
@@ -2051,7 +2101,8 @@ async function runRecklessDrop() {
     mode: 'drop',
     paths,
     run: (_name, batch) => runWorkflowCommand('dropReckless', { projectPath, paths: batch }, elements.dataRecklessOpen),
-    shouldStop: shouldStopSequence
+    shouldStop: shouldStopSequence,
+    onProgress: showPartProgress
   })
   elements.dataPanelNote.textContent = outcome.ok
     ? ''
@@ -2183,6 +2234,7 @@ async function detectProjectType(projectPath) {
     state.rootProjectPath = projectPath
     state.rootProjectClassification = result.classification
     state.rootProjectIsBids = Boolean(result.isBids)
+    resetDataPanel()
     updateDataPanelVisibility()
     state.rootProjectPrism = null
     state.rootProjectCheck = null

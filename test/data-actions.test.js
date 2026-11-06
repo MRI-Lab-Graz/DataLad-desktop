@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { runSelectedBatches, planPaths, needsRecklessOffer, isDeleteWord } from '../src/gui/renderer/data-actions.js'
+import {
+  runSelectedBatches, planPaths, needsRecklessOffer, isDeleteWord, panelMatchesProject, describeNotRemoved,
+  describeRecklessDialog, planGetAll, describeGetAll
+} from '../src/gui/renderer/data-actions.js'
 
 const f = (path, present = false) => ({ path, present, bytes: 1 })
 const files = [
@@ -45,7 +48,7 @@ test('batches run in order and stop at the first failure; the rest is reported, 
   assert.deepEqual(r.failedPaths, calls[1])
   assert.equal(r.done, calls[0].length)
   assert.equal(r.done + r.failedPaths.length + r.remainingPaths.length, 30)
-  assert.equal(needsRecklessOffer(r), true)
+  assert.equal(needsRecklessOffer(r), false) // a plain failure is not a safety refusal
 })
 
 test('a failed run that returns nothing counts as a failure', async () => {
@@ -88,4 +91,67 @@ test('isDeleteWord accepts only the word delete', () => {
   assert.equal(isDeleteWord('delete'), true)
   assert.equal(isDeleteWord(' Delete '), true)
   for (const bad of ['delet', '', 'deleted', 'delete it', null, undefined]) assert.equal(isDeleteWord(bad), false, String(bad))
+})
+
+const unsafe = { ok: false, userError: { code: 'DROP_UNSAFE' } }
+const dropFail = (result) => runSelectedBatches({ mode: 'drop', paths: ['a', 'b'], run: async () => result, shouldStop: (x) => Boolean(x.cancelled) })
+
+test('reckless is offered only for a DROP_UNSAFE refusal', async () => {
+  assert.equal(needsRecklessOffer(await dropFail(unsafe)), true)
+  const others = [
+    { ok: false, userError: { code: 'TRUST_REQUIRED' } },
+    { ok: false, userError: { code: 'IDENTITY_MISSING' } },
+    { ok: false, userError: { code: 'REPO_LOCKED' } },
+    { ok: false, cancelled: true, userError: { code: 'CANCELLED' } },
+    { ok: false },
+    null
+  ]
+  for (const r of others) assert.equal(needsRecklessOffer(await dropFail(r)), false, JSON.stringify(r))
+})
+
+test('the outcome keeps the failing result', async () => {
+  assert.equal((await dropFail(unsafe)).failedResult, unsafe)
+})
+
+test('only the refused paths go to the delete-anyway dialog, not the untried rest', async () => {
+  const calls = []
+  const run = async (n, p) => (calls.push(p), unsafe)
+  const r = await runSelectedBatches({ mode: 'drop', paths: many.map((x) => x.path), run, shouldStop: () => false })
+  assert.ok(r.remainingPaths.length > 0)
+  assert.deepEqual(r.failedPaths, calls[0])
+  const msg = describeNotRemoved(r)
+  assert.match(msg, /were not removed/)
+  assert.match(msg, /not tried/)
+  assert.match(msg, /Free up space again/)
+})
+
+test('describeNotRemoved says nothing about untried files when none are left', async () => {
+  assert.doesNotMatch(describeNotRemoved(await dropFail(unsafe)), /not tried/)
+})
+
+test('the dialog text says how many files and how many system confirmations', () => {
+  const t = describeRecklessDialog(['a', 'b'])
+  assert.match(t, /2 files/)
+  assert.match(t, /1 time/)
+  const big = describeRecklessDialog(many.map((x) => x.path))
+  assert.match(big, /30 files/)
+  assert.match(big, /\d+ times/)
+})
+
+test('panel state belongs to one project', () => {
+  assert.equal(panelMatchesProject({ project: '/p' }, '/p'), true)
+  assert.equal(panelMatchesProject({ project: '/p' }, '/q'), false)
+  assert.equal(panelMatchesProject({ project: null }, null), false)
+  assert.equal(panelMatchesProject(null, '/p'), false)
+})
+
+test('Get all plans every missing file, no companions needed', () => {
+  assert.deepEqual(planGetAll([f('a'), f('b', true), f('c')]), ['a', 'c'])
+})
+
+test('Get all confirm text gives the count and size, or says it is unknown', () => {
+  assert.match(describeGetAll([f('a'), f('b')]), /2 files.*2 B/)
+  assert.match(describeGetAll([{ path: 'a', present: false, bytes: null }]), /size is not known/)
+  assert.match(describeGetAll(null), /not known/)
+  assert.match(describeGetAll([f('a', true)]), /Nothing/)
 })

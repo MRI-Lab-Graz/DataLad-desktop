@@ -119,7 +119,6 @@ test('Get all confirms first, with the file count and size', () => {
   assert.match(run, /action === 'get' && paths\.length === 0/)
   assert.ok(run.indexOf('window.confirm') < run.indexOf('runWorkflowCommand(action,'))
   assert.match(run, /listDataFiles/)
-  assert.match(run, /size is not known/)
 })
 
 test('the panel buttons are gated while a command runs', () => {
@@ -130,4 +129,39 @@ test('the panel buttons are gated while a command runs', () => {
 
 test('panel styles exist', () => {
   assert.match(css, /\.data-panel/)
+})
+
+// ---- review fixes ----
+test('both panel runners refuse when the panel belongs to another project', () => {
+  for (const fn of ['async function runDataPanelAction', 'async function runRecklessDrop']) {
+    const body = between(app, fn, '\n}\n')
+    assert.match(body, /panelMatchesProject\(state\.dataPanel, (projectPath|state\.rootProjectPath)\)/, fn)
+    assert.ok(body.indexOf('panelMatchesProject(') < body.indexOf('runSelectedBatches('), fn)
+  }
+})
+
+test('switching project resets the panel, the offer and the delete dialog', () => {
+  const reset = between(app, 'function resetDataPanel', '\n}\n')
+  assert.match(reset, /unsafePaths: \[\]/)
+  assert.match(reset, /closeRecklessDialog\(\)/)
+  assert.match(reset, /dataRecklessOffer\.hidden = true/)
+  assert.match(between(app, 'async function detectProjectType', '\n}\n'), /resetDataPanel\(\)/)
+})
+
+test('only refused paths feed the delete dialog, with the plain messages from data-actions', () => {
+  const run = between(app, 'async function runDataPanelAction', '\n}\n')
+  assert.match(run, /unsafePaths = outcome\.failedPaths/)
+  assert.doesNotMatch(run, /unsafePaths = \[\.\.\./)
+  assert.match(run, /describeNotRemoved\(outcome\)/)
+  assert.match(app, /describeRecklessDialog\(/)
+  assert.match(run, /onProgress/)
+})
+
+test('Get all on a BIDS project goes through the batch runner with the exact plan', () => {
+  const run = between(app, 'async function runDataAction', '\n}\n')
+  assert.match(run, /state\.rootProjectIsBids/)
+  assert.match(run, /planGetAll\(/)
+  assert.match(run, /describeGetAll\(/)
+  assert.match(run, /runSelectedBatches\(/)
+  assert.ok(run.indexOf('window.confirm') < run.indexOf('runSelectedBatches('))
 })

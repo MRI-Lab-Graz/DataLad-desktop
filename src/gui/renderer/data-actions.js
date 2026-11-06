@@ -1,5 +1,6 @@
 // Runs the chosen data in command-line sized batches. Pure: the command runner is injected, no DOM, no I/O.
-import { batchPaths, selectFiles, withCompanions } from './data-selection.js'
+import { batchPaths, selectFiles, summarize, withCompanions } from './data-selection.js'
+import { formatBytes } from './data-panel.js'
 
 /** The exact paths a get or drop would touch (chosen files plus companions). */
 export function planPaths(files, selection, mode) {
@@ -9,7 +10,7 @@ export function planPaths(files, selection, mode) {
 /**
  * Stops at the first failure or when shouldStop(result) says so; later batches never run and are reported.
  * `paths` replaces the plan (used to retry only what failed). run(commandName, paths) returns a result with `ok`.
- * @returns {Promise<{ ok: boolean, done: number, failedPaths: string[], remainingPaths: string[], stopped: boolean }>}
+ * @returns {Promise<{ failedResult?: object|null, ok: boolean, done: number, failedPaths: string[], remainingPaths: string[], stopped: boolean }>}
  */
 export async function runSelectedBatches({ mode, files, selection, paths, run, shouldStop, onProgress }) {
   const planned = paths ?? planPaths(files, selection, mode)
@@ -24,7 +25,8 @@ export async function runSelectedBatches({ mode, files, selection, paths, run, s
         done,
         failedPaths: batches[i],
         remainingPaths: batches.slice(i + 1).flat(),
-        stopped: Boolean(result && shouldStop(result))
+        stopped: Boolean(result && shouldStop(result)),
+        failedResult: result
       }
     }
     done += batches[i].length
@@ -33,9 +35,41 @@ export async function runSelectedBatches({ mode, files, selection, paths, run, s
   return { ok: true, done, failedPaths: [], remainingPaths: [], stopped: false }
 }
 
-/** The "Delete without a safety check" button is offered only after a normal drop failed on its own (not stopped). */
+/** Delete-anyway is offered only when DataLad itself refused for safety (DROP_UNSAFE, see errors.js), never for any other failure. */
 export function needsRecklessOffer(outcome) {
-  return !outcome.ok && !outcome.stopped && outcome.failedPaths.length + outcome.remainingPaths.length > 0
+  return !outcome.ok && !outcome.stopped && outcome.failedResult?.userError?.code === 'DROP_UNSAFE' && outcome.failedPaths.length > 0
+}
+
+const files = (n) => `${n} ${n === 1 ? 'file' : 'files'}`
+
+/** Plain message after a drop that failed; the untried rest is named so nobody thinks it was refused. */
+export function describeNotRemoved(outcome) {
+  const n = outcome.failedPaths.length
+  const rest = outcome.remainingPaths.length
+  return (
+    `${files(n)} ${n === 1 ? 'was' : 'were'} not removed. Usually no other copy could be confirmed, or the remote cannot be reached. Details are shown below.` +
+    (rest ? ` ${files(rest)} ${rest === 1 ? 'was' : 'were'} not tried; press Free up space again for those.` : '')
+  )
+}
+
+export function describeRecklessDialog(paths) {
+  const times = batchPaths(paths).length
+  return `${files(paths.length)} in this project. You may be asked to confirm in a system window ${times === 1 ? '1 time' : `${times} times`}.`
+}
+
+/** True only while the panel's data belongs to the project that is open now. */
+export const panelMatchesProject = (panel, rootPath) => Boolean(panel?.project) && panel.project === rootPath
+
+/** Get all for a BIDS project: every file whose content is missing. */
+export const planGetAll = (all) => all.filter((f) => !f.present).map((f) => f.path)
+
+/** Confirm text for Get all; `all` is the file list or null when it could not be read. */
+export function describeGetAll(all) {
+  if (!all) return 'How many files and how big they are is not known.'
+  const todo = all.filter((f) => !f.present)
+  if (!todo.length) return 'Nothing is missing: all files are already on this computer.'
+  const { bytes, unknownSize } = summarize(todo)
+  return `${files(todo.length)} will be downloaded, ${unknownSize ? 'size is not known for all of them' : `about ${formatBytes(bytes)}`}.`
 }
 
 export const isDeleteWord = (text) => typeof text === 'string' && text.trim().toLowerCase() === 'delete'
