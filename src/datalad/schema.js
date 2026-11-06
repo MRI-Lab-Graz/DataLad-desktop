@@ -15,6 +15,10 @@ export const COMMAND_SCHEMAS = Object.freeze({
     required: ['projectPath'],
     optional: ['paths']
   },
+  dropReckless: {
+    required: ['projectPath', 'paths'],
+    optional: []
+  },
   createTag: {
     required: ['projectPath', 'tagName', 'message', 'commitHash'],
     optional: []
@@ -121,6 +125,9 @@ const RUN_MAX_PATHS = 200
 function isProjectRelativePath(value) {
   return !value.includes('\0') && !/^([A-Za-z]:|[\\/])/.test(value) && !value.split(/[\\/]/).includes('..')
 }
+
+// Commands that hand `paths` straight to datalad as dataset content paths.
+const PROJECT_PATH_COMMANDS = new Set(['get', 'drop', 'dropReckless'])
 
 // Nothing that can hide or disguise text in the native confirmation: control characters (except line feed and tab),
 // bidirectional overrides and isolates, zero-width characters, the byte-order mark.
@@ -234,6 +241,9 @@ export function assertCommandRequest(commandName, request, { platform = process.
   for (const pathValue of request.paths ?? []) {
     if (typeof pathValue !== 'string' || !pathValue.trim()) {
       throw new Error(`Invalid request for ${commandName}: each path must be a non-empty string`)
+    }
+    if (PROJECT_PATH_COMMANDS.has(commandName) && !isProjectRelativePath(pathValue)) {
+      throw new Error(`Invalid request for ${commandName}: paths must be inside the project`)
     }
   }
 }

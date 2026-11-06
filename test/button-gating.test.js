@@ -7,7 +7,8 @@ import {
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage,
   filesToolbarVisibility,
-  remoteNameForProject
+  remoteNameForProject,
+  computeDataPanelGating
 } from '../src/gui/renderer/button-gating.js'
 
 test('computeDatasetGating disables Get Data when no project is loaded', () => {
@@ -182,6 +183,13 @@ test('remoteNameForProject names the remote only when the health snapshot is for
   assert.equal(remoteNameForProject(health, '/proj/sub-dataset'), null) // a subdataset has its own remotes
   assert.equal(remoteNameForProject({ projectPath: '/proj', hasUpstream: false }, '/proj'), null)
   assert.equal(remoteNameForProject(null, '/proj'), null)
+})
+
+test('computeDataPanelGating disables the panel buttons while a command runs or nothing is chosen', () => {
+  assert.equal(computeDataPanelGating({ commandRunning: true, count: 5 }).disabled, true)
+  assert.equal(computeDataPanelGating({ commandRunning: false, count: 0 }).disabled, true)
+  assert.equal(computeDataPanelGating({ commandRunning: false, count: 5 }).disabled, false)
+  assert.match(computeDataPanelGating({ commandRunning: true, count: 5 }).title, /running/i)
 })
 
 test('Free up space (all) only shows when the project has a remote to keep the other copy', () => {

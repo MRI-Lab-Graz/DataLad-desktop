@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, symlink, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename, parse } from 'node:path'
@@ -2111,7 +2112,7 @@ test('ignoreOsNoiseFiles never writes through a symlinked info folder', { skip: 
 
 test('runCommand routes drop for selected paths through datalad drop', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'sub-01/anat.nii.gz'], { stdout: 'drop(ok): sub-01/anat.nii.gz (file)\n' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('drop', {
     projectPath: '/tmp/project',
@@ -2119,17 +2120,17 @@ test('runCommand routes drop for selected paths through datalad drop', async () 
   })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--', 'sub-01/anat.nii.gz'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'sub-01/anat.nii.gz'])
 })
 
 test('runCommand drops the whole dataset content when no paths are given', async () => {
   const runner = new FakeRunner()
-  runner.set('datalad', ['-C', '/tmp/project', 'drop'], { stdout: 'drop(ok): . (directory)\n' })
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent'], { stdout: 'drop(ok): . (directory)\n' })
 
   const result = await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project' })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop'])
+  assert.deepEqual(runner.calls[0].args, ['-C', '/tmp/project', 'drop', '--what', 'filecontent'])
 })
 
 test('runCommand creates an annotated version tag at a save point', async () => {
@@ -2795,4 +2796,161 @@ test('isInsideFolder is true below the folder, false beside or above it, and wor
   assert.equal(isInsideFolder(join(root, 'a'), join(root, 'ab', 'b.txt')), false)
   assert.equal(isInsideFolder(join(root, 'a'), join(root, 'b.txt')), false)
   assert.equal(isInsideFolder(join(root, 'a'), join(root, 'a')), false)
+})
+
+test('listDataFiles lists annexed files of the root and each subdataset with presence and size, and skips repos without annex', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-files-'))
+  await writeFile(
+    join(root, '.gitmodules'),
+    '[submodule "a"]\n\tpath = sub-01\n\turl = ../a\n[submodule "b"]\n\tpath = sub-02\n\turl = ../b\n'
+  )
+  const runner = new FakeRunner()
+  const ok = (stdout) => ({ stdout })
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], ok('true\n'))
+  const sub = join(root, 'sub-01')
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], ok('u1\n'))
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], ok('big.dat\t2048\nnäme.txt\t5\n'))
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], ok(''))
+  runner.set('git', ['-C', sub, 'config', '--get', 'annex.uuid'], ok('u2\n'))
+  runner.set('git', ['-C', sub, 'annex', 'find', '--in=here', fmt], ok(''))
+  runner.set('git', ['-C', sub, 'annex', 'find', '--not', '--in=here', fmt], ok('func/run1.nii\t\n'))
+  runner.set('git', ['-C', join(root, 'sub-02'), 'config', '--get', 'annex.uuid'], { exitCode: 1, failed: true }) // unset -> skipped
+
+  const files = await new DataLadAdapter({ runner }).listDataFiles(root)
+
+  assert.deepEqual(files, [
+    { path: 'big.dat', present: true, bytes: 2048 },
+    { path: 'näme.txt', present: true, bytes: 5 },
+    { path: 'sub-01/func/run1.nii', present: false, bytes: null }
+  ])
+  assert.equal(runner.calls.filter((c) => c.args.includes('find')).length, 4)
+})
+
+// Runner for many subdatasets: counts repos in flight, finishes later repos first.
+async function manyReposRunner(count) {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-many-'))
+  let modules = ''
+  for (let i = 0; i < count; i++) modules += `[submodule "s${i}"]\n\tpath = s${i}\n\turl = ../s${i}\n`
+  await writeFile(join(root, '.gitmodules'), modules)
+  const state = { inFlight: new Set(), max: 0 }
+  const runner = {
+    async run(command, args = []) {
+      const repo = args[1]
+      const ok = (stdout = '') => ({ command, args, exitCode: 0, stdout, stderr: '', failed: false })
+      if (args.includes('--is-inside-work-tree')) return ok('true\n')
+      if (args.includes('annex.uuid')) {
+        state.inFlight.add(repo)
+        state.max = Math.max(state.max, state.inFlight.size)
+        const n = Number(/s(\d+)$/.exec(repo)?.[1] ?? 0)
+        await new Promise((resolve) => setTimeout(resolve, (count - n) * 3)) // later repos finish first
+        return ok('u\n')
+      }
+      if (args.includes('annex')) {
+        const done = () => state.inFlight.delete(repo)
+        if (args.includes('--not')) { done(); return ok('') }
+        return ok(`f.dat\t1\n`)
+      }
+      return ok()
+    }
+  }
+  return { root, runner, state }
+}
+
+test('listDataFiles works on several repos at once, never more than 8, and keeps the order', async () => {
+  const { root, runner, state } = await manyReposRunner(20)
+  const files = await new DataLadAdapter({ runner }).listDataFiles(root)
+  assert.ok(state.max > 1, 'repos should run concurrently')
+  assert.ok(state.max <= 8, `at most 8 at once, saw ${state.max}`)
+  assert.deepEqual(files.map((f) => f.path), ['f.dat', ...Array.from({ length: 20 }, (_, i) => `s${i}/f.dat`)])
+})
+
+test('listDataFiles keeps a tab inside a file name', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-tab-'))
+  const runner = new FakeRunner()
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { stdout: 'u\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], { stdout: 'a\tb.dat\t7\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], { stdout: '' })
+  assert.deepEqual(await new DataLadAdapter({ runner }).listDataFiles(root), [{ path: 'a\tb.dat', present: true, bytes: 7 }])
+})
+
+test('listDataFiles throws a plain error when git annex find fails, but skips a repo with annex.uuid unset', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-data-fail-'))
+  const runner = new FakeRunner()
+  const fmt = '--format=${file}\\t${bytesize}\\n'
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  runner.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { stdout: 'u\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--in=here', fmt], { stdout: 'a.dat\t1\n' })
+  runner.set('git', ['-C', root, 'annex', 'find', '--not', '--in=here', fmt], { exitCode: 1, failed: true })
+  await assert.rejects(new DataLadAdapter({ runner }).listDataFiles(root), /could not list the data files/i)
+
+  const unset = new FakeRunner()
+  unset.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  unset.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { exitCode: 1, failed: true })
+  assert.deepEqual(await new DataLadAdapter({ runner: unset }).listDataFiles(root), [])
+
+  const broken = new FakeRunner() // uuid check fails for another reason (exit 128)
+  broken.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  broken.set('git', ['-C', root, 'config', '--get', 'annex.uuid'], { exitCode: 128, failed: true })
+  await assert.rejects(new DataLadAdapter({ runner: broken }).listDataFiles(root), /could not list the data files/i)
+})
+
+test('installSubdatasets is gone: it is not a curated command', async () => {
+  await assert.rejects(new DataLadAdapter({ runner: new FakeRunner() }).runCommand('installSubdatasets', { projectPath: '/tmp/project', paths: ['sub-a'] }), /Unsupported command/)
+})
+
+for (const commandName of ['get', 'drop']) {
+  test(`${commandName} refuses paths outside the project`, async () => {
+    const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+    for (const p of ['../x', '/etc/passwd', 'C:\\x', 'a/../../b', 'a\0b']) {
+      await assert.rejects(adapter.runCommand(commandName, { projectPath: '/tmp/project', paths: [p] }), /inside the project/, JSON.stringify(p))
+    }
+  })
+
+  test(`${commandName} accepts project-relative paths`, async () => {
+    for (const p of ['sub-01/ses-1/func/a.nii.gz', 'sübjekt/ä.txt']) {
+      const runner = new FakeRunner()
+      runner.set('datalad', ['-C', '/tmp/project', commandName, ...(commandName === 'drop' ? ['--what', 'filecontent'] : []), '--', p], {})
+      const result = await new DataLadAdapter({ runner }).runCommand(commandName, { projectPath: '/tmp/project', paths: [p] })
+      assert.equal(result.ok, true, p)
+    }
+  })
+}
+
+test('drop uses --what filecontent and never --reckless', async () => {
+  const runner = new FakeRunner()
+  runner.set('datalad', ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--', 'a.bin'], {})
+  await new DataLadAdapter({ runner }).runCommand('drop', { projectPath: '/tmp/project', paths: ['a.bin'] })
+  assert.ok(!runner.calls[0].args.includes('--reckless'))
+  assert.ok(runner.calls[0].args.includes('filecontent'))
+})
+
+test('dropReckless builds the reckless command', async () => {
+  const runner = new FakeRunner()
+  const args = ['-C', '/tmp/project', 'drop', '--what', 'filecontent', '--reckless', 'kill', '--', 'a.bin', 'b/c.bin']
+  runner.set('datalad', args, {})
+  await new DataLadAdapter({ runner }).runCommand('dropReckless', { projectPath: '/tmp/project', paths: ['a.bin', 'b/c.bin'] })
+  assert.deepEqual(runner.calls[0].args, args)
+  assert.equal(runner.calls[0].options.cwd, '/tmp/project')
+})
+
+test('dropReckless is refused without paths', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project', paths: [] }), /non-empty/)
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project' }), /paths/)
+})
+
+test('dropReckless refuses ../x', async () => {
+  const adapter = new DataLadAdapter({ runner: new FakeRunner() })
+  await assert.rejects(adapter.runCommand('dropReckless', { projectPath: '/tmp/project', paths: ['../x'] }), /inside the project/)
+})
+
+test('--reckless is built only in the dropReckless case', () => {
+  const src = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const hits = [...src.matchAll(/'--reckless'/g)]
+  assert.equal(hits.length, 1)
+  const start = src.indexOf("case 'dropReckless'")
+  assert.ok(start > 0 && hits[0].index > start && hits[0].index < src.indexOf('default:', start))
 })

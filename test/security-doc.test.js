@@ -2,8 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
-const doc = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8')
-const overview = readFileSync(new URL('../REVIEW-OVERVIEW.md', import.meta.url), 'utf8')
+const doc = readFileSync(new URL('../SECURITY.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const overview = readFileSync(new URL('../REVIEW-OVERVIEW.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 
 // Every control SECURITY.md names must be real, and nothing it names may be removed.
 test('SECURITY.md names the admin policy and it exists in code', () => {
@@ -49,7 +49,7 @@ test('SECURITY.md says releases are unsigned and how to verify them', () => {
 test('SECURITY.md documents that dataset-shipped datalad procedures are neutralised', () => {
   assert.match(doc, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
   assert.match(doc, /\.datalad\/procedures/)
-  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(runner, /DATALAD_LOCATIONS_DATASET__PROCEDURES/)
 })
 
@@ -58,7 +58,7 @@ test('SECURITY.md documents the execution layer: app-owned hooks, no reckless cl
   assert.match(doc, /DATALAD_CLONE_RECKLESS/)
   assert.match(doc, /not fully scanned/i)
   assert.match(doc, /native (dialog|confirmation)/i)
-  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(runner, /core\.hooksPath/)
   assert.match(runner, /DATALAD_CLONE_RECKLESS/)
   assert.ok(existsSync(new URL('../build/git-hooks/pre-commit', import.meta.url)))
@@ -92,7 +92,7 @@ test('SECURITY.md states the trust-before-run rule, its sources, and its limits'
   assert.match(doc, /created[^.]*empty/i)
   assert.match(doc, /share'?s? own permissions/i)
   assert.match(doc, /ownership/i)
-  const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8')
+  const main = readFileSync(new URL('../src/gui/main.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(main, /policy\.trustedRoots/)
 })
 
@@ -105,12 +105,13 @@ test('SECURITY.md describes the push-time remote list, the nesting re-check and 
 
 // The doc describes the new commands' controls; each phrase below is backed by code or a test named in it.
 test('SECURITY.md documents the controls of the science-workflow commands, and the code has them', () => {
-  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
-  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8')
+  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+  const runner = readFileSync(new URL('../src/datalad/process-runner.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(doc, /protocol\.ext\.allow=never/)
   assert.match(runner, /\['protocol\.ext\.allow', 'never'\]/)
   assert.match(doc, /never with `--reckless`/)
-  assert.doesNotMatch(adapter, /['"`]--reckless/) // as an argument; a comment may name it
+  assert.equal(adapter.match(/['"`]--reckless/g).length, 1) // as an argument: only the separate dropReckless case; a comment may name it
+  assert.match(doc, /dropReckless/)
   assert.match(doc, /never `--tags`/)
   assert.doesNotMatch(adapter, /'--tags'/)
   assert.match(doc, /isUnsafeBackupLocation/)
@@ -121,7 +122,7 @@ test('SECURITY.md documents the controls of the science-workflow commands, and t
 test('SECURITY.md documents that file diffs never run repository-named programs, and the code does the same', () => {
   assert.match(doc, /--no-ext-diff/)
   assert.match(doc, /--no-textconv/)
-  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8')
+  const adapter = readFileSync(new URL('../src/datalad/adapter.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(adapter, /DIFF_SAFE_FLAGS = \['--no-ext-diff', '--no-textconv'/)
   assert.match(adapter, /must never run a program named by repository content/)
 })
@@ -132,7 +133,7 @@ test('SECURITY.md documents Run & record: native confirmation, the admin switch,
   assert.match(doc, /runDisabled/)
   assert.match(doc, /native (dialog|confirmation)/i)
   assert.match(doc, /not a sandbox/i)
-  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
+  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(policy, /WORLDLINE_DESKTOP_DISABLE_RUN/)
 })
 
@@ -142,10 +143,10 @@ test('SECURITY.md documents the validator auto-update, the update notices and th
   assert.match(doc, /only announced/i)
   assert.match(doc, /WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK/)
   assert.match(doc, /updateCheckDisabled/)
-  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8')
+  const policy = readFileSync(new URL('../src/gui/policy.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(policy, /updateCheckDisabled/)
   assert.match(policy, /WORLDLINE_DESKTOP_DISABLE_UPDATE_CHECK/)
-  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8')
+  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(upd, /PRISM_COOLDOWN_DAYS/)
   assert.match(upd, /--only-binary/)
 })
@@ -161,9 +162,9 @@ test('SECURITY.md lists the update network requests, and the code uses those hos
   assert.doesNotMatch(doc, /Nothing runs while a Save/)
   assert.match(doc, /never swaps a new version in while a Save or validation is running/)
   assert.match(doc, /only the 3-day cooldown/i)
-  const notices = readFileSync(new URL('../src/datalad/tool-notices.js', import.meta.url), 'utf8')
+  const notices = readFileSync(new URL('../src/datalad/tool-notices.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(notices, /formulae\.brew\.sh/)
-  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8')
+  const upd = readFileSync(new URL('../src/datalad/validator-update.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
   assert.match(upd, /PRISM_COOLDOWN_DAYS = 3\b/)
   assert.match(upd, /--exclude-newer/)
   assert.match(upd, /https:\/\/pypi\.org\/simple/)

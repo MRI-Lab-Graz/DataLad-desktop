@@ -29,6 +29,7 @@ export const CURATED_COMMANDS = new Set([
   'discardChanges',
   'unlock',
   'drop',
+  'dropReckless',
   'createTag',
   'pushTags',
   'verify',
@@ -668,6 +669,50 @@ export class DataLadAdapter {
     await this.#collectSubdatasets(projectPath, projectPath, '', datasets)
 
     return datasets
+  }
+
+  // Annexed files of the project and its installed subdatasets, with whether the content is on this computer.
+  // Read-only: only a repo whose annex.uuid is set is asked (`git annex find` would otherwise initialise annex there).
+  async listDataFiles(projectPath) {
+    const format = '--format=${file}\\t${bytesize}\\n'
+    const datasets = await this.listDatasets(projectPath)
+    const fail = (dataset) => {
+      throw new Error(`Could not list the data files of ${dataset.relativePath === '.' ? 'the project' : dataset.relativePath}.`)
+    }
+    const listOne = async (dataset) => {
+      const repo = dataset.path
+      const prefix = dataset.relativePath === '.' ? '' : `${dataset.relativePath}/`
+      const uuid = await this.runner.run('git', ['-C', repo, 'config', '--get', 'annex.uuid'])
+      if (uuid.failed) {
+        return uuid.exitCode === 1 ? [] : fail(dataset) // exit 1 = key not set = no annex here
+      }
+      const found = await Promise.all([
+        this.runner.run('git', ['-C', repo, 'annex', 'find', '--in=here', format]),
+        this.runner.run('git', ['-C', repo, 'annex', 'find', '--not', '--in=here', format])
+      ])
+      if (found.some((result) => result.failed)) {
+        fail(dataset)
+      }
+      return found.flatMap((result, index) =>
+        (result.stdout ?? '').split(/\r?\n/).filter(Boolean).map((line) => {
+          const tab = line.lastIndexOf('\t') // a file name may hold a tab; the size is the last field
+          const size = line.slice(tab + 1)
+          return { path: prefix + line.slice(0, tab), present: index === 0, bytes: /^\d+$/.test(size) ? Number(size) : null }
+        })
+      )
+    }
+    // At most 8 repos at a time (Windows spawns are slow); results stay in listDatasets order.
+    const results = new Array(datasets.length)
+    let next = 0
+    await Promise.all(
+      Array.from({ length: Math.min(8, datasets.length) }, async () => {
+        while (next < datasets.length) {
+          const index = next++
+          results[index] = await listOne(datasets[index])
+        }
+      })
+    )
+    return results.flat()
   }
 
   async #collectSubdatasets(rootPath, currentPath, relativePrefix, datasets) {
@@ -1810,13 +1855,21 @@ export class DataLadAdapter {
         }
       }
       case 'drop': {
-        // datalad refuses to drop the last verified copy by itself (no --reckless here, ever).
+        // datalad refuses to drop the last verified copy by itself. Reckless exists only as the separate dropReckless command.
         const projectPath = request.projectPath
         const paths = request.paths ?? []
         return {
           command: 'datalad',
-          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--', ...paths] : ['-C', projectPath, 'drop'],
+          args: paths.length > 0 ? ['-C', projectPath, 'drop', '--what', 'filecontent', '--', ...paths] : ['-C', projectPath, 'drop', '--what', 'filecontent'],
           options: { cwd: projectPath }
+        }
+      }
+      case 'dropReckless': {
+        // Skips datalad's check that another copy exists. Only reachable after the typed word and the native confirmation.
+        return {
+          command: 'datalad',
+          args: ['-C', request.projectPath, 'drop', '--what', 'filecontent', '--reckless', 'kill', '--', ...request.paths],
+          options: { cwd: request.projectPath }
         }
       }
       default:

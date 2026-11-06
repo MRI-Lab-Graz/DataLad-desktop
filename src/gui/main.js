@@ -11,6 +11,7 @@ import { assertCommandRequest } from '../datalad/schema.js'
 import { createResultCounter } from '../datalad/result-counter.js'
 import { createProjectWatcher } from './fs-watch.js'
 import { listDirectory } from './list-directory.js'
+import { previewPaths } from './renderer/reckless-preview.js'
 import { initialAuthorizedRoots, isUnsafeBackupLocation, isWithinRoots } from './path-confinement.js'
 import { loadPolicy, policyFiles } from './policy.js'
 import { guardedHandler } from './ipc-guard.js'
@@ -126,9 +127,9 @@ const trustGate = () =>
 // Native yes/no the renderer cannot answer. E2E drives the real app without a human, so an
 // unpackaged build started by the e2e driver answers yes itself; a packaged app never does.
 // What the page gets back when the person declines the native "Run this command?" question.
-const runDeclinedResult = () => ({
+const runDeclinedResult = (commandName = 'run') => ({
   ok: false,
-  commandName: 'run',
+  commandName,
   command: 'datalad',
   args: [],
   exitCode: null,
@@ -140,7 +141,7 @@ const runDeclinedResult = () => ({
   userError: {
     code: 'RUN_DECLINED',
     title: 'Not run',
-    message: 'You chose not to run the command, so nothing was started.',
+    message: commandName === 'run' ? 'You chose not to run the command, so nothing was started.' : 'You chose not to go on, so nothing was deleted.',
     technicalDetails: ''
   }
 })
@@ -291,6 +292,11 @@ handle('adapter:findUnnestedBidsCandidates', async (_event, projectPath) => {
   return adapter.findUnnestedBidsCandidates(projectPath)
 })
 
+handle('adapter:listDataFiles', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.listDataFiles(projectPath)
+})
+
 handle('adapter:untrackPath', async (_event, payload = {}) => {
   requireAuthorizedRoot(payload.projectPath)
   return adapter.untrackPath(payload.projectPath, payload.relativePath)
@@ -371,6 +377,24 @@ handle('adapter:runCommand', async (event, payload) => {
     })
     if (!confirmed) {
       return runDeclinedResult()
+    }
+  }
+
+  if (payload.commandName === 'dropReckless') {
+    // The page's typed word is not enough: the main process asks too. Never reachable through plain `drop`.
+    assertCommandRequest('dropReckless', payload.request)
+    const count = payload.request.paths.length
+    const confirmed = await confirmNative(event, {
+      title: 'Delete without a safety check?',
+      message: `In ${payload.request.projectPath}:`,
+      detail:
+        `${count} ${count === 1 ? 'file or folder' : 'files or folders'} will be removed from this computer WITHOUT checking that another copy exists. ` +
+        'If there is no other copy, the data may be gone for good.\n' +
+        previewPaths(payload.request.paths),
+      confirmLabel: 'Delete'
+    })
+    if (!confirmed) {
+      return runDeclinedResult('dropReckless')
     }
   }
 
