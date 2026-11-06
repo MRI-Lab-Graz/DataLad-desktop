@@ -17,10 +17,13 @@ const UNLOCK = {
 
 /**
  * @param {{ type: 'file'|'directory', annexPresent?: boolean|'partial'|null }} node
+ * @param {{ hasRemote?: boolean }} [options]
  * @returns {Array<{ action: 'get'|'drop'|'unlock', label: string, title: string }>}
  */
-export function rowDataActions({ type, annexPresent }) {
+export function rowDataActions({ type, annexPresent }, { hasRemote = false } = {}) {
   if (annexPresent === null || annexPresent === undefined) return []
-  if (type === 'directory') return [annexPresent !== true && GET, annexPresent !== false && DROP].filter(Boolean)
-  return annexPresent === false ? [GET] : annexPresent === true ? [DROP, UNLOCK] : []
+  // Without a remote there is no other copy, so freeing space can never succeed: do not offer it.
+  const drop = hasRemote && DROP
+  if (type === 'directory') return [annexPresent !== true && GET, annexPresent !== false && drop].filter(Boolean)
+  return annexPresent === false ? [GET] : annexPresent === true ? [drop, UNLOCK].filter(Boolean) : []
 }

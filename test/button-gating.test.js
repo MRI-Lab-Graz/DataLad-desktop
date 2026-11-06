@@ -6,6 +6,7 @@ import {
   computeRemoteGating,
   computeSyncSectionVisible,
   computeSyncActionsQuietMessage,
+  filesToolbarVisibility,
   remoteNameForProject
 } from '../src/gui/renderer/button-gating.js'
 
@@ -181,4 +182,17 @@ test('remoteNameForProject names the remote only when the health snapshot is for
   assert.equal(remoteNameForProject(health, '/proj/sub-dataset'), null) // a subdataset has its own remotes
   assert.equal(remoteNameForProject({ projectPath: '/proj', hasUpstream: false }, '/proj'), null)
   assert.equal(remoteNameForProject(null, '/proj'), null)
+})
+
+test('Free up space (all) only shows when the project has a remote to keep the other copy', () => {
+  assert.equal(filesToolbarVisibility({ hasUpstream: true }).freeUp, true)
+  for (const health of [null, undefined, {}, { hasUpstream: false }]) assert.equal(filesToolbarVisibility(health).freeUp, false)
+})
+
+test('Get all shows with a remote, or when files are missing (they must live somewhere), never otherwise', () => {
+  assert.equal(filesToolbarVisibility({ hasUpstream: true, missingContentCount: 0 }).getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 3 }).getAll, true)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: 0 }).getAll, false)
+  assert.equal(filesToolbarVisibility({ hasUpstream: false, missingContentCount: null }).getAll, false)
+  assert.equal(filesToolbarVisibility(null).getAll, false)
 })

@@ -42,6 +42,18 @@ export function computeDatasetGating(classification, health) {
   return { disabled: false, title: GET_DATA_READY_TITLE }
 }
 
+/**
+ * Which whole-project data buttons are worth showing. Free up space needs another copy to exist, i.e. a remote;
+ * Get all needs files that are missing here, which can only be fetched from somewhere, so it shows with a remote or
+ * whenever something is actually missing. Unknown (health not loaded yet) shows nothing, never a premature button.
+ * @param {{ hasUpstream?: boolean, missingContentCount?: number|null } | null | undefined} health
+ * @returns {{ getAll: boolean, freeUp: boolean }}
+ */
+export function filesToolbarVisibility(health) {
+  const hasRemote = Boolean(health?.hasUpstream)
+  return { getAll: hasRemote || Number(health?.missingContentCount) > 0, freeUp: hasRemote }
+}
+
 const NOT_A_DATASET_ANNEX_TITLE =
   'This is a plain Git project, so it has no downloaded copies to remove or check.'
 

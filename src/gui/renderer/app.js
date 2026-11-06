@@ -2,6 +2,7 @@ import {
   computeDatasetGating,
   computeAnnexToolGating,
   FREE_UP_SPACE_TITLE,
+  filesToolbarVisibility,
   computeRemoteGating,
   remoteNameForProject,
   computeSyncSectionVisible,
@@ -3716,6 +3717,9 @@ function applyDatasetGatedButtons(classification) {
 function updateGetDataGating() {
   const gating = computeDatasetGating(state.currentProjectClassification, state.projectHealthSnapshot)
 
+  const visible = filesToolbarVisibility(state.projectHealthSnapshot)
+  elements.filesGetAllButton.hidden = !visible.getAll
+  elements.filesFreeAllButton.hidden = !visible.freeUp
   elements.filesGetAllButton.disabled = gating.disabled
   elements.filesGetAllButton.title = gating.title
 
@@ -3805,6 +3809,10 @@ async function refreshProjectHealth(projectPath) {
 
       state.projectHealthSnapshot = health
       renderProjectHealth()
+      // The rows show Free up space only with a remote: redraw them if that answer arrived late or changed.
+      if (state.fileRowsHaveRemote !== undefined && state.fileRowsHaveRemote !== Boolean(health.hasUpstream)) {
+        void refreshFileBrowser(projectPath)
+      }
       return health
     } catch (error) {
       if (!isLatestRequestToken('projectHealth', requestToken)) {
@@ -4458,12 +4466,14 @@ function renderFileTreeNodes(children, expandAll, depth) {
     return left.name.localeCompare(right.name)
   })
 
+  const hasRemote = Boolean(state.projectHealthSnapshot?.hasUpstream)
+  state.fileRowsHaveRemote = hasRemote // health may arrive after the rows: see fetchProjectHealth
   const items = nodes
     .map((node) => {
       const openButton = node.absolutePath
         ? `<button type="button" class="button button-ghost button-mini" data-entry-path="${escapeHtml(node.absolutePath)}">Open</button>`
         : ''
-      const dataButtons = rowDataActions(node)
+      const dataButtons = rowDataActions(node, { hasRemote })
         .map(
           ({ action, label, title }) =>
             `<button type="button" class="button button-ghost button-mini" data-data-action="${action}" data-data-path="${escapeHtml(node.relativePath)}" title="${escapeHtml(title)}">${label}</button>`

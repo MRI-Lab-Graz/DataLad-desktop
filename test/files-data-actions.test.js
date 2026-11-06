@@ -16,7 +16,7 @@ test('the Files toolbar has Get all and Free up space (all)', () => {
 test('file rows render their data actions from rowDataActions, with an escaped path', () => {
   assert.match(app, /import \{ rowDataActions \} from '\.\/row-data-actions\.js'/)
   const render = between(app, 'function renderFileTreeNodes', 'function renderGitStatusBadge')
-  assert.match(render, /rowDataActions\(node\)/)
+  assert.match(render, /rowDataActions\(node, \{ hasRemote \}\)/)
   assert.match(render, /data-data-path="\$\{escapeHtml\(node\.relativePath\)\}"/)
 })
 
@@ -80,4 +80,17 @@ test('the reasons a Files button is switched off are also plain words', () => {
     computeAnnexToolGating('git', 'x').title
   ]
   for (const text of reasons) assert.doesNotMatch(text, /annex|tracked|datalad|dataset/i, text)
+})
+
+test('the toolbar hides Get all and Free up space (all) by the same rule the page uses', () => {
+  assert.match(app, /filesToolbarVisibility\(state\.projectHealthSnapshot\)/)
+  assert.match(app, /filesGetAllButton\.hidden\s*=\s*!/)
+  assert.match(app, /filesFreeAllButton\.hidden\s*=\s*!/)
+})
+
+test('file rows are rebuilt when the remote becomes known after they were drawn', () => {
+  const render = between(app, 'function renderFileTreeNodes', 'function renderGitStatusBadge')
+  assert.match(render, /state\.fileRowsHaveRemote\s*=\s*hasRemote/)
+  const health = between(app, 'state.projectHealthSnapshot = health', 'return health')
+  assert.match(health, /state\.fileRowsHaveRemote\s*!==\s*Boolean\(health\.hasUpstream\)[\s\S]{0,120}refreshFileBrowser\(projectPath\)/)
 })
