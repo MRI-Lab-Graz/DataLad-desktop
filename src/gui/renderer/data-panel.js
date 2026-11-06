@@ -36,10 +36,15 @@ function renderGroup(group, selected) {
   )
 }
 
-export function renderDataPanel({ groups, selection, summary, mode }) {
+const EMPTY = 'No files that live elsewhere were found in this project, so there is nothing to download or free up here.'
+
+// fileCount: how many files were listed at all (0 = explain the empty panel; undefined = unknown, say nothing).
+export function renderDataPanel({ groups, selection, summary, mode, fileCount }) {
   const off = summary.count === 0 ? ' disabled' : ''
   return (
-    groups.filter((g) => g.values.length).map((g) => renderGroup(g, selection[g.key])).join('') +
+    (fileCount === 0
+      ? `<p role="status">${esc(EMPTY)}</p>`
+      : groups.filter((g) => g.values.length).map((g) => renderGroup(g, selection[g.key])).join('')) +
     `<p id="data-panel-summary" data-mode="${mode === 'drop' ? 'drop' : 'get'}" aria-live="polite">${esc(summaryText(summary))}</p>` +
     `<button type="button" id="data-panel-download"${off} title="Copy the chosen files onto this computer so you can open them">Download selected</button> ` +
     `<button type="button" id="data-panel-free"${off} title="Remove the chosen files from this computer. They stay available from where they came from">Free up space</button>`

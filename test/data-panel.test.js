@@ -77,3 +77,23 @@ test('reckless dialog previews the first 5 paths', () => {
   assert.match(block, /previewPaths\(payload\.request\.paths\)/)
   assert.match(main, /from '\.\/reckless-preview\.js'/)
 })
+
+test('empty file list explains itself, buttons stay disabled', () => {
+  const html = render({ groups: [], summary: none, fileCount: 0 })
+  assert.match(html, /<p role="status">No files that live elsewhere were found in this project, so there is nothing to download or free up here\.<\/p>/)
+  assert.doesNotMatch(html, /<fieldset/)
+  assert.match(html, /id="data-panel-download"[^>]*disabled/)
+  assert.match(html, /id="data-panel-free"[^>]*disabled/)
+})
+
+test('the empty message is not shown when files exist or the count is unknown', () => {
+  assert.doesNotMatch(render({ summary: none, fileCount: 3 }), /No files that live elsewhere/)
+  assert.doesNotMatch(render({ summary: none }), /No files that live elsewhere/)
+})
+
+test('app.js passes the real file count and keeps the loading text', () => {
+  const app = readFileSync(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')
+  assert.match(app, /fileCount: files\.length/)
+  assert.match(app, /'Looking at your files…'/)
+  assert.match(app, /read the file list[^\n]*\n\s*elements\.dataPanelBody\.textContent = ''\n\s*return/)
+})

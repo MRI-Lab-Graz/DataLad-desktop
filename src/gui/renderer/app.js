@@ -1919,7 +1919,8 @@ function renderDataPanelNow() {
     groups: buildFilterGroups(files),
     selection,
     summary: summarize(getFiles.map((p) => byPath.get(p))),
-    mode: 'get'
+    mode: 'get',
+    fileCount: files.length
   })
   document.getElementById('data-panel-download').title =
     `Download ${describeCount(getFiles.map((p) => byPath.get(p)))} to this computer`
@@ -1961,6 +1962,8 @@ async function loadDataPanel() {
     elements.dataPanelNote.textContent = files.length ? '' : 'This project has no separately stored data files.'
   } catch (error) {
     elements.dataPanelNote.textContent = `Could not read the file list: ${String(error.message)}`
+    elements.dataPanelBody.textContent = ''
+    return
   }
   renderDataPanelNow()
 }
