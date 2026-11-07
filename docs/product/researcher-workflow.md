@@ -41,8 +41,10 @@ Known limitation: subject folders that are not set up on this computer yet (a pr
 For DataLad-enabled projects, the compact action group should include:
 
 - **Get**, **Free up space** and **Unlock**, on the file and folder rows of the Files tab (Get fetches content; Free up space is its counterpart and only removes data another copy holds, so it only appears when the project has a remote; Get all shows with a remote or when files are missing; Unlock makes an editable copy)
-- **Update Project**
-- **Publish** (also sends the versions the researcher marked)
+- **Get updates** (called Update in older notes): brings in saves that others, or another computer, added to the shared place. Nothing of yours is changed.
+- **Send my saves** (called Publish in older notes): copies the saves you made on this computer to the shared place so others can get them. It also sends the versions you marked.
+
+The Sync tab shows both in their own box, with the name and location of the shared place at the top (a folder, or an online repository) and one sentence on where you stand, for example "3 saves of yours are not there yet · nothing new from others" or "Everything is in sync." When the app has not checked yet, it says "not checked yet" instead of "none waiting".
 - **Add a Remote** (a USB drive, network share or empty repository; shown while the project has no remote, and also when you answered "No, it is read-only" to the source question)
 
 **A place that only lets you read.** A project downloaded from a public place such as OpenNeuro cannot send your saves back. When saves exist only on your computer and the app does not know yet whether the place accepts changes, the Home view asks once: "Can you send changes back to the place this project came from?" with **Yes**, **No, it is read-only** and **Not sure**. Your answer is kept in the project's own settings and only changes the wording and the buttons. **Not sure** keeps the normal Publish button for now and asks again next time. After **No**, the Home view calmly says the saves are only on your computer and offers **Add a Remote** (your own USB drive, network share or repository) instead of Publish; **My answer was wrong** brings the question back. If a Publish is refused for lack of permission, the app answers "No" for you, explains it in plain words and your saves stay safe on your computer. A network problem never changes the answer. You can also change this answer any time in **Setup**, under **This project**.

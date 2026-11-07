@@ -97,6 +97,12 @@ test('computeRemoteGating enables Update/Publish/Disconnect and shows remote URL
   assert.equal(gating.remoteInfo.text, 'Remote: origin/main (git@example.org:lab/study.git)')
 })
 
+test('computeRemoteGating titles are plain words', () => {
+  const gating = computeRemoteGating({ hasUpstream: true, upstream: 'origin/main', remoteUrl: null })
+  assert.equal(gating.update.title, 'Get the latest saves from origin/main. Nothing of yours is changed.')
+  assert.equal(gating.publish.title, 'Send your saves to origin/main.')
+})
+
 test('computeRemoteGating falls back to the branch name when the remote URL is unavailable', () => {
   const gating = computeRemoteGating({ hasUpstream: true, upstream: 'origin/main', remoteUrl: null })
 
@@ -146,6 +152,7 @@ test('computeSyncActionsQuietMessage explains a project with no remote, for data
   ]) {
     const message = computeSyncActionsQuietMessage(health)
     assert.match(message, /Nothing to sync right now/)
+    assert.match(message, /Get updates and Send my saves/)
     assert.match(message, /Add a Remote/)
     assert.doesNotMatch(message, /Get Data/)
   }

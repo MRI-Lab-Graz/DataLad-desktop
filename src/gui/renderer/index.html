@@ -459,25 +459,27 @@
           <div class="section-head">
             <h2 id="sync-data-title">Sync</h2>
           </div>
-          <p class="lede-small">
-            Optional actions that sync this project with a remote or sibling copy, for example a server or another computer.
-          </p>
-
-          <div id="sync-actions-strip" class="action-strip">
-            <span class="sibling-action-group">
-              <button id="update-project" class="button button-ghost" type="button">Update (remote)</button>
-              <button id="publish-project" class="button button-ghost" type="button">Publish (remote)</button>
-              <button id="disconnect-remote" class="button button-ghost" type="button" hidden>Disconnect from Source</button>
-              <button
-                id="sibling-actions-info"
-                class="info-hint"
-                type="button"
-                aria-label="What are remote/sibling actions?"
-                title="Update and Publish sync with a remote or sibling copy of this project (for example a server or another computer). A standard local-only project has no remote, so these stay disabled — Save already covers fully offline work. Disconnect from Source removes the remote link entirely — useful for read-only sources (e.g. OpenNeuro) you'll never push to or pull further updates from."
-              >
-                ⓘ
-              </button>
-            </span>
+          <div id="sync-actions-strip" class="action-strip sync-cards">
+            <h3 class="sync-heading">Where your saves are shared</h3>
+            <p id="sync-remote-line" class="sync-remote-line"></p>
+            <p id="sync-status-line" class="lede-small" role="status"></p>
+            <div class="panel panel-muted panel-compact sync-card">
+              <h3 class="sync-heading">Get updates</h3>
+              <p id="sync-update-help" class="lede-small"></p>
+              <div class="field-row">
+                <button id="update-project" class="button button-ghost" type="button">Get updates</button>
+                <span id="sync-update-count" class="hint-inline"></span>
+              </div>
+            </div>
+            <div class="panel panel-muted panel-compact sync-card">
+              <h3 class="sync-heading">Send my saves</h3>
+              <p id="sync-publish-help" class="lede-small"></p>
+              <div class="field-row">
+                <button id="publish-project" class="button button-ghost" type="button">Send my saves</button>
+                <span id="sync-publish-count" class="hint-inline"></span>
+              </div>
+            </div>
+            <button id="disconnect-remote" class="button button-ghost" type="button" hidden>Disconnect from Source</button>
           </div>
           <p id="sync-actions-quiet" class="lede-small" hidden></p>
           <p id="remote-info" class="lede-small" hidden></p>

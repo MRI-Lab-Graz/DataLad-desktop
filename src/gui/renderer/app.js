@@ -50,6 +50,7 @@ import {
 } from './project-health-chips.js'
 import { withSessionAnswer, isSourceRefusal, settingState, settingAction, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
 import { formatAge } from './relative-age.js'
+import { describeSync } from './sync-cards.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
 import { suggestMessage, vagueMessageNudge } from './message-suggestion.js'
@@ -220,6 +221,12 @@ const elements = {
   saveProjectButton: document.getElementById('save-project'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
+  syncRemoteLine: document.getElementById('sync-remote-line'),
+  syncStatusLine: document.getElementById('sync-status-line'),
+  syncUpdateHelp: document.getElementById('sync-update-help'),
+  syncUpdateCount: document.getElementById('sync-update-count'),
+  syncPublishHelp: document.getElementById('sync-publish-help'),
+  syncPublishCount: document.getElementById('sync-publish-count'),
   verifyDataButton: document.getElementById('verify-data'),
   verifyOutput: document.getElementById('verify-output'),
   updateProjectButton: document.getElementById('update-project'),
@@ -3786,7 +3793,7 @@ function buildWorkflowStatusLine(result) {
   }
 
   if (result.commandName === 'push') {
-    return 'Publish finished.'
+    return 'Send my saves finished.'
   }
 
   if (result.commandName === 'createBranch') {
@@ -3834,11 +3841,11 @@ function actionLabel(commandName) {
   }
 
   if (commandName === 'update') {
-    return 'Update'
+    return 'Get updates'
   }
 
   if (commandName === 'push') {
-    return 'Publish'
+    return 'Send my saves'
   }
 
   if (commandName === 'createBranch') {
@@ -4197,7 +4204,18 @@ async function refreshProjectHealth(projectPath, { fresh = false } = {}) {
   return promise
 }
 
+function renderSyncCards(health) {
+  const view = describeSync(health)
+  elements.syncRemoteLine.textContent = view.remoteLine
+  elements.syncStatusLine.textContent = view.statusLine
+  elements.syncUpdateHelp.textContent = view.update.help
+  elements.syncUpdateCount.textContent = view.update.countText
+  elements.syncPublishHelp.textContent = view.publish.help
+  elements.syncPublishCount.textContent = view.publish.countText
+}
+
 function applyRemoteGatedButtons(health) {
+  renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
   const gating = computeRemoteGating(health)
 
   elements.updateProjectButton.disabled = gating.update.disabled
