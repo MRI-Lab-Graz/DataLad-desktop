@@ -4079,12 +4079,6 @@ elements.saveValidityRecheck.addEventListener('click', () => void refreshValidit
 
 function applyDatasetGatedButtons(classification) {
   state.currentProjectClassification = classification
-  // Wording only: it must never be able to skip the gating above.
-  try {
-    renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
-  } catch {
-    // keep the old text
-  }
   updateGetDataGating()
   updateSyncSectionVisibility()
 }

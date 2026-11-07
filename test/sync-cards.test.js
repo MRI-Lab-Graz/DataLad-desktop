@@ -115,6 +115,13 @@ test('wiring: a failing card render cannot skip the button gating', () => {
   assert.match(body, /try \{\s*renderSyncCards/)
 })
 
+test('wiring: renderSyncCards is called only from applyRemoteGatedButtons', () => {
+  const app = read('../src/gui/renderer/app.js')
+  assert.equal(app.match(/renderSyncCards\(/g).length, 2, 'one definition, one call')
+  const body = app.slice(app.indexOf('function applyRemoteGatedButtons'), app.indexOf('function setStatusLine'))
+  assert.match(body, /renderSyncCards\(/)
+})
+
 test('wiring: app.js renders the cards from describeSync with textContent only', () => {
   const app = read('../src/gui/renderer/app.js')
   assert.match(app, /import \{ describeSync \} from '\.\/sync-cards\.js'/)

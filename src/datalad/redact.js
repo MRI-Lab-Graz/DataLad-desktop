@@ -2,7 +2,8 @@
 // ssh user names (git@host) are not secrets and stay. Userinfo ends at the LAST @ before the path, so a password
 // that itself contains @ does not leak its tail.
 const URL_USERINFO = /\b(https?|ftps?):\/\/[^/?#\s]*@/gi
-const SECRET_QUERY = /([?&](?:access_token|token|password|passwd|key|secret|sig)=)[^&#\s]*/gi
+// Exact names only (no prefix matching), so ordinary parameters such as tokenizer or key_id stay readable.
+const SECRET_QUERY = /([?&#](?:access[_-]?token|private[_-]?token|token|password|passwd|key|api[_-]?key|secret|sig|auth|authorization|credential)=)[^&#\s]*/gi
 
 export function redactUrlCredentials(text) {
   return String(text ?? '')
