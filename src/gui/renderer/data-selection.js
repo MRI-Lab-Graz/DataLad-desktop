@@ -25,26 +25,49 @@ function valueOf(parsed, key) {
   return own(parsed.entities, key) ?? null
 }
 
-/** @returns {Array<{ key: string, title: string, hint: string, values: string[] }>} */
-export function buildFilterGroups(files) {
+// One matching definition for ticks, used by selectFiles and buildFilterGroups: a file lacking the entity never matches.
+const matches = (parsed, key, set) => {
+  const v = valueOf(parsed, key)
+  return v != null && set.has(v)
+}
+const ticked = (selection) => Object.entries(selection).filter(([, set]) => set && set.size > 0)
+
+/**
+ * Faceted search: a value in a group is offered only if some file fits the ticks in all OTHER groups (a group's own
+ * ticks do not narrow it). Ticked values always stay visible so they can be unticked; a group with a tick is never hidden.
+ * Each file is parsed once and counted against the ticked groups once: files fitting all ticks feed every group,
+ * files missing exactly one ticked group feed only that group.
+ * @returns {Array<{ key: string, title: string, hint: string, values: string[] }>}
+ */
+export function buildFilterGroups(files, selection = {}) {
+  const touched = ticked(selection)
   const seen = new Map([['sub', new Set()], ['ses', new Set()], ['modality', new Set()], ['suffix', new Set()], ['ext', new Set()]])
+  const add = (key, v) => {
+    if (!seen.has(key)) seen.set(key, new Set())
+    seen.get(key).add(v)
+  }
   for (const file of files) {
     const p = parseBidsPath(file.path)
-    for (const key of ['sub', 'ses', 'modality', 'suffix', 'ext']) {
-      const v = valueOf(p, key)
-      if (v) seen.get(key).add(v)
+    let missed = null
+    let misses = 0
+    for (const [key, set] of touched) {
+      if (!matches(p, key, set) && ++misses === 1) missed = key
+      if (misses > 1) break
     }
-    for (const [key, v] of Object.entries(p.entities)) {
-      if (key === 'sub' || key === 'ses') continue
-      if (!seen.has(key)) seen.set(key, new Set())
-      seen.get(key).add(v)
+    if (misses > 1) continue
+    const offer = (key, v) => {
+      if (v && (misses === 0 || missed === key)) add(key, v)
     }
+    for (const key of ['sub', 'ses', 'modality', 'suffix', 'ext']) offer(key, valueOf(p, key))
+    for (const [key, v] of Object.entries(p.entities)) if (key !== 'sub' && key !== 'ses') offer(key, v)
   }
+  for (const [key, set] of touched) for (const v of set) add(key, v)
   const entityKeys = [...seen.keys()].filter((k) => !['modality', 'suffix', 'ext'].includes(k))
   const otherKeys = entityKeys.filter((k) => !ENTITY_ORDER.includes(k)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   const order = ['sub', 'ses', 'modality', ...ENTITY_ORDER.slice(2), ...otherKeys, 'suffix', 'ext']
+  const hasTick = new Set(touched.map(([key]) => key))
   return order
-    .filter((key) => seen.has(key) && seen.get(key).size >= 2)
+    .filter((key) => seen.has(key) && (seen.get(key).size >= 2 || hasTick.has(key)))
     .map((key) => ({
       key,
       title: TITLES.get(key) ?? key,
@@ -58,16 +81,13 @@ export function buildFilterGroups(files) {
  * get keeps files not yet present, drop keeps files that are present.
  */
 export function selectFiles(files, selection, mode) {
-  const touched = Object.entries(selection).filter(([, set]) => set && set.size > 0)
+  const touched = ticked(selection)
   if (!touched.length) return []
   const wantPresent = mode === 'drop'
   return files.filter((file) => {
     if (file.present !== wantPresent) return false
     const p = parseBidsPath(file.path)
-    return touched.every(([key, set]) => {
-      const v = valueOf(p, key)
-      return v != null && set.has(v)
-    })
+    return touched.every(([key, set]) => matches(p, key, set))
   })
 }
 
