@@ -87,7 +87,7 @@ test('interpretReport: warnings are never listed, even BIDS ones', () => {
 
 test('Save panel says plainly when more problems exist than are listed', async () => {
   const src = (await readFile(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
-  assert.match(src, /and \$\{[^}]*\} more (problem|error)/)
+  assert.match(src, /moreProblemsLine\(check\.errorCount, problems\.length\)/)
 })
 
 test('interpretReport: valid:true with errors counted is still invalid', () => {
@@ -378,4 +378,11 @@ test('checkProject passes the cancel signal and a timeout to the validator', asy
   await check(runner, await prismDir(), { signal })
   assert.equal(runner.opts.signal, signal)
   assert.ok(runner.opts.timeoutMs > 0)
+})
+
+test('interpretReport: a hostile non-string code cannot throw', () => {
+  const bad = (code) => ({ code, severity: 'ERROR', message: 'x', file_path: '/p' })
+  const out = run([bad({ toString: 1, startsWith: 1 }), bad(5), bad(null), bad({ toString: () => { throw new Error('boom') } })])
+  assert.equal(out.verdict, 'invalid')
+  assert.equal(out.errors.length, 4)
 })

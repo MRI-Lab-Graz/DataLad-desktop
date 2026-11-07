@@ -4,6 +4,12 @@ const SUBJECT = /^sub-[A-Za-z0-9._-]+$/
 const plural = (n, one, many) => (n === 1 ? one : many)
 
 // `datasets` = the app's list of datasets ({ relativePath }); '.' is the project itself.
+export function moreProblemsLine(errorCount, listedCount) {
+  const more = errorCount - listedCount
+  if (!Number.isSafeInteger(errorCount) || !(more > 0)) return null
+  return `... and ${more} more ${plural(more, 'problem', 'problems')} not shown here`
+}
+
 export function describeFolders(datasets, { bidsLike }) {
   const nested = (Array.isArray(datasets) ? datasets : []).map((d) => d?.relativePath).filter((p) => typeof p === 'string' && p !== '.')
   if (nested.length === 0) return ''

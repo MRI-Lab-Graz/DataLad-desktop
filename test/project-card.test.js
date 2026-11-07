@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { describeFolders, describeTypeBadge, describeValidity } from '../src/gui/renderer/project-card.js'
+import { describeFolders, describeTypeBadge, describeValidity, moreProblemsLine } from '../src/gui/renderer/project-card.js'
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n')
 const html = read('src/gui/renderer/index.html')
@@ -120,4 +120,10 @@ test('the check runs when a project is opened and after a Save, cancels the one 
   assert.doesNotMatch(body, /innerHTML/)
   assert.match(app, /void refreshValidity\(projectPath\)/) // on open
   assert.match(app, /commandName === 'save'[^\n]*refreshValidity\(nextProjectPath\)/) // after a Save, also a blocked one
+})
+
+test('moreProblemsLine: says how many problems are not listed, singular for one, nothing for odd numbers', () => {
+  assert.equal(moreProblemsLine(11, 10), '... and 1 more problem not shown here')
+  assert.equal(moreProblemsLine(113, 10), '... and 103 more problems not shown here')
+  for (const [c, l] of [[10, 10], [3, 10], [12.5, 10], [Infinity, 10], [NaN, 10], [undefined, 10], ['13', 10]]) assert.equal(moreProblemsLine(c, l), null)
 })
