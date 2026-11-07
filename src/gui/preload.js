@@ -70,6 +70,8 @@ contextBridge.exposeInMainWorld('worldlineDesktop', {
   prepareFolderRemote: (projectPath, remoteName, folderPath) =>
     ipcRenderer.invoke('adapter:prepareFolderRemote', { projectPath, remoteName, folderPath }),
   trackRemote: (projectPath, remoteName) => ipcRenderer.invoke('adapter:trackRemote', { projectPath, remoteName }),
+  setSourceAccepts: (projectPath, value) => ipcRenderer.invoke('adapter:setSourceAccepts', { projectPath, value }),
+  clearSourceAccepts: (projectPath) => ipcRenderer.invoke('adapter:clearSourceAccepts', projectPath),
   getWorkspaceRoot: () => ipcRenderer.invoke('app:getWorkspaceRoot'),
   pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
   listFileEntries: (rootPath, options) =>

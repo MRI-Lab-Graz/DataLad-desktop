@@ -292,7 +292,12 @@ export function mapCommandError(commandName, runResult) {
     }
   }
 
-  if (hasPattern(stderr, /authentication|permission denied|forbidden|unauthorized/)) {
+  // What a refused push to GitHub-style hosts prints (datalad may put it on stdout). Push only: elsewhere
+  // "403" or "permission to" could mean something else.
+  const pushRefused = commandName === 'push' &&
+    hasPattern(`${stderr}\n${stdout}`, /authentication failed|permission to .+ denied|returned error: 40[13]|could not read (username|password)|terminal prompts disabled/)
+
+  if (pushRefused || hasPattern(stderr, /authentication|permission denied|forbidden|unauthorized/)) {
     return {
       code: 'AUTH_FAILED',
       title: 'Authentication failed',

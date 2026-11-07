@@ -2039,6 +2039,17 @@ select:disabled {
   background: var(--teal-soft);
 }
 
+/* A question or a calm note, not a warning. */
+.attention-row-calm {
+  border-color: var(--line, rgba(0, 0, 0, 0.15));
+}
+
+.attention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* With a project open the header shrinks to one row so the work gets the screen. */
 .hero-slim {
   min-height: 0;

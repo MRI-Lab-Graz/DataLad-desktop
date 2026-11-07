@@ -642,6 +642,20 @@ handle('adapter:trackRemote', async (_event, payload = {}) => {
   return adapter.trackRemote(payload.projectPath, payload.remoteName)
 })
 
+// Wording only (see adapter.getSourceAccepts): the answer never gates Publish.
+handle('adapter:setSourceAccepts', async (_event, payload = {}) => {
+  requireAuthorizedRoot(payload.projectPath)
+  if (payload.value !== 'yes' && payload.value !== 'no') {
+    throw new Error('The answer must be yes or no.')
+  }
+  return adapter.setSourceAccepts(payload.projectPath, payload.value)
+})
+
+handle('adapter:clearSourceAccepts', async (_event, projectPath) => {
+  requireAuthorizedRoot(projectPath)
+  return adapter.clearSourceAccepts(projectPath)
+})
+
 handle('watch:setActiveProject', async (event, projectPath = null) => {
   if (activeProjectWatcher) {
     activeProjectWatcher.stop()

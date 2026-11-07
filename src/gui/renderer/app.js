@@ -48,6 +48,7 @@ import {
   computeStatusLine,
   computeAttentionRows
 } from './project-health-chips.js'
+import { withSessionAnswer, isSourceRefusal, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
@@ -86,6 +87,7 @@ const state = {
   activeRuns: new Map(),
   sequenceStopRequested: false,
   projectHealthSnapshot: null,
+  sourceNotSure: new Set(), // projects where the person said "Not sure" this session; never stored
   pendingHealthFetch: null,
   datasets: [],
   datasetsRootPath: null,
@@ -1281,6 +1283,16 @@ elements.publishProjectButton.addEventListener('click', async () => {
 
   const remoteName = remoteNameForProject(state.projectHealthSnapshot, projectPath) ?? undefined
   const result = await runWorkflowCommand('push', { projectPath, remoteName }, elements.publishProjectButton)
+  if (isSourceRefusal('push', result)) {
+    // Learn from the refusal (wording only): a network problem or a stop never gets here.
+    try {
+      await api.setSourceAccepts(projectPath, 'no')
+      await refreshProjectHealth(projectPath)
+      setLastActionState(REFUSED_PUBLISH_MESSAGE, 'warning')
+    } catch {
+      // The failure details are already shown; the answer can still be given from the question.
+    }
+  }
   if (result?.ok && remoteName) {
     // datalad push does not send tags; send the versions this person marked (an up-to-date push is a no-op).
     const tagNames = await api.listOwnTags(projectPath)
@@ -2486,6 +2498,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     untrackRun(runId)
     state.pendingCommands.delete(commandName)
     setButtonBusy(button, false)
+    syncAttentionRowGating()
     updateSaveButtonState()
 
     if (state.pendingCommands.size === 0 && state.watchRefreshPending) {
@@ -4202,9 +4215,42 @@ function setStatusLine(text, tone) {
   elements.projectStatusLine.className = `status-line status-line-${tone}`
 }
 
-elements.attentionRows.addEventListener('click', (event) => {
+elements.attentionRows.addEventListener('click', async (event) => {
   const kind = event.target.closest('button[data-attention]')?.dataset.attention
-  attentionTargetButton(kind)?.click()
+  if (kind) {
+    attentionTargetButton(kind)?.click()
+    return
+  }
+
+  const projectPath = readProjectPath()
+  if (!projectPath) {
+    return
+  }
+  if (event.target.closest('button[data-add-remote]')) {
+    showTools('sync-data-section')
+    elements.addRemote.open = true
+    elements.addRemoteLocation.focus()
+    return
+  }
+
+  const answer = event.target.closest('button[data-source-answer]')?.dataset.sourceAnswer
+  const undo = event.target.closest('button[data-source-undo]')
+  if (!answer && !undo) {
+    return
+  }
+  try {
+    if (answer === 'unsure') {
+      state.sourceNotSure.add(projectPath)
+    } else if (answer === 'yes' || answer === 'no') {
+      await api.setSourceAccepts(projectPath, answer)
+    } else {
+      state.sourceNotSure.delete(projectPath)
+      await api.clearSourceAccepts(projectPath)
+    }
+  } catch (error) {
+    setLastActionState(`Could not remember your answer: ${String(error.message)}`, 'error')
+  }
+  await refreshProjectHealth(projectPath)
 })
 
 function attentionTargetButton(kind) {
@@ -4222,16 +4268,28 @@ function syncAttentionRowGating() {
     rowButton.disabled = button.disabled
     rowButton.title = button.title
   }
+  for (const rowButton of elements.attentionRows.querySelectorAll('button[data-source-answer], button[data-source-undo], button[data-add-remote]')) {
+    rowButton.disabled = state.pendingCommands.size > 0
+  }
 }
 
 function renderAttentionRows(health) {
   const rows = computeAttentionRows(health)
   elements.attentionRows.hidden = rows.length === 0
   elements.attentionRows.innerHTML = rows
-    .map(
-      (row) => `<div class="attention-row"><span>${escapeHtml(row.label)}</span>` +
-        `<button class="button button-ghost button-inline" type="button" data-attention="${row.kind}">${escapeHtml(row.action)}</button></div>`
-    )
+    .map((row) => {
+      const button = (attrs, text) => `<button class="button button-ghost button-inline" type="button" ${attrs}>${escapeHtml(text)}</button>`
+      if (row.kind === 'question') {
+        const answers = row.answers.map((answer) => button(`data-source-answer="${escapeHtml(answer.answer)}"`, answer.text)).join('')
+        return `<div class="attention-row attention-row-calm"><span>${escapeHtml(row.label)}</span>` +
+          `<span class="attention-actions" role="group" aria-label="${escapeHtml(row.groupLabel)}">${answers}</span></div>`
+      }
+      if (row.kind === 'readonly') {
+        return `<div class="attention-row attention-row-calm"><span>${escapeHtml(row.label)}</span>` +
+          `<span class="attention-actions">${button('data-add-remote', row.action)}${button('data-source-undo', row.undo)}</span></div>`
+      }
+      return `<div class="attention-row"><span>${escapeHtml(row.label)}</span>${button(`data-attention="${row.kind}"`, row.action)}</div>`
+    })
     .join('')
   syncAttentionRowGating()
 }
@@ -4244,8 +4302,8 @@ function renderProjectHealth(overrideMessage = null) {
     return
   }
 
-  const health = state.projectHealthSnapshot
-  applyRemoteGatedButtons(health)
+  const health = withSessionAnswer(state.projectHealthSnapshot, state.sourceNotSure)
+  applyRemoteGatedButtons(state.projectHealthSnapshot)
   renderAttentionRows(health)
 
   if (!health) {

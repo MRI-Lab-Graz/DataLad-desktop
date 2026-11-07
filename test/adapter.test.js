@@ -2283,11 +2283,12 @@ test('prepareFolderRemote stops at the first failing step', async () => {
 
 test('trackRemote points the current branch at the remote', async () => {
   const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
   runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'main\n' })
   runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
-  assert.equal(runner.calls.length, 2) // branch --show-current, then one --set-upstream-to
+  assert.equal(runner.calls.length, 4) // show-current, set-upstream, git check, then the yes answer is tried (unmocked here, ignored)
 })
 
 test('trackRemote also sets the upstream on the base branch of an adjusted branch, where DataLad looks for its push target', async () => {
@@ -2297,7 +2298,7 @@ test('trackRemote also sets the upstream on the base branch of an adjusted branc
   runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main', 'main'], {}) // the base branch (datalad push)
 
   assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
-  assert.equal(runner.calls.length, 3)
+  assert.equal(runner.calls.length, 4)
 })
 
 test('trackRemote reports a failed upstream on the base branch, naming the remote branch', async () => {
@@ -2953,4 +2954,61 @@ test('--reckless is built only in the dropReckless case', () => {
   assert.equal(hits.length, 1)
   const start = src.indexOf("case 'dropReckless'")
   assert.ok(start > 0 && hits[0].index > start && hits[0].index < src.indexOf('default:', start))
+})
+
+// "Does the place this project came from accept changes?" lives in the project's own git settings.
+// It only steers wording and buttons: Publish is always really tried, so a wrong value grants or blocks nothing.
+function sourceRunner(root, getOut) {
+  const runner = new FakeRunner()
+  runner.set('git', ['-C', root, 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
+  if (getOut) runner.set('git', ['-C', root, 'config', '--local', '--get', 'worldline.sourceAccepts'], getOut)
+  return runner
+}
+
+test('getSourceAccepts returns only exactly yes or no, from the local settings', async () => {
+  for (const [out, expected] of [['yes\n', 'yes'], ['no\n', 'no'], ['maybe\n', null], ['YES\n', null], ['yes; rm -rf /\n', null], ['', null]]) {
+    const runner = sourceRunner('/p', { stdout: out })
+    assert.equal(await new DataLadAdapter({ runner }).getSourceAccepts('/p'), expected, JSON.stringify(out))
+  }
+  assert.equal(await new DataLadAdapter({ runner: sourceRunner('/p', { exitCode: 1, failed: true }) }).getSourceAccepts('/p'), null)
+})
+
+test('setSourceAccepts writes only yes or no, to the local settings, without a shell', async () => {
+  const runner = sourceRunner('/p')
+  runner.set('git', ['-C', '/p', 'config', '--local', 'worldline.sourceAccepts', 'no'], {})
+  await new DataLadAdapter({ runner }).setSourceAccepts('/p', 'no')
+  assert.ok(runner.calls.some((c) => c.args.join(' ') === '-C /p config --local worldline.sourceAccepts no'))
+  for (const bad of ['maybe', '', null, undefined, 'yes\nno', '--unset']) {
+    await assert.rejects(new DataLadAdapter({ runner }).setSourceAccepts('/p', bad), /yes or no/)
+  }
+})
+
+test('clearSourceAccepts removes the local setting and tolerates it being absent', async () => {
+  const runner = sourceRunner('/p')
+  runner.set('git', ['-C', '/p', 'config', '--local', '--unset', 'worldline.sourceAccepts'], { exitCode: 5, failed: true })
+  assert.deepEqual(await new DataLadAdapter({ runner }).clearSourceAccepts('/p'), { ok: true })
+  assert.ok(runner.calls.some((c) => c.args.includes('--unset')))
+})
+
+test('the source-accepts setting needs a git project', async () => {
+  const runner = new FakeRunner() // is-inside-work-tree unmocked => fails
+  await assert.rejects(new DataLadAdapter({ runner }).setSourceAccepts('/p', 'yes'), /not a git repository/)
+})
+
+test('getProjectHealth carries sourceAccepts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dlad-sa-'))
+  const runner = sourceRunner(root, { stdout: 'no\n' })
+  runner.set('git', ['-C', root, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { stdout: 'origin/main\n' })
+  runner.set('git', ['-C', root, 'rev-list', '--left-right', '--count', 'origin/main...HEAD'], { stdout: '0\t3\n' })
+  const health = await new DataLadAdapter({ runner }).getProjectHealth(root)
+  assert.equal(health.sourceAccepts, 'no')
+})
+
+test('a remote the app added itself counts as one you can publish to', async () => {
+  const runner = sourceRunner('/p')
+  runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'main\n' })
+  runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
+  runner.set('git', ['-C', '/p', 'config', '--local', 'worldline.sourceAccepts', 'yes'], {})
+  await new DataLadAdapter({ runner }).trackRemote('/p', 'backup')
+  assert.ok(runner.calls.some((c) => c.args.join(' ') === '-C /p config --local worldline.sourceAccepts yes'))
 })

@@ -158,3 +158,22 @@ test('mapCommandError maps merge refusals to plain language', () => {
   assert.equal(mapCommandError('finishMerge', { stderr: 'fatal: Exiting because of an unresolved conflict.' }).code, 'MERGE_UNRESOLVED')
   assert.equal(mapCommandError('finishMerge', { stderr: 'error: Committing is not possible because you have unmerged files.' }).code, 'MERGE_UNRESOLVED')
 })
+
+test('mapCommandError maps the texts a refused push to GitHub really prints to AUTH_FAILED', () => {
+  for (const text of [
+    'remote: Permission to OpenNeuroDatasets/ds003612.git denied to someone.\nfatal: unable to access',
+    "fatal: unable to access 'https://github.com/x/y.git/': The requested URL returned error: 403",
+    'fatal: Authentication failed for https://github.com/x/y.git/',
+    "fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+  ]) {
+    assert.equal(mapCommandError('push', { stderr: text }).code, 'AUTH_FAILED', text)
+    assert.equal(mapCommandError('push', { stdout: text, stderr: '' }).code, 'AUTH_FAILED', `stdout: ${text}`)
+  }
+})
+
+test('mapCommandError does not call a timeout or a network failure an authentication failure', () => {
+  for (const text of ['fatal: unable to access: Operation timed out', 'ssh: Could not resolve hostname github.com', 'Connection timed out after 30000 milliseconds']) {
+    assert.notEqual(mapCommandError('push', { stderr: text }).code, 'AUTH_FAILED', text)
+  }
+  assert.notEqual(mapCommandError('push', { stderr: '', timedOut: true }).code, 'AUTH_FAILED')
+})

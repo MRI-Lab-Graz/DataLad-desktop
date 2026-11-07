@@ -167,3 +167,60 @@ test('attention rows: no sync rows without an upstream or with unknown ahead/beh
   assert.deepEqual(computeAttentionRows({ hasUpstream: false, ahead: 3, behind: 3 }), [])
   assert.deepEqual(computeAttentionRows({ hasUpstream: true, upstream: 'origin/main', ahead: null, behind: undefined }), [])
 })
+
+// Does the place the project came from accept changes? (null = not asked yet)
+const clean = { clean: true, totalChanged: 0 }
+const ahead = (extra) => ({ hasUpstream: true, upstream: 'origin/main', ahead: 103, behind: 0, annexSupported: false, ...extra })
+
+test('source answer yes, or nothing to publish, or no upstream: exactly the old status line and Publish row', () => {
+  for (const sourceAccepts of ['yes', undefined]) {
+    assert.deepEqual(computeStatusLine(clean, ahead({ sourceAccepts })), { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (103 to publish).' })
+    assert.deepEqual(computeAttentionRows(ahead({ sourceAccepts })), [{ kind: 'publish', count: 103, label: '103 saves not published', action: 'Publish' }])
+  }
+  for (const sourceAccepts of [null, 'no']) {
+    assert.equal(computeStatusLine(clean, ahead({ ahead: 0, sourceAccepts })).tone, 'good')
+    assert.deepEqual(computeAttentionRows(ahead({ ahead: 0, sourceAccepts })), [])
+    const none = { hasUpstream: false, ahead: null, sourceAccepts }
+    assert.equal(computeStatusLine(clean, none).tone, 'good')
+    assert.deepEqual(computeAttentionRows(none), [])
+  }
+})
+
+test('source answer unknown with unpublished saves: a neutral line and a question with three answers', () => {
+  const health = ahead({ sourceAccepts: null })
+  assert.deepEqual(computeStatusLine(clean, health), { tone: 'neutral', label: '103 saves are only on this computer.' })
+  assert.deepEqual(computeAttentionRows(health), [{
+    kind: 'question',
+    count: 103,
+    label: 'These 103 saves are only on this computer. Can you send changes back to the place this project came from?',
+    groupLabel: 'Can you send changes back?',
+    answers: [
+      { answer: 'yes', text: 'Yes' },
+      { answer: 'no', text: 'No, it is read-only' },
+      { answer: 'unsure', text: 'Not sure' }
+    ]
+  }])
+})
+
+test('source answer unknown, one save: singular wording', () => {
+  const health = ahead({ ahead: 1, sourceAccepts: null })
+  assert.equal(computeStatusLine(clean, health).label, '1 save is only on this computer.')
+  assert.match(computeAttentionRows(health)[0].label, /^This 1 save is only on this computer\./)
+})
+
+test('source answer no with unpublished saves: calm line, and Add a Remote instead of Publish', () => {
+  const health = ahead({ sourceAccepts: 'no' })
+  assert.deepEqual(computeStatusLine(clean, health), { tone: 'neutral', label: '103 saves only on this computer. The place this project came from does not accept changes.' })
+  assert.deepEqual(computeAttentionRows(health), [{
+    kind: 'readonly',
+    count: 103,
+    label: 'To share these saves, add your own remote (a USB drive, a network share or your own repository).',
+    action: 'Add a Remote',
+    undo: 'My answer was wrong'
+  }])
+  assert.equal(computeStatusLine(clean, ahead({ ahead: 1, sourceAccepts: 'no' })).label, '1 save only on this computer. The place this project came from does not accept changes.')
+})
+
+test('unsaved changes still come first in the status line', () => {
+  assert.equal(computeStatusLine({ clean: false, totalChanged: 2 }, ahead({ sourceAccepts: null })).tone, 'urgent')
+})
