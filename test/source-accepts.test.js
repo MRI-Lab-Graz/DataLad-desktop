@@ -48,3 +48,49 @@ test('Add a Remote stays reachable while the source does not accept changes', ()
   assert.equal(computeRemoteGating({ ...health, sourceAccepts: 'yes' }).addRemote.hidden, true)
   assert.equal(computeRemoteGating({ ...health, sourceAccepts: null }).addRemote.hidden, true)
 })
+
+import { settingState, settingAction } from '../src/gui/renderer/source-accepts.js'
+
+const goodHealth = { projectPath: '/p', hasUpstream: true, sourceAccepts: null }
+
+test('the setting is disabled with a separate plain reason for each case', () => {
+  const cases = [
+    [null, '', /^No project is open\.$/],
+    [goodHealth, '', /^No project is open\.$/],
+    [null, '/p', /^Checking this project…$/],
+    [goodHealth, '/other', /^Checking this project…$/],
+    [{ ...goodHealth, hasUpstream: false }, '/p', /^This project has no remote, so there is nothing to answer\.$/],
+    [{ ...goodHealth, hasUpstream: undefined }, '/p', /no remote/]
+  ]
+  for (const [health, path, reason] of cases) {
+    const s = settingState(health, path)
+    assert.equal(s.disabled, true)
+    assert.equal(s.value, 'ask')
+    assert.match(s.reason, reason)
+  }
+})
+
+test('the setting shows the stored answer and treats anything else as ask', () => {
+  assert.deepEqual(settingState({ ...goodHealth, sourceAccepts: 'yes' }, '/p'), { disabled: false, value: 'yes', reason: '' })
+  assert.equal(settingState({ ...goodHealth, sourceAccepts: 'no' }, '/p').value, 'no')
+  assert.equal(settingState(goodHealth, '/p').value, 'ask')
+  assert.equal(settingState({ ...goodHealth, sourceAccepts: 'maybe' }, '/p').value, 'ask')
+})
+
+test('the setting maps a choice to set or clear and rejects free text', () => {
+  assert.deepEqual(settingAction('ask'), { op: 'clear' })
+  assert.deepEqual(settingAction('yes'), { op: 'set', value: 'yes' })
+  assert.deepEqual(settingAction('no'), { op: 'set', value: 'no' })
+  for (const bad of ['', 'YES', 'x; rm', null, undefined, 3]) {
+    assert.equal(settingAction(bad), null)
+  }
+})
+
+import { reusePendingFetch } from '../src/gui/renderer/latest-wins.js'
+
+test('an explicit refresh after an action never reuses an older health fetch', () => {
+  assert.equal(reusePendingFetch({ pendingPath: '/p', projectPath: '/p', fresh: false }), true)
+  assert.equal(reusePendingFetch({ pendingPath: '/p', projectPath: '/p', fresh: true }), false)
+  assert.equal(reusePendingFetch({ pendingPath: '/q', projectPath: '/p', fresh: false }), false)
+  assert.equal(reusePendingFetch({ pendingPath: undefined, projectPath: '/p' }), false)
+})

@@ -9,3 +9,8 @@ export function createLatestWins() {
     return mine
   }
 }
+
+/** A pending fetch for the same path may be shared, unless the caller just changed something (fresh). */
+export function reusePendingFetch({ pendingPath, projectPath, fresh = false }) {
+  return !fresh && pendingPath !== undefined && pendingPath === projectPath
+}

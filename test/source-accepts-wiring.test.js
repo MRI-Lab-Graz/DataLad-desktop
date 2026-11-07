@@ -67,7 +67,7 @@ test('Publish learns "does not accept changes" only from a refused push, then sa
   const learn = body.search(/isSourceRefusal\('push', result\)[\s\S]{0,200}api\.setSourceAccepts\(projectPath, 'no'\)/)
   assert.ok(push !== -1 && learn > push)
   assert.match(body, /setLastActionState\(REFUSED_PUBLISH_MESSAGE, 'warning'\)/)
-  assert.match(body, /refreshProjectHealth\(projectPath\)/)
+  assert.match(body, /refreshProjectHealth\(projectPath, \{ fresh: true \}\)/)
 })
 
 test('the question and read-only buttons are disabled while a command runs; the group label is short', () => {
@@ -81,4 +81,53 @@ test('the question and read-only buttons are disabled while a command runs; the 
 test('the refusal message is hedged and does not contradict the credentials help', () => {
   const src = read('../src/gui/renderer/source-accepts.js')
   assert.match(src, /Publish was refused\. Either this place does not accept changes from you, or your login is not valid\. If this project came from a public source such as OpenNeuro, add your own remote to share these saves\./)
+})
+
+const html = read('../src/gui/renderer/index.html')
+
+test('Setup has a This project section with a labelled select and the plain-words options', () => {
+  assert.match(html, /<h3 class="setup-section-title">This project<\/h3>/)
+  assert.match(html, /<label[^>]*for="source-accepts-select"[^>]*>\s*Does the place this project came from accept your changes\?/)
+  const sel = html.match(/<select[^>]*id="source-accepts-select"[\s\S]*?<\/select>/)?.[0] ?? ''
+  assert.match(sel, /value="ask"[^>]*>Ask me when there are unpublished saves/)
+  assert.match(sel, /value="yes"[^>]*>Yes, I can publish there/)
+  assert.match(sel, /value="no"[^>]*>No, it is read-only for me/)
+  assert.match(html, /Publish is always really attempted/)
+})
+
+test('Setup writes the answer only through settingAction, then refreshes health', () => {
+  const at = app.indexOf("sourceAcceptsSelect.addEventListener('change'")
+  assert.ok(at !== -1)
+  const body = app.slice(at, app.indexOf('\n})\n', at))
+  assert.match(body, /settingAction\(/)
+  assert.match(body, /api\.setSourceAccepts\(projectPath, action\.value\)/)
+  assert.match(body, /api\.clearSourceAccepts\(projectPath\)/)
+  assert.ok(body.indexOf('refreshProjectHealth(projectPath, { fresh: true })') > body.indexOf('api.clearSourceAccepts'))
+  assert.match(body, /Saved for this project\./)
+  assert.match(body, /readProjectPath\(\)/)
+})
+
+test('the Setup control follows the health snapshot when Setup opens and when health renders', () => {
+  assert.match(app, /function renderSourceAcceptsSetting\(\)[\s\S]*settingState\(state\.projectHealthSnapshot/)
+  const render = app.slice(app.indexOf('function renderProjectHealth'), app.indexOf('function renderProjectHealth') + 600)
+  assert.match(render, /renderSourceAcceptsSetting\(\)/)
+  const open = app.slice(app.indexOf("elements.openSettingsButton.addEventListener('click'"), app.indexOf('async function refreshGitIdentity'))
+  assert.match(open, /renderSourceAcceptsSetting\(\)/)
+})
+
+test('actions that change the project refresh health with fresh: true', () => {
+  const add = app.slice(app.indexOf("} finally {\n    await refreshProjectHealth"), app.indexOf("} finally {\n    await refreshProjectHealth") + 120)
+  assert.match(add, /refreshProjectHealth\(projectPath, \{ fresh: true \}\)/)
+  const answers = handlerOf("button[data-source-answer]").length ? app.slice(app.indexOf("const answer = event.target.closest('button[data-source-answer]')"), app.indexOf('function renderSourceAcceptsSetting')) : ''
+  assert.match(answers, /refreshProjectHealth\(projectPath, \{ fresh: true \}\)/)
+  const setup = app.slice(app.indexOf("sourceAcceptsSelect.addEventListener('change'"), app.indexOf('function attentionTargetButton'))
+  assert.match(setup, /refreshProjectHealth\(projectPath, \{ fresh: true \}\)/)
+  assert.match(setup, /sourceAcceptsSelect\.disabled = true/)
+  assert.match(setup, /finally \{[\s\S]*sourceAcceptsSelect\.disabled = false/)
+  assert.match(app, /reusePendingFetch\(\{ pendingPath: state\.pendingHealthFetch\?\.path, projectPath, fresh \}\)/)
+})
+
+test('the Setup help says the Publish button and the Home view', () => {
+  assert.doesNotMatch(html, /Publish bar|Home bar/)
+  assert.match(html, /the Publish button works as usual/)
 })

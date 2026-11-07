@@ -28,3 +28,23 @@ export function isSourceRefusal(commandName, result) {
 
 export const REFUSED_PUBLISH_MESSAGE =
   'Publish was refused. Either this place does not accept changes from you, or your login is not valid. If this project came from a public source such as OpenNeuro, add your own remote to share these saves.'
+
+/**
+ * What the Setup control shows. Disabled (not hidden) unless the snapshot is for this project and it has a remote.
+ * @returns {{ disabled: boolean, value: 'ask'|'yes'|'no', reason: string }}
+ */
+export function settingState(health, projectPath) {
+  const off = (reason) => ({ disabled: true, value: 'ask', reason })
+  if (!projectPath) return off('No project is open.')
+  if (!health || health.projectPath !== projectPath) return off('Checking this project…')
+  if (!health.hasUpstream) return off('This project has no remote, so there is nothing to answer.')
+  const value = health.sourceAccepts === 'yes' || health.sourceAccepts === 'no' ? health.sourceAccepts : 'ask'
+  return { disabled: false, value, reason: '' }
+}
+
+/** Maps a control choice to the one allowed call; anything else (free text) is refused with null. */
+export function settingAction(choice) {
+  if (choice === 'ask') return { op: 'clear' }
+  if (choice === 'yes' || choice === 'no') return { op: 'set', value: choice }
+  return null
+}
