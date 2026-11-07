@@ -53,12 +53,20 @@ import { settingState, settingAction } from '../src/gui/renderer/source-accepts.
 
 const goodHealth = { projectPath: '/p', hasUpstream: true, sourceAccepts: null }
 
-test('the setting is disabled, with a plain reason, without a project, a remote or a matching snapshot', () => {
-  for (const [health, path] of [[null, '/p'], [goodHealth, ''], [{ ...goodHealth, hasUpstream: false }, '/p'], [{ ...goodHealth, hasUpstream: undefined }, '/p'], [goodHealth, '/other']]) {
+test('the setting is disabled with a separate plain reason for each case', () => {
+  const cases = [
+    [null, '', /^No project is open\.$/],
+    [goodHealth, '', /^No project is open\.$/],
+    [null, '/p', /^Checking this project…$/],
+    [goodHealth, '/other', /^Checking this project…$/],
+    [{ ...goodHealth, hasUpstream: false }, '/p', /^This project has no remote, so there is nothing to answer\.$/],
+    [{ ...goodHealth, hasUpstream: undefined }, '/p', /no remote/]
+  ]
+  for (const [health, path, reason] of cases) {
     const s = settingState(health, path)
     assert.equal(s.disabled, true)
     assert.equal(s.value, 'ask')
-    assert.match(s.reason, /Open a project that has a remote to change this\./)
+    assert.match(s.reason, reason)
   }
 })
 
@@ -76,4 +84,13 @@ test('the setting maps a choice to set or clear and rejects free text', () => {
   for (const bad of ['', 'YES', 'x; rm', null, undefined, 3]) {
     assert.equal(settingAction(bad), null)
   }
+})
+
+import { reusePendingFetch } from '../src/gui/renderer/latest-wins.js'
+
+test('an explicit refresh after an action never reuses an older health fetch', () => {
+  assert.equal(reusePendingFetch({ pendingPath: '/p', projectPath: '/p', fresh: false }), true)
+  assert.equal(reusePendingFetch({ pendingPath: '/p', projectPath: '/p', fresh: true }), false)
+  assert.equal(reusePendingFetch({ pendingPath: '/q', projectPath: '/p', fresh: false }), false)
+  assert.equal(reusePendingFetch({ pendingPath: undefined, projectPath: '/p' }), false)
 })

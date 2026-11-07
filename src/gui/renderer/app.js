@@ -30,7 +30,7 @@ import { friendlyIpcError, mergeBannerModel, mergeBlockReason, mergeCandidates, 
 import { DIFF_DEFAULT_LINES, DIFF_MAX_LINES, renderDiffHtml } from './diff-view.js'
 import { linesOf, defaultRunMessage, computeRunGating } from './run-dialog.js'
 import { identityMissingResult, shouldBlockForIdentity } from './identity-guard.js'
-import { createLatestWins } from './latest-wins.js'
+import { createLatestWins, reusePendingFetch } from './latest-wins.js'
 import {
   cancelledResult,
   createRunId,
@@ -1291,7 +1291,7 @@ elements.publishProjectButton.addEventListener('click', async () => {
     // Learn from the refusal (wording only): a network problem or a stop never gets here.
     try {
       await api.setSourceAccepts(projectPath, 'no')
-      await refreshProjectHealth(projectPath)
+      await refreshProjectHealth(projectPath, { fresh: true })
       setLastActionState(REFUSED_PUBLISH_MESSAGE, 'warning')
     } catch {
       // The failure details are already shown; the answer can still be given from the question.
@@ -1369,7 +1369,7 @@ elements.addRemoteConnect.addEventListener('click', async () => {
     elements.commandOutput.textContent = String(error.message)
     setLastActionState('Add a Remote failed.', 'error')
   } finally {
-    await refreshProjectHealth(projectPath)
+    await refreshProjectHealth(projectPath, { fresh: true })
   }
 })
 
@@ -1396,7 +1396,7 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
   }
 
   await runWorkflowCommand('disconnectRemote', { projectPath, remoteName }, elements.disconnectRemoteButton)
-  await refreshProjectHealth(projectPath)
+  await refreshProjectHealth(projectPath, { fresh: true })
 })
 
 elements.refreshBranchesButton.addEventListener('click', async () => {
@@ -1922,7 +1922,7 @@ function describeCount(files) {
 async function refreshAfterSequence(projectPath) {
   void refreshLastCommitMeta(projectPath)
   void refreshWorkingTreeStatus(projectPath)
-  void refreshProjectHealth(projectPath)
+  void refreshProjectHealth(projectPath, { fresh: true })
   await refreshFileBrowser(projectPath)
 }
 
@@ -2459,7 +2459,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
           void refreshBranchList(nextProjectPath)
         }
         void refreshWorkingTreeStatus(nextProjectPath)
-        void refreshProjectHealth(nextProjectPath)
+        void refreshProjectHealth(nextProjectPath, { fresh: true })
       }
 
       if (commandName === 'save') {
@@ -2476,7 +2476,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     if (!result.ok && nextProjectPath && !skipBackgroundRefresh) {
       void refreshWorkingTreeStatus(nextProjectPath)
       if (result.cancelled) {
-        void refreshProjectHealth(nextProjectPath)
+        void refreshProjectHealth(nextProjectPath, { fresh: true })
       }
     }
 
@@ -4138,7 +4138,8 @@ function setProjectDependentSectionsVisible(visible) {
   }
 }
 
-async function refreshProjectHealth(projectPath) {
+// fresh: true after a user action. The result of a fetch that started before the action must not be shown or shared.
+async function refreshProjectHealth(projectPath, { fresh = false } = {}) {
   if (!projectPath) {
     state.projectHealthSnapshot = null
     state.pendingHealthFetch = null
@@ -4152,7 +4153,7 @@ async function refreshProjectHealth(projectPath) {
   // once the active dataset path is confirmed. Each call spawns several
   // real git subprocesses, so reuse an in-flight fetch for the same path
   // instead of paying for that twice and making project opens feel slow.
-  if (state.pendingHealthFetch?.path === projectPath) {
+  if (reusePendingFetch({ pendingPath: state.pendingHealthFetch?.path, projectPath, fresh })) {
     return state.pendingHealthFetch.promise
   }
 
@@ -4185,13 +4186,14 @@ async function refreshProjectHealth(projectPath) {
       renderProjectHealth(`Could not read project health: ${String(error.message)}`)
       return null
     } finally {
-      if (state.pendingHealthFetch?.path === projectPath) {
+      if (state.pendingHealthFetch === entry) {
         state.pendingHealthFetch = null
       }
     }
   })()
 
-  state.pendingHealthFetch = { path: projectPath, promise }
+  const entry = { path: projectPath, promise }
+  state.pendingHealthFetch = entry
   return promise
 }
 
@@ -4254,7 +4256,7 @@ elements.attentionRows.addEventListener('click', async (event) => {
   } catch (error) {
     setLastActionState(`Could not remember your answer: ${String(error.message)}`, 'error')
   }
-  await refreshProjectHealth(projectPath)
+  await refreshProjectHealth(projectPath, { fresh: true })
 })
 
 function renderSourceAcceptsSetting() {
@@ -4273,6 +4275,7 @@ elements.sourceAcceptsSelect.addEventListener('change', async () => {
     renderSourceAcceptsSetting()
     return
   }
+  elements.sourceAcceptsSelect.disabled = true
   try {
     if (action.op === 'set') {
       await api.setSourceAccepts(projectPath, action.value)
@@ -4283,10 +4286,12 @@ elements.sourceAcceptsSelect.addEventListener('change', async () => {
     setLastActionState('Saved for this project.', 'success')
   } catch (error) {
     setLastActionState(`Could not save this setting: ${String(error.message)}`, 'error')
+  } finally {
+    // On success the new snapshot shows the new value; on error it still holds the old one, so the control snaps back.
+    await refreshProjectHealth(projectPath, { fresh: true })
+    elements.sourceAcceptsSelect.disabled = false
+    renderSourceAcceptsSetting()
   }
-  // On success the fresh snapshot shows the new value; on error it still holds the old one, so the control snaps back.
-  await refreshProjectHealth(projectPath)
-  renderSourceAcceptsSetting()
 })
 
 function attentionTargetButton(kind) {

@@ -34,9 +34,10 @@ export const REFUSED_PUBLISH_MESSAGE =
  * @returns {{ disabled: boolean, value: 'ask'|'yes'|'no', reason: string }}
  */
 export function settingState(health, projectPath) {
-  if (!projectPath || !health || health.projectPath !== projectPath || !health.hasUpstream) {
-    return { disabled: true, value: 'ask', reason: 'Open a project that has a remote to change this.' }
-  }
+  const off = (reason) => ({ disabled: true, value: 'ask', reason })
+  if (!projectPath) return off('No project is open.')
+  if (!health || health.projectPath !== projectPath) return off('Checking this project…')
+  if (!health.hasUpstream) return off('This project has no remote, so there is nothing to answer.')
   const value = health.sourceAccepts === 'yes' || health.sourceAccepts === 'no' ? health.sourceAccepts : 'ask'
   return { disabled: false, value, reason: '' }
 }
