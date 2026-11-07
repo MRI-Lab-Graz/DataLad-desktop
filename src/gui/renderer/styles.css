@@ -354,6 +354,12 @@ body {
   justify-content: flex-end;
 }
 
+.strip-state-column {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
 .card {
   position: relative;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 252, 248, 0.95));
@@ -1713,6 +1719,17 @@ select:disabled {
 .badge-bids {
   background: #ffe0e6;
   color: #99213d;
+}
+
+/* Later and more specific than .badge-bids, so a passing check shows green. */
+.badge-bids.badge-ok {
+  background: #e3f3e6;
+  color: #1f6b34;
+}
+
+.badge-bids.badge-bad {
+  background: #fbe3e3;
+  color: #9b1c1c;
 }
 
 .state-pill {
