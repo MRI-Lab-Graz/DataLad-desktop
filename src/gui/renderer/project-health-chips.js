@@ -38,10 +38,10 @@ export function computeSyncStatusChip(health) {
 
   const parts = []
   if (health.ahead > 0) {
-    parts.push(`${health.ahead} to publish`)
+    parts.push(`${health.ahead} not sent yet`)
   }
   if (health.behind > 0) {
-    parts.push(`${health.behind} to update`)
+    parts.push(`${health.behind} to get`)
   }
   return { tone: 'warning', label: parts.join(', ') }
 }

@@ -72,6 +72,12 @@ test('a folder, an online repository and a missing location read differently', (
   assert.equal(describeSync(snap({ remoteUrl: null })).remoteLine, 'backup')
 })
 
+test('file URLs: Windows drive and server paths read as folders, bad escapes never throw', () => {
+  assert.equal(describeSync(snap({ remoteUrl: 'file:///C:/Users/Ana/USB' })).remoteLine, 'backup — a folder at C:\\Users\\Ana\\USB')
+  assert.equal(describeSync(snap({ remoteUrl: 'file://server/share/x' })).remoteLine, 'backup — a folder at \\\\server\\share\\x')
+  assert.equal(describeSync(snap({ remoteUrl: 'file:///100%/x' })).remoteLine, 'backup — a folder at /100%/x')
+})
+
 test('credentials in a URL never reach the screen text', () => {
   const view = describeSync(snap({ upstream: 'origin/main', remoteUrl: 'https://me:s3cret@gitlab.com/me/study.git' }))
   assert.doesNotMatch(JSON.stringify(view), /s3cret|me:/)
@@ -100,6 +106,13 @@ test('markup: the Sync section has three blocks and keeps the button ids', () =>
   }
   assert.doesNotMatch(section, /Update \(remote\)|Publish \(remote\)/)
   assert.doesNotMatch(section, /called (Update|Publish)/, 'the old names live in describeSync only, so they appear once')
+})
+
+test('wiring: a failing card render cannot skip the button gating', () => {
+  const app = read('../src/gui/renderer/app.js')
+  const body = app.slice(app.indexOf('function applyRemoteGatedButtons'), app.indexOf('function setStatusLine'))
+  assert.ok(body.indexOf('computeRemoteGating(') < body.indexOf('renderSyncCards('))
+  assert.match(body, /try \{\s*renderSyncCards/)
 })
 
 test('wiring: app.js renders the cards from describeSync with textContent only', () => {

@@ -50,7 +50,7 @@
         </div>
         <h1>Worldline Desktop</h1>
         <p class="lede">
-          Lightweight, researcher-first workflow: open a project, save work, get data, update, and publish.
+          Lightweight, researcher-first workflow: open a project, save work, get data, get updates, and send my saves.
         </p>
       </header>
 
@@ -103,19 +103,19 @@
           <p id="source-accepts-project" class="lede-small"></p>
           <label for="source-accepts-select">Does the place this project came from accept your changes?</label>
           <select id="source-accepts-select" aria-describedby="source-accepts-help">
-            <option value="ask">Ask me when there are unpublished saves</option>
-            <option value="yes">Yes, I can publish there</option>
+            <option value="ask">Ask me when there are unsent saves</option>
+            <option value="yes">Yes, I can send my saves there</option>
             <option value="no">No, it is read-only for me</option>
           </select>
           <div id="source-accepts-help" class="lede-small">
             <p id="source-accepts-reason"></p>
             <p>
-              <strong>Yes:</strong> the Publish button works as usual. <strong>No:</strong> the app stops suggesting
-              Publish and offers Add a Remote instead. <strong>Ask me:</strong> the question appears in the Home view when
+              <strong>Yes:</strong> the Send my saves button works as usual. <strong>No:</strong> the app stops suggesting
+              Send my saves and offers Add a Remote instead. <strong>Ask me:</strong> the question appears in the Home view when
               it is needed.
             </p>
             <p>
-              The answer only changes wording and buttons. Publish is always really attempted when you click it. The
+              The answer only changes wording and buttons. Send my saves is always really attempted when you click it. The
               choice is kept in this project's own settings.
             </p>
           </div>
@@ -422,7 +422,7 @@
             <div class="section-head branch-head">
               <h3 id="command-output-title">Last Action Result</h3>
             </div>
-            <p class="lede-small">Shows what happened after Save, Get Data, Update, or Publish runs.</p>
+            <p class="lede-small">Shows what happened after Save, Get Data, Get updates, or Send my saves runs.</p>
             <div id="command-output" class="panel panel-muted" aria-live="polite">Run an action to see status and details.</div>
           </section>
           </details>
@@ -488,7 +488,7 @@
             <summary>Add a Remote</summary>
             <p class="lede-small">
               Keep a second copy on a USB drive or network share, or connect an empty repository you created on
-              GIN, GitHub or GitLab. The first Publish sends everything.
+              GIN, GitHub or GitLab. The first time, all your saves are sent.
             </p>
             <div class="field-row">
               <label><input type="radio" name="add-remote-mode" id="add-remote-mode-folder" value="folder" checked /> Folder</label>
@@ -505,7 +505,7 @@
               <span>Name</span>
               <input id="add-remote-name" type="text" value="backup" />
             </label>
-            <button id="add-remote-connect" class="button button-primary" type="button">Connect and Publish</button>
+            <button id="add-remote-connect" class="button button-primary" type="button">Connect and send my saves</button>
           </details>
         </section>
 
@@ -712,7 +712,7 @@
                 </div>
               </label>
               <p class="hint-inline">
-                Gives this save point a permanent name you can cite in a paper. Publish sends it to your remote.
+                Gives this save point a permanent name you can cite in a paper. Send my saves sends it to your remote.
               </p>
             </div>
 

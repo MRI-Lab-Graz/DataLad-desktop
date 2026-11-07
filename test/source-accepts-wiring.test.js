@@ -80,7 +80,7 @@ test('the question and read-only buttons are disabled while a command runs; the 
 
 test('the refusal message is hedged and does not contradict the credentials help', () => {
   const src = read('../src/gui/renderer/source-accepts.js')
-  assert.match(src, /Publish was refused\. Either this place does not accept changes from you, or your login is not valid\. If this project came from a public source such as OpenNeuro, add your own remote to share these saves\./)
+  assert.match(src, /Sending your saves was refused\. Either this place does not accept changes from you, or your login is not valid\. If this project came from a public source such as OpenNeuro, add your own remote to share these saves\./)
 })
 
 const html = read('../src/gui/renderer/index.html')
@@ -89,10 +89,10 @@ test('Setup has a This project section with a labelled select and the plain-word
   assert.match(html, /<h3 class="setup-section-title">This project<\/h3>/)
   assert.match(html, /<label[^>]*for="source-accepts-select"[^>]*>\s*Does the place this project came from accept your changes\?/)
   const sel = html.match(/<select[^>]*id="source-accepts-select"[\s\S]*?<\/select>/)?.[0] ?? ''
-  assert.match(sel, /value="ask"[^>]*>Ask me when there are unpublished saves/)
-  assert.match(sel, /value="yes"[^>]*>Yes, I can publish there/)
+  assert.match(sel, /value="ask"[^>]*>Ask me when there are unsent saves/)
+  assert.match(sel, /value="yes"[^>]*>Yes, I can send my saves there/)
   assert.match(sel, /value="no"[^>]*>No, it is read-only for me/)
-  assert.match(html, /Publish is always really attempted/)
+  assert.match(html, /Send my saves is always really attempted/)
 })
 
 test('Setup writes the answer only through settingAction, then refreshes health', () => {
@@ -127,7 +127,7 @@ test('actions that change the project refresh health with fresh: true', () => {
   assert.match(app, /reusePendingFetch\(\{ pendingPath: state\.pendingHealthFetch\?\.path, projectPath, fresh \}\)/)
 })
 
-test('the Setup help says the Publish button and the Home view', () => {
+test('the Setup help says the Send my saves button and the Home view', () => {
   assert.doesNotMatch(html, /Publish bar|Home bar/)
-  assert.match(html, /the Publish button works as usual/)
+  assert.match(html, /the Send my saves button works as usual/)
 })

@@ -1155,7 +1155,7 @@ function renderBidsNestSummary(nestResult, fromRemote) {
       ? 'Any that failed can be retried anytime via "Convert to subdataset" in the Files browser. '
       : '') +
     (fromRemote
-      ? "This project's local structure now differs from its origin remote, so a future Update " +
+      ? "This project's local structure now differs from its origin remote, so a future Get updates " +
         '(pulling from origin) may not merge cleanly — re-cloning is usually simpler than updating if ' +
         'you need newer data from the source. If this remote is read-only anyway (e.g. OpenNeuro), you ' +
         'can remove the link entirely with "Disconnect from Source" in Get Data & Remote Sync.'
@@ -1318,9 +1318,9 @@ elements.publishProjectButton.addEventListener('click', async () => {
         untrackRun(runId)
       }
       if (tags?.cancelled) {
-        setLastActionState('Published; sending versions was stopped.', 'warning')
+        setLastActionState('Sent your saves; sending versions was stopped.', 'warning')
       } else if (!tags?.ok) {
-        setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+        setLastActionState('Sent your saves, but versions could not be sent. Try Send my saves again.', 'warning')
       }
     }
   }
@@ -1334,7 +1334,7 @@ elements.addRemoteBrowse.addEventListener('click', async () => {
   }
 })
 
-// The remote is only useful once Publish worked and the branch tracks it: otherwise remove it again, so
+// The remote is only useful once Send my saves worked and the branch tracks it: otherwise remove it again, so
 // the name is free for a retry (Disconnect is disabled while no upstream exists).
 async function undoAddedRemote(projectPath, remoteName) {
   await api.runCommand('disconnectRemote', { projectPath, remoteName }, createRunId())
@@ -1371,7 +1371,7 @@ elements.addRemoteConnect.addEventListener('click', async () => {
       await undoAddedRemote(projectPath, remoteName)
       throw error
     }
-    setLastActionState(`Connected to ${remoteName} and published.`, 'success')
+    setLastActionState(`Connected to ${remoteName} and sent your saves.`, 'success')
   } catch (error) {
     elements.commandOutput.textContent = String(error.message)
     setLastActionState('Add a Remote failed.', 'error')
@@ -1395,7 +1395,7 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
     `Disconnect this project from "${remoteName}"?\n\n` +
       '- Removes the remote link entirely (the git remote and any DataLad sibling config for it).\n' +
       '- Everything already saved locally is unaffected.\n' +
-      `- Update and Publish against ${remoteName} will no longer be available afterward.\n\n` +
+      `- Get updates and Send my saves against ${remoteName} will no longer be available afterward.\n\n` +
       'Continue?'
   )
   if (!confirmed) {
@@ -1730,7 +1730,7 @@ elements.timeMachineMarkVersionButton.addEventListener('click', async () => {
   if (result?.ok) {
     elements.timeMachineActionOutput.innerHTML =
       `<p>Marked save <code>${escapeHtml(commitHash)}</code> as version <strong>${escapeHtml(tagName)}</strong>. ` +
-      'Publish to share it.</p>'
+      'Send my saves to share it.</p>'
     elements.timeMachineVersionName.value = ''
     await refreshTimeMachineHistory(projectPath)
   } else if (result) {
@@ -3789,7 +3789,7 @@ function buildWorkflowStatusLine(result) {
   }
 
   if (result.commandName === 'update') {
-    return 'Project update finished.'
+    return 'Updates received.'
   }
 
   if (result.commandName === 'push') {
@@ -3889,7 +3889,7 @@ function actionLabel(commandName) {
   }
 
   if (commandName === 'pushTags') {
-    return 'Publish Versions'
+    return 'Send Versions'
   }
 
   return 'Action'
@@ -4079,6 +4079,12 @@ elements.saveValidityRecheck.addEventListener('click', () => void refreshValidit
 
 function applyDatasetGatedButtons(classification) {
   state.currentProjectClassification = classification
+  // Wording only: it must never be able to skip the gating above.
+  try {
+    renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
+  } catch {
+    // keep the old text
+  }
   updateGetDataGating()
   updateSyncSectionVisibility()
 }
@@ -4215,7 +4221,6 @@ function renderSyncCards(health) {
 }
 
 function applyRemoteGatedButtons(health) {
-  renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
   const gating = computeRemoteGating(health)
 
   elements.updateProjectButton.disabled = gating.update.disabled
@@ -4230,6 +4235,12 @@ function applyRemoteGatedButtons(health) {
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
 
+  // Wording only: it must never be able to skip the gating above.
+  try {
+    renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
+  } catch {
+    // keep the old text
+  }
   updateGetDataGating()
   updateSyncSectionVisibility()
 }

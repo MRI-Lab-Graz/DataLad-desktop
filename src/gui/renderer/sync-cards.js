@@ -5,10 +5,23 @@ import { redactUrlCredentials } from '../../datalad/redact.js'
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 const known = (n) => Number.isFinite(n)
 
+// file:///C:/x -> C:\x, file://server/share -> \\server\share, file:///a/b -> /a/b. A bad %-escape keeps the raw text.
+function fileUrlPath(url) {
+  let path = url.replace(/^file:\/\//i, '')
+  try {
+    path = decodeURIComponent(path)
+  } catch {
+    // keep as is
+  }
+  if (/^\/[A-Za-z]:[/\\]/.test(path)) return path.slice(1).replace(/\//g, '\\')
+  if (!path.startsWith('/') && path) return `\\\\${path.replace(/\//g, '\\')}`
+  return path
+}
+
 // A URL scheme (other than file) or user@host:path means online; everything else is a folder.
 function describeLocation(url) {
   const shown = redactUrlCredentials(url)
-  if (/^file:\/\//i.test(shown)) return `a folder at ${decodeURIComponent(shown.replace(/^file:\/\//i, ''))}`
+  if (/^file:\/\//i.test(shown)) return `a folder at ${fileUrlPath(shown)}`
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(shown) || /^[^/\\\s]+@[^/\\\s]+:/.test(shown)) return `an online repository: ${shown}`
   return `a folder at ${shown}`
 }

@@ -63,7 +63,7 @@ test('Add a Remote creates an annex-ready folder copy and publishes the data to 
     document.getElementById('add-remote-location').value = path
     document.getElementById('add-remote-connect').click()
   }, backupPath)
-  await statusLine(/Connected to backup and published|failed/)
+  await statusLine(/Connected to backup and sent your saves|failed/)
 
   const whereis = sh('git', ['annex', 'whereis', 'data.bin'], projectPath)
   assert.match(whereis, /2 copies/, await commandOutput())

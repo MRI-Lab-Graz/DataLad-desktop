@@ -1,5 +1,5 @@
 // "Can you send changes back to the place this project came from?" Pure helpers for the page.
-// SECURITY: the answer only steers wording and which buttons show. Publish is always really attempted
+// SECURITY: the answer only steers wording and which buttons show. Send my saves is always really attempted
 // by the person's click, so nothing here grants or blocks anything.
 
 /**
@@ -27,7 +27,7 @@ export function isSourceRefusal(commandName, result) {
 }
 
 export const REFUSED_PUBLISH_MESSAGE =
-  'Publish was refused. Either this place does not accept changes from you, or your login is not valid. If this project came from a public source such as OpenNeuro, add your own remote to share these saves.'
+  'Sending your saves was refused. Either this place does not accept changes from you, or your login is not valid. If this project came from a public source such as OpenNeuro, add your own remote to share these saves.'
 
 /**
  * What the Setup control shows. Disabled (not hidden) unless the snapshot is for this project and it has a remote.

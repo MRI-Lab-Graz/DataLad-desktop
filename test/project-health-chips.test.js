@@ -45,15 +45,15 @@ test('sync status chip: good "in sync" when ahead and behind are both zero', () 
 test('sync status chip: warning with counts when ahead and/or behind', () => {
   assert.deepEqual(
     computeSyncStatusChip({ hasUpstream: true, upstream: 'origin/main', ahead: 2, behind: 0 }),
-    { tone: 'warning', label: '2 to publish' }
+    { tone: 'warning', label: '2 not sent yet' }
   )
   assert.deepEqual(
     computeSyncStatusChip({ hasUpstream: true, upstream: 'origin/main', ahead: 0, behind: 5 }),
-    { tone: 'warning', label: '5 to update' }
+    { tone: 'warning', label: '5 to get' }
   )
   assert.deepEqual(
     computeSyncStatusChip({ hasUpstream: true, upstream: 'origin/main', ahead: 1, behind: 2 }),
-    { tone: 'warning', label: '1 to publish, 2 to update' }
+    { tone: 'warning', label: '1 not sent yet, 2 to get' }
   )
 })
 
@@ -111,7 +111,7 @@ test('status line: warning when saved and data present but out of sync with remo
       { clean: true, totalChanged: 0 },
       { hasUpstream: true, upstream: 'origin/main', ahead: 2, behind: 0, annexSupported: false }
     ),
-    { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (2 to publish).' }
+    { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (2 not sent yet).' }
   )
 })
 
@@ -174,7 +174,7 @@ const ahead = (extra) => ({ hasUpstream: true, upstream: 'origin/main', ahead: 1
 
 test('source answer yes, or nothing to publish, or no upstream: exactly the old status line and Publish row', () => {
   for (const sourceAccepts of ['yes', undefined]) {
-    assert.deepEqual(computeStatusLine(clean, ahead({ sourceAccepts })), { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (103 to publish).' })
+    assert.deepEqual(computeStatusLine(clean, ahead({ sourceAccepts })), { tone: 'warning', label: '⚠️ Saved, but out of sync with remote (103 not sent yet).' })
     assert.deepEqual(computeAttentionRows(ahead({ sourceAccepts })), [{ kind: 'publish', count: 103, label: '103 saves not sent yet', action: 'Send my saves' }])
   }
   for (const sourceAccepts of [null, 'no']) {
