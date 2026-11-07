@@ -63,6 +63,17 @@ test('plain git project with a remote: Update/Publish enabled; Get all and Free 
   })
   assert.equal(remoteInfo.hidden, false)
   assert.match(remoteInfo.text, /Remote: origin\/main/)
+
+  const cards = await app.page.evaluate(() => ({
+    remote: document.getElementById('sync-remote-line').textContent,
+    status: document.getElementById('sync-status-line').textContent,
+    update: document.getElementById('update-project').textContent,
+    publish: document.getElementById('publish-project').textContent
+  }))
+  assert.match(cards.remote, /^origin — /)
+  assert.ok(cards.status.length > 0)
+  assert.equal(cards.update, 'Get updates')
+  assert.equal(cards.publish, 'Send my saves')
 })
 
 test('DataLad dataset with no remote and nothing missing: Get all and Free up space hidden, Update/Publish disabled', async () => {

@@ -109,8 +109,8 @@ export function computeRemoteGating(health) {
   const remoteName = health.upstream?.split('/')[0] ?? health.upstream
 
   return {
-    update: { disabled: false, title: `Pull and merge the latest changes from ${remoteLabel}.` },
-    publish: { disabled: false, title: `Push your saved changes to ${remoteLabel}.` },
+    update: { disabled: false, title: `Get the latest saves from ${remoteLabel}. Nothing of yours is changed.` },
+    publish: { disabled: false, title: `Send your saves to ${remoteLabel}.` },
     disconnect: {
       disabled: false,
       title:
@@ -142,7 +142,7 @@ export function computeSyncSectionVisible(classification, health) {
 }
 
 /**
- * Without a remote, Update and Publish are both disabled — two greyed buttons plus an info icon read as broken rather
+ * Without a remote, Get updates and Send my saves are both disabled — two greyed buttons plus an info icon read as broken rather
  * than "not needed yet". Swap the strip for one quiet line instead of hiding the section, so Add a Remote stays
  * discoverable. Null before health has resolved, to avoid a premature flash.
  *
@@ -155,7 +155,7 @@ export function computeSyncActionsQuietMessage(health) {
   }
   const { update, publish } = computeRemoteGating(health)
   return update.disabled && publish.disabled
-    ? 'Nothing to sync right now — use Add a Remote below to enable Update and Publish.'
+    ? 'Nothing to sync right now — use Add a Remote below to enable Get updates and Send my saves.'
     : null
 }
 

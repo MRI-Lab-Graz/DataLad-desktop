@@ -2233,3 +2233,24 @@ select:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Sync tab: stacked blocks. #remote-info stays in the page for its id but the remote line above says the same. */
+.sync-cards {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.sync-heading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.sync-remote-line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#remote-info {
+  display: none;
+}

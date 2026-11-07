@@ -16,3 +16,23 @@ test('redactUrlCredentials leaves ordinary remotes alone (ssh user names are not
     assert.equal(redactUrlCredentials(text), text)
   }
 })
+
+test('redactUrlCredentials: userinfo ends at the last @ before the path, so a password with @ does not leak', () => {
+  assert.equal(redactUrlCredentials('https://u:p@ss@h/x'), 'https://***@h/x')
+  assert.equal(redactUrlCredentials('https://u:p@ss@h'), 'https://***@h')
+  assert.equal(redactUrlCredentials('https://h/x@y'), 'https://h/x@y')
+})
+
+test('redactUrlCredentials hides secret-looking query values in http(s) URLs', () => {
+  assert.equal(redactUrlCredentials('https://h/x?token=abc&b=1'), 'https://h/x?token=***&b=1')
+  assert.equal(redactUrlCredentials('https://h/x?a=1&access_token=abc&password=p&key=k&secret=s&sig=z'), 'https://h/x?a=1&access_token=***&password=***&key=***&secret=***&sig=***')
+  assert.equal(redactUrlCredentials('https://h/x?page=2'), 'https://h/x?page=2')
+})
+
+test('redactUrlCredentials hides more secret names and fragments, but only exact names', () => {
+  const names = ['apikey', 'api_key', 'api-key', 'private_token', 'access-token', 'auth', 'authorization', 'credential', 'API_KEY']
+  for (const n of names) assert.equal(redactUrlCredentials(`https://h/x?a=1&${n}=zzz`), `https://h/x?a=1&${n}=***`, n)
+  assert.equal(redactUrlCredentials('https://h/x#access_token=zzz&state=1'), 'https://h/x#access_token=***&state=1')
+  assert.equal(redactUrlCredentials('https://h/x#token=zzz'), 'https://h/x#token=***')
+  for (const ok of ['https://h/x?tokenizer=a', 'https://h/x?key_id=7', 'https://h/x?author=me', 'https://h/x#section-2']) assert.equal(redactUrlCredentials(ok), ok)
+})

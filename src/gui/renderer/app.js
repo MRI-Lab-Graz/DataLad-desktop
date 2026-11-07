@@ -50,6 +50,7 @@ import {
 } from './project-health-chips.js'
 import { withSessionAnswer, isSourceRefusal, settingState, settingAction, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
 import { formatAge } from './relative-age.js'
+import { describeSync } from './sync-cards.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
 import { suggestMessage, vagueMessageNudge } from './message-suggestion.js'
@@ -220,6 +221,12 @@ const elements = {
   saveProjectButton: document.getElementById('save-project'),
   syncActionsStrip: document.getElementById('sync-actions-strip'),
   syncActionsQuiet: document.getElementById('sync-actions-quiet'),
+  syncRemoteLine: document.getElementById('sync-remote-line'),
+  syncStatusLine: document.getElementById('sync-status-line'),
+  syncUpdateHelp: document.getElementById('sync-update-help'),
+  syncUpdateCount: document.getElementById('sync-update-count'),
+  syncPublishHelp: document.getElementById('sync-publish-help'),
+  syncPublishCount: document.getElementById('sync-publish-count'),
   verifyDataButton: document.getElementById('verify-data'),
   verifyOutput: document.getElementById('verify-output'),
   updateProjectButton: document.getElementById('update-project'),
@@ -1148,7 +1155,7 @@ function renderBidsNestSummary(nestResult, fromRemote) {
       ? 'Any that failed can be retried anytime via "Convert to subdataset" in the Files browser. '
       : '') +
     (fromRemote
-      ? "This project's local structure now differs from its origin remote, so a future Update " +
+      ? "This project's local structure now differs from its origin remote, so a future Get updates " +
         '(pulling from origin) may not merge cleanly — re-cloning is usually simpler than updating if ' +
         'you need newer data from the source. If this remote is read-only anyway (e.g. OpenNeuro), you ' +
         'can remove the link entirely with "Disconnect from Source" in Get Data & Remote Sync.'
@@ -1311,9 +1318,9 @@ elements.publishProjectButton.addEventListener('click', async () => {
         untrackRun(runId)
       }
       if (tags?.cancelled) {
-        setLastActionState('Published; sending versions was stopped.', 'warning')
+        setLastActionState('Sent your saves; sending versions was stopped.', 'warning')
       } else if (!tags?.ok) {
-        setLastActionState('Published, but versions could not be sent. Try Publish again.', 'warning')
+        setLastActionState('Sent your saves, but versions could not be sent. Try Send my saves again.', 'warning')
       }
     }
   }
@@ -1327,7 +1334,7 @@ elements.addRemoteBrowse.addEventListener('click', async () => {
   }
 })
 
-// The remote is only useful once Publish worked and the branch tracks it: otherwise remove it again, so
+// The remote is only useful once Send my saves worked and the branch tracks it: otherwise remove it again, so
 // the name is free for a retry (Disconnect is disabled while no upstream exists).
 async function undoAddedRemote(projectPath, remoteName) {
   await api.runCommand('disconnectRemote', { projectPath, remoteName }, createRunId())
@@ -1364,7 +1371,7 @@ elements.addRemoteConnect.addEventListener('click', async () => {
       await undoAddedRemote(projectPath, remoteName)
       throw error
     }
-    setLastActionState(`Connected to ${remoteName} and published.`, 'success')
+    setLastActionState(`Connected to ${remoteName} and sent your saves.`, 'success')
   } catch (error) {
     elements.commandOutput.textContent = String(error.message)
     setLastActionState('Add a Remote failed.', 'error')
@@ -1388,7 +1395,7 @@ elements.disconnectRemoteButton.addEventListener('click', async () => {
     `Disconnect this project from "${remoteName}"?\n\n` +
       '- Removes the remote link entirely (the git remote and any DataLad sibling config for it).\n' +
       '- Everything already saved locally is unaffected.\n' +
-      `- Update and Publish against ${remoteName} will no longer be available afterward.\n\n` +
+      `- Get updates and Send my saves against ${remoteName} will no longer be available afterward.\n\n` +
       'Continue?'
   )
   if (!confirmed) {
@@ -1723,7 +1730,7 @@ elements.timeMachineMarkVersionButton.addEventListener('click', async () => {
   if (result?.ok) {
     elements.timeMachineActionOutput.innerHTML =
       `<p>Marked save <code>${escapeHtml(commitHash)}</code> as version <strong>${escapeHtml(tagName)}</strong>. ` +
-      'Publish to share it.</p>'
+      'Send my saves to share it.</p>'
     elements.timeMachineVersionName.value = ''
     await refreshTimeMachineHistory(projectPath)
   } else if (result) {
@@ -3782,11 +3789,11 @@ function buildWorkflowStatusLine(result) {
   }
 
   if (result.commandName === 'update') {
-    return 'Project update finished.'
+    return 'Updates received.'
   }
 
   if (result.commandName === 'push') {
-    return 'Publish finished.'
+    return 'Send my saves finished.'
   }
 
   if (result.commandName === 'createBranch') {
@@ -3834,11 +3841,11 @@ function actionLabel(commandName) {
   }
 
   if (commandName === 'update') {
-    return 'Update'
+    return 'Get updates'
   }
 
   if (commandName === 'push') {
-    return 'Publish'
+    return 'Send my saves'
   }
 
   if (commandName === 'createBranch') {
@@ -3882,7 +3889,7 @@ function actionLabel(commandName) {
   }
 
   if (commandName === 'pushTags') {
-    return 'Publish Versions'
+    return 'Send Versions'
   }
 
   return 'Action'
@@ -4197,6 +4204,16 @@ async function refreshProjectHealth(projectPath, { fresh = false } = {}) {
   return promise
 }
 
+function renderSyncCards(health) {
+  const view = describeSync(health)
+  elements.syncRemoteLine.textContent = view.remoteLine
+  elements.syncStatusLine.textContent = view.statusLine
+  elements.syncUpdateHelp.textContent = view.update.help
+  elements.syncUpdateCount.textContent = view.update.countText
+  elements.syncPublishHelp.textContent = view.publish.help
+  elements.syncPublishCount.textContent = view.publish.countText
+}
+
 function applyRemoteGatedButtons(health) {
   const gating = computeRemoteGating(health)
 
@@ -4212,6 +4229,12 @@ function applyRemoteGatedButtons(health) {
   elements.remoteInfo.hidden = gating.remoteInfo.hidden
   elements.remoteInfo.textContent = gating.remoteInfo.text
 
+  // Wording only: it must never be able to skip the gating above.
+  try {
+    renderSyncCards(withSessionAnswer(health, state.sourceNotSure))
+  } catch {
+    // keep the old text
+  }
   updateGetDataGating()
   updateSyncSectionVisibility()
 }
