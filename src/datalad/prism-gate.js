@@ -55,7 +55,10 @@ export function interpretReport(stdout) {
   const errors = issues.filter((issue) => issue?.severity === 'ERROR')
   const total = Math.max(report.summary?.errors ?? 0, errors.length)
   if (report.valid && total === 0) return { verdict: 'valid' }
-  return { verdict: 'invalid', errorCount: total, errors: errors.slice(0, MAX_LISTED_ERRORS).map(oneLine) }
+  // BIDS_ errors first (they block other tools and must not be cut off behind many PRISM ones); sort is stable.
+  const isBids = (issue) => String(issue.code ?? '').startsWith('BIDS_')
+  const ordered = [...errors.filter(isBids), ...errors.filter((issue) => !isBids(issue))]
+  return { verdict: 'invalid', errorCount: total, errors: ordered.slice(0, MAX_LISTED_ERRORS).map(oneLine) }
 }
 
 const blocked = (code, title, message, extra = {}) => ({

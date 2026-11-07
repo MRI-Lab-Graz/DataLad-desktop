@@ -4035,7 +4035,9 @@ function renderSaveValidity() {
   elements.saveValidityText.classList.toggle('save-validity-ok', out.tone === 'ok')
   elements.saveValidityText.classList.toggle('save-validity-bad', out.tone === 'bad')
   const problems = check.verdict === 'invalid' && Array.isArray(check.errors) ? check.errors.filter((e) => typeof e === 'string') : []
-  elements.saveValidityProblems.replaceChildren(...problems.map((line) => Object.assign(document.createElement('li'), { textContent: line })))
+  const lines = problems.slice()
+  if (problems.length && check.errorCount > problems.length) lines.push(`... and ${check.errorCount - problems.length} more problems not shown here`)
+  elements.saveValidityProblems.replaceChildren(...lines.map((line) => Object.assign(document.createElement('li'), { textContent: line })))
   elements.saveValidityRecheck.disabled = check.verdict === 'checking'
 }
 
