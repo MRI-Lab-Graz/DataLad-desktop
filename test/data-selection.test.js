@@ -237,3 +237,76 @@ test('toggleValue adds and removes a tick without touching other groups, and sur
     assert.deepEqual([...Object.getOwnPropertyDescriptor(t, key).value], ['x'], key)
   }
 })
+
+// Faceted narrowing: a value is offered only if some file fits the ticks in all OTHER groups.
+const narrowFiles = [
+  f('sub-01/anat/sub-01_T1w.nii.gz'),
+  f('sub-01/anat/sub-01_T2w.nii.gz'),
+  f('sub-01/func/sub-01_task-rest_run-1_bold.nii.gz'),
+  f('sub-01/func/sub-01_task-nback_run-2_bold.nii.gz'),
+  f('sub-02/anat/sub-02_T1w.nii.gz'),
+  f('sub-02/func/sub-02_task-rest_run-1_bold.nii.gz'),
+  f('sub-02/fmap/sub-02_dir-AP_epi.nii.gz')
+]
+const vals = (groups, key) => groups.find((g) => g.key === key)?.values
+const tick = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, new Set(v)]))
+
+test('buildFilterGroups: no selection or empty ticks equals the old output', () => {
+  const old = buildFilterGroups(narrowFiles)
+  assert.deepEqual(buildFilterGroups(narrowFiles, {}), old)
+  assert.deepEqual(buildFilterGroups(narrowFiles, { modality: new Set() }), old)
+})
+
+test('buildFilterGroups: ticking anat removes func-only tasks and runs', () => {
+  const g = buildFilterGroups(narrowFiles, tick({ modality: ['anat'] }))
+  assert.equal(vals(g, 'task'), undefined)
+  assert.equal(vals(g, 'run'), undefined)
+  assert.equal(vals(g, 'dir'), undefined)
+  assert.deepEqual(vals(g, 'suffix'), ['T1w', 'T2w'])
+  assert.deepEqual(vals(g, 'modality'), ['anat', 'fmap', 'func']) // ticks in a group do not narrow that group
+})
+
+test('buildFilterGroups: a subject never offers types it lacks', () => {
+  const g = buildFilterGroups(narrowFiles, tick({ sub: ['02'] }))
+  assert.ok(!vals(g, 'suffix').includes('T2w'))
+  assert.deepEqual(vals(g, 'suffix'), ['bold', 'epi', 'T1w'])
+})
+
+test('buildFilterGroups: a ticked value stays visible when it matches nothing, and its group is never hidden', () => {
+  const g = buildFilterGroups(narrowFiles, tick({ sub: ['02'], suffix: ['T2w'] }))
+  assert.ok(vals(g, 'suffix').includes('T2w'))
+  assert.deepEqual(vals(g, 'sub'), ['01', '02']) // sub is offered by files that fit suffix T2w only: sub-01, plus the tick
+  const only = buildFilterGroups(narrowFiles, tick({ task: ['rest'], run: ['9'] }))
+  assert.deepEqual(vals(only, 'run'), ['1', '9'])
+})
+
+test('buildFilterGroups: a group left with one value is hidden unless ticked', () => {
+  const g = buildFilterGroups(narrowFiles, tick({ suffix: ['bold'] }))
+  assert.equal(vals(g, 'modality'), undefined) // only func fits
+  assert.deepEqual(vals(g, 'task'), ['nback', 'rest'])
+  const t = buildFilterGroups(narrowFiles, tick({ suffix: ['bold'], modality: ['func'] }))
+  assert.deepEqual(vals(t, 'modality'), ['func'])
+})
+
+test('buildFilterGroups: narrowing handles prototype-named keys', () => {
+  const fs = [
+    f('sub-01/func/sub-01_constructor-a_toString-x_bold.nii'),
+    f('sub-02/func/sub-02_constructor-b_toString-y_bold.nii'),
+    f('sub-03/anat/sub-03_T1w.nii')
+  ]
+  const g = buildFilterGroups(fs, { constructor: new Set(['a']) })
+  assert.deepEqual(vals(g, 'constructor'), ['a', 'b'])
+  assert.equal(vals(g, 'toString'), undefined) // only x fits constructor-a: one value, hidden
+  const t = buildFilterGroups(fs, { toString: new Set(['x']) })
+  assert.deepEqual(vals(t, 'toString'), ['x', 'y'])
+  assert.equal(vals(t, 'sub'), undefined)
+})
+
+test('50000 files with ticked groups still build groups in under 1000 ms', () => {
+  const many = Array.from({ length: 50000 }, (_, i) => f(`sub-${i % 500}/ses-${i % 3}/func/sub-${i % 500}_ses-${i % 3}_task-t${i % 5}_run-${i % 7}_bold.nii.gz`))
+  const sel = tick({ sub: ['1', '2', '3'], ses: ['1'], task: ['t1'], suffix: ['bold'], ext: ['nii.gz'] })
+  const t0 = performance.now()
+  const g = buildFilterGroups(many, sel)
+  assert.ok(performance.now() - t0 < 1000)
+  assert.ok(g.length > 0)
+})

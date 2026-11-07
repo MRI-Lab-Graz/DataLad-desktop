@@ -102,3 +102,17 @@ test('an entity key named like an Object method does not break the panel', () =>
   const g = [{ key: 'constructor', title: 'X', hint: '', values: ['a', 'b'] }]
   assert.match(render({ groups: g, selection: {} }), /data-group="constructor"/)
 })
+
+test('renderDataPanel says so when the ticks fit no file, and only then', () => {
+  const none = { sub: new Set(['02']), suffix: new Set(['T2w']) }
+  const msg = /<p role="status">No file fits these choices\. Untick something to see more\.<\/p>/
+  const empty = { count: 0, bytes: 0, unknownSize: 0 }
+  assert.match(render({ selection: none, summary: empty, fitCount: 0 }), msg)
+  assert.doesNotMatch(render({ selection: {}, summary: empty, fitCount: 0 }), /No file fits/)
+  assert.doesNotMatch(render({ selection: { sub: new Set() }, summary: empty, fitCount: 0 }), /No file fits/)
+  // ticks fit files that are all downloaded already: nothing to download, but files do fit
+  assert.doesNotMatch(render({ selection: none, summary: empty, fitCount: 3 }), /No file fits/)
+  assert.doesNotMatch(render({ selection: none, summary: some, fitCount: 3 }), /No file fits/)
+  assert.doesNotMatch(render({ selection: none, summary: empty }), /No file fits/)
+  assert.doesNotMatch(render({ selection: none, summary: empty, fitCount: 0, fileCount: 0 }), /No file fits/)
+})
