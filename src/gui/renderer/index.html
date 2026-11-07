@@ -99,6 +99,29 @@
         </div>
 
         <div class="setup-section">
+          <h3 class="setup-section-title">This project</h3>
+          <p id="source-accepts-project" class="lede-small"></p>
+          <label for="source-accepts-select">Does the place this project came from accept your changes?</label>
+          <select id="source-accepts-select" aria-describedby="source-accepts-help">
+            <option value="ask">Ask me when there are unpublished saves</option>
+            <option value="yes">Yes, I can publish there</option>
+            <option value="no">No, it is read-only for me</option>
+          </select>
+          <div id="source-accepts-help" class="lede-small">
+            <p id="source-accepts-reason"></p>
+            <p>
+              <strong>Yes:</strong> the Publish bar works as usual. <strong>No:</strong> the app stops suggesting
+              Publish and offers Add a Remote instead. <strong>Ask me:</strong> the question appears on the Home bar when
+              it is needed.
+            </p>
+            <p>
+              The answer only changes wording and buttons. Publish is always really attempted when you click it. The
+              choice is kept in this project's own settings.
+            </p>
+          </div>
+        </div>
+
+        <div class="setup-section">
           <h3 class="setup-section-title">Your Name and Email</h3>
           <p class="lede-small">Saves are labelled with who made them.</p>
           <p id="identity-summary" class="lede-small"></p>

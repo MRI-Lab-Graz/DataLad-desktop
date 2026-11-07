@@ -48,7 +48,7 @@ import {
   computeStatusLine,
   computeAttentionRows
 } from './project-health-chips.js'
-import { withSessionAnswer, isSourceRefusal, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
+import { withSessionAnswer, isSourceRefusal, settingState, settingAction, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
@@ -157,6 +157,9 @@ const elements = {
   saveValidityRecheck: document.getElementById('save-validity-recheck'),
   messageNudge: document.getElementById('message-nudge'),
   saveTipsToggle: document.getElementById('save-tips-toggle'),
+  sourceAcceptsSelect: document.getElementById('source-accepts-select'),
+  sourceAcceptsProject: document.getElementById('source-accepts-project'),
+  sourceAcceptsReason: document.getElementById('source-accepts-reason'),
   currentProjectPrismBadge: document.getElementById('current-project-prism-badge'),
   switchProjectButton: document.getElementById('switch-project'),
   onboardingGroup: document.getElementById('onboarding-group'),
@@ -689,6 +692,7 @@ elements.createSourceRemoteRadio.addEventListener('change', updateCreateProjectS
 
 elements.openSettingsButton.addEventListener('click', () => {
   elements.settingsCard.hidden = false
+  renderSourceAcceptsSetting()
   void refreshGitIdentity()
 })
 
@@ -4253,6 +4257,38 @@ elements.attentionRows.addEventListener('click', async (event) => {
   await refreshProjectHealth(projectPath)
 })
 
+function renderSourceAcceptsSetting() {
+  const projectPath = elements.commandProjectPath.value.trim()
+  const setting = settingState(state.projectHealthSnapshot, projectPath)
+  elements.sourceAcceptsSelect.disabled = setting.disabled
+  elements.sourceAcceptsSelect.value = setting.value
+  elements.sourceAcceptsReason.textContent = setting.reason
+  elements.sourceAcceptsProject.textContent = projectPath ? `Project: ${projectPath}` : 'No project is open.'
+}
+
+elements.sourceAcceptsSelect.addEventListener('change', async () => {
+  const projectPath = readProjectPath()
+  const action = settingAction(elements.sourceAcceptsSelect.value)
+  if (!projectPath || !action) {
+    renderSourceAcceptsSetting()
+    return
+  }
+  try {
+    if (action.op === 'set') {
+      await api.setSourceAccepts(projectPath, action.value)
+    } else {
+      await api.clearSourceAccepts(projectPath)
+    }
+    state.sourceNotSure.delete(projectPath)
+    setLastActionState('Saved for this project.', 'success')
+  } catch (error) {
+    setLastActionState(`Could not save this setting: ${String(error.message)}`, 'error')
+  }
+  // On success the fresh snapshot shows the new value; on error it still holds the old one, so the control snaps back.
+  await refreshProjectHealth(projectPath)
+  renderSourceAcceptsSetting()
+})
+
 function attentionTargetButton(kind) {
   return {
     missing: elements.filesGetAllButton,
@@ -4295,6 +4331,7 @@ function renderAttentionRows(health) {
 }
 
 function renderProjectHealth(overrideMessage = null) {
+  renderSourceAcceptsSetting()
   if (overrideMessage) {
     elements.projectHealthOutput.textContent = overrideMessage
     setStatusLine(overrideMessage, 'neutral')

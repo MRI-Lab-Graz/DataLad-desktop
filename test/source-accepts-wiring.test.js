@@ -82,3 +82,35 @@ test('the refusal message is hedged and does not contradict the credentials help
   const src = read('../src/gui/renderer/source-accepts.js')
   assert.match(src, /Publish was refused\. Either this place does not accept changes from you, or your login is not valid\. If this project came from a public source such as OpenNeuro, add your own remote to share these saves\./)
 })
+
+const html = read('../src/gui/renderer/index.html')
+
+test('Setup has a This project section with a labelled select and the plain-words options', () => {
+  assert.match(html, /<h3 class="setup-section-title">This project<\/h3>/)
+  assert.match(html, /<label[^>]*for="source-accepts-select"[^>]*>\s*Does the place this project came from accept your changes\?/)
+  const sel = html.match(/<select[^>]*id="source-accepts-select"[\s\S]*?<\/select>/)?.[0] ?? ''
+  assert.match(sel, /value="ask"[^>]*>Ask me when there are unpublished saves/)
+  assert.match(sel, /value="yes"[^>]*>Yes, I can publish there/)
+  assert.match(sel, /value="no"[^>]*>No, it is read-only for me/)
+  assert.match(html, /Publish is always really attempted/)
+})
+
+test('Setup writes the answer only through settingAction, then refreshes health', () => {
+  const at = app.indexOf("sourceAcceptsSelect.addEventListener('change'")
+  assert.ok(at !== -1)
+  const body = app.slice(at, app.indexOf('\n})\n', at))
+  assert.match(body, /settingAction\(/)
+  assert.match(body, /api\.setSourceAccepts\(projectPath, action\.value\)/)
+  assert.match(body, /api\.clearSourceAccepts\(projectPath\)/)
+  assert.ok(body.indexOf('refreshProjectHealth(projectPath)') > body.indexOf('api.clearSourceAccepts'))
+  assert.match(body, /Saved for this project\./)
+  assert.match(body, /readProjectPath\(\)/)
+})
+
+test('the Setup control follows the health snapshot when Setup opens and when health renders', () => {
+  assert.match(app, /function renderSourceAcceptsSetting\(\)[\s\S]*settingState\(state\.projectHealthSnapshot/)
+  const render = app.slice(app.indexOf('function renderProjectHealth'), app.indexOf('function renderProjectHealth') + 600)
+  assert.match(render, /renderSourceAcceptsSetting\(\)/)
+  const open = app.slice(app.indexOf("elements.openSettingsButton.addEventListener('click'"), app.indexOf('async function refreshGitIdentity'))
+  assert.match(open, /renderSourceAcceptsSetting\(\)/)
+})

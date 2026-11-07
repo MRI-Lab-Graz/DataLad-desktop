@@ -48,3 +48,32 @@ test('Add a Remote stays reachable while the source does not accept changes', ()
   assert.equal(computeRemoteGating({ ...health, sourceAccepts: 'yes' }).addRemote.hidden, true)
   assert.equal(computeRemoteGating({ ...health, sourceAccepts: null }).addRemote.hidden, true)
 })
+
+import { settingState, settingAction } from '../src/gui/renderer/source-accepts.js'
+
+const goodHealth = { projectPath: '/p', hasUpstream: true, sourceAccepts: null }
+
+test('the setting is disabled, with a plain reason, without a project, a remote or a matching snapshot', () => {
+  for (const [health, path] of [[null, '/p'], [goodHealth, ''], [{ ...goodHealth, hasUpstream: false }, '/p'], [{ ...goodHealth, hasUpstream: undefined }, '/p'], [goodHealth, '/other']]) {
+    const s = settingState(health, path)
+    assert.equal(s.disabled, true)
+    assert.equal(s.value, 'ask')
+    assert.match(s.reason, /Open a project that has a remote to change this\./)
+  }
+})
+
+test('the setting shows the stored answer and treats anything else as ask', () => {
+  assert.deepEqual(settingState({ ...goodHealth, sourceAccepts: 'yes' }, '/p'), { disabled: false, value: 'yes', reason: '' })
+  assert.equal(settingState({ ...goodHealth, sourceAccepts: 'no' }, '/p').value, 'no')
+  assert.equal(settingState(goodHealth, '/p').value, 'ask')
+  assert.equal(settingState({ ...goodHealth, sourceAccepts: 'maybe' }, '/p').value, 'ask')
+})
+
+test('the setting maps a choice to set or clear and rejects free text', () => {
+  assert.deepEqual(settingAction('ask'), { op: 'clear' })
+  assert.deepEqual(settingAction('yes'), { op: 'set', value: 'yes' })
+  assert.deepEqual(settingAction('no'), { op: 'set', value: 'no' })
+  for (const bad of ['', 'YES', 'x; rm', null, undefined, 3]) {
+    assert.equal(settingAction(bad), null)
+  }
+})
