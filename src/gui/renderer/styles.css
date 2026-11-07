@@ -1715,6 +1715,17 @@ select:disabled {
   color: #99213d;
 }
 
+/* Later and more specific than .badge-bids, so a passing check shows green. */
+.badge-bids.badge-ok {
+  background: #e3f3e6;
+  color: #1f6b34;
+}
+
+.badge-bids.badge-bad {
+  background: #fbe3e3;
+  color: #9b1c1c;
+}
+
 .state-pill {
   display: inline-block;
   border-radius: 999px;
