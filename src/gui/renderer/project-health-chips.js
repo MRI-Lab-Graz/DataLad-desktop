@@ -135,7 +135,7 @@ export function computeAttentionRows(health) {
       kind: 'question',
       count: onlyHere,
       label: `${onlyHere === 1 ? 'This' : 'These'} ${plural(onlyHere, 'save is', 'saves are')} only on this computer. ${question}`,
-      groupLabel: question,
+      groupLabel: 'Can you send changes back?',
       answers: [
         { answer: 'yes', text: 'Yes' },
         { answer: 'no', text: 'No, it is read-only' },

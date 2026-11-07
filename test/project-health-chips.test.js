@@ -193,7 +193,7 @@ test('source answer unknown with unpublished saves: a neutral line and a questio
     kind: 'question',
     count: 103,
     label: 'These 103 saves are only on this computer. Can you send changes back to the place this project came from?',
-    groupLabel: 'Can you send changes back to the place this project came from?',
+    groupLabel: 'Can you send changes back?',
     answers: [
       { answer: 'yes', text: 'Yes' },
       { answer: 'no', text: 'No, it is read-only' },

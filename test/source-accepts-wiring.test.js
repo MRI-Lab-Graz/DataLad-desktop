@@ -64,8 +64,21 @@ test('the status line and rows are built from the health with the session answer
 test('Publish learns "does not accept changes" only from a refused push, then says so plainly', () => {
   const body = handlerOf('elements.publishProjectButton.addEventListener')
   const push = body.indexOf("runWorkflowCommand('push'")
-  const learn = body.search(/isPushRefusal\('push', result\)[\s\S]{0,200}api\.setSourceAccepts\(projectPath, 'no'\)/)
+  const learn = body.search(/isSourceRefusal\('push', result\)[\s\S]{0,200}api\.setSourceAccepts\(projectPath, 'no'\)/)
   assert.ok(push !== -1 && learn > push)
   assert.match(body, /setLastActionState\(REFUSED_PUBLISH_MESSAGE, 'warning'\)/)
   assert.match(body, /refreshProjectHealth\(projectPath\)/)
+})
+
+test('the question and read-only buttons are disabled while a command runs; the group label is short', () => {
+  const gating = app.slice(app.indexOf('function syncAttentionRowGating'), app.indexOf('function renderAttentionRows'))
+  assert.match(gating, /button\[data-source-answer\], button\[data-source-undo\], button\[data-add-remote\]/)
+  assert.match(gating, /state\.pendingCommands\.size > 0/)
+  const chips = read('../src/gui/renderer/project-health-chips.js')
+  assert.match(chips, /groupLabel: 'Can you send changes back\?'/)
+})
+
+test('the refusal message is hedged and does not contradict the credentials help', () => {
+  const src = read('../src/gui/renderer/source-accepts.js')
+  assert.match(src, /Publish was refused\. Either this place does not accept changes from you, or your login is not valid\. If this project came from a public source such as OpenNeuro, add your own remote to share these saves\./)
 })

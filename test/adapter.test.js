@@ -2283,11 +2283,12 @@ test('prepareFolderRemote stops at the first failing step', async () => {
 
 test('trackRemote points the current branch at the remote', async () => {
   const runner = new FakeRunner()
+  runner.set('git', ['-C', '/p', 'rev-parse', '--is-inside-work-tree'], { stdout: 'true\n' })
   runner.set('git', ['-C', '/p', 'branch', '--show-current'], { stdout: 'main\n' })
   runner.set('git', ['-C', '/p', 'branch', '--set-upstream-to=backup/main'], {})
 
   assert.deepEqual(await new DataLadAdapter({ runner }).trackRemote('/p', 'backup'), { ok: true, upstream: 'backup/main' })
-  assert.equal(runner.calls.length, 3) // branch --show-current, one --set-upstream-to, then the yes answer is tried (unmocked here, ignored)
+  assert.equal(runner.calls.length, 4) // show-current, set-upstream, git check, then the yes answer is tried (unmocked here, ignored)
 })
 
 test('trackRemote also sets the upstream on the base branch of an adjusted branch, where DataLad looks for its push target', async () => {

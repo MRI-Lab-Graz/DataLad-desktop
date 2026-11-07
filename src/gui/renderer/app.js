@@ -48,7 +48,7 @@ import {
   computeStatusLine,
   computeAttentionRows
 } from './project-health-chips.js'
-import { withSessionAnswer, isPushRefusal, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
+import { withSessionAnswer, isSourceRefusal, REFUSED_PUBLISH_MESSAGE } from './source-accepts.js'
 import { formatAge } from './relative-age.js'
 import { nextTabIndex } from './tab-keys.js'
 import { trapFocus } from './dialog-focus.js'
@@ -1283,7 +1283,7 @@ elements.publishProjectButton.addEventListener('click', async () => {
 
   const remoteName = remoteNameForProject(state.projectHealthSnapshot, projectPath) ?? undefined
   const result = await runWorkflowCommand('push', { projectPath, remoteName }, elements.publishProjectButton)
-  if (isPushRefusal('push', result)) {
+  if (isSourceRefusal('push', result)) {
     // Learn from the refusal (wording only): a network problem or a stop never gets here.
     try {
       await api.setSourceAccepts(projectPath, 'no')
@@ -2498,6 +2498,7 @@ async function runWorkflowCommand(commandName, request, button = null, busyLabel
     untrackRun(runId)
     state.pendingCommands.delete(commandName)
     setButtonBusy(button, false)
+    syncAttentionRowGating()
     updateSaveButtonState()
 
     if (state.pendingCommands.size === 0 && state.watchRefreshPending) {
@@ -4266,6 +4267,9 @@ function syncAttentionRowGating() {
     const button = attentionTargetButton(rowButton.dataset.attention)
     rowButton.disabled = button.disabled
     rowButton.title = button.title
+  }
+  for (const rowButton of elements.attentionRows.querySelectorAll('button[data-source-answer], button[data-source-undo], button[data-add-remote]')) {
+    rowButton.disabled = state.pendingCommands.size > 0
   }
 }
 

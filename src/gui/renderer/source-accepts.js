@@ -14,10 +14,17 @@ export function withSessionAnswer(health, notSurePaths) {
   return health
 }
 
-/** A refused push (permission/login), not a network problem, a stop, or another command. */
-export function isPushRefusal(commandName, result) {
-  return commandName === 'push' && result?.ok === false && !result.cancelled && result.userError?.code === 'AUTH_FAILED'
+/**
+ * True only when the git push itself was refused for lack of permission (GitHub-style "Permission to X denied to
+ * Y" or HTTP 403). Not a login problem, a special-remote (S3) error, a USB/share error, or a network failure.
+ */
+export function isSourceRefusal(commandName, result) {
+  if (commandName !== 'push' || result?.ok !== false || result.cancelled) {
+    return false
+  }
+  const text = `${result.stderr ?? ''}\n${result.stdout ?? ''}\n${result.userError?.technicalDetails ?? ''}`
+  return /permission to .+ denied to |returned error: 403/i.test(text) && !/amazonaws|\bs3\b|special remote/i.test(text)
 }
 
 export const REFUSED_PUBLISH_MESSAGE =
-  'This place does not accept changes from you, so Publish cannot work. Your saves stay safe on this computer. To share them, add your own remote.'
+  'Publish was refused. Either this place does not accept changes from you, or your login is not valid. If this project came from a public source such as OpenNeuro, add your own remote to share these saves.'
