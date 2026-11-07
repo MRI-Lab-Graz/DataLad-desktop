@@ -592,7 +592,38 @@ export class DataLadAdapter {
         throw new Error(`Could not connect the branch to ${upstream}: ${(result.stderr || result.stdout).trim()}`)
       }
     }
+    // A remote this app added itself is one the person made: they can publish to it.
+    await this.setSourceAccepts(projectPath, 'yes').catch(() => {})
     return { ok: true, upstream }
+  }
+
+  // Does the place this project came from accept changes? Kept in the project's own git settings.
+  // SECURITY: this value only steers wording and which buttons show. Publish is always really attempted by the
+  // person's click, so a wrong or hostile value never grants or blocks anything security-relevant.
+  async getSourceAccepts(projectPath) {
+    await this.#ensureGitProject(projectPath)
+    const result = await this.runner.run('git', ['-C', projectPath, 'config', '--local', '--get', 'worldline.sourceAccepts'])
+    const value = result.failed ? null : this.#firstLine(result.stdout)
+    return value === 'yes' || value === 'no' ? value : null
+  }
+
+  async setSourceAccepts(projectPath, value) {
+    if (value !== 'yes' && value !== 'no') {
+      throw new Error('The answer must be yes or no.')
+    }
+    await this.#ensureGitProject(projectPath)
+    const result = await this.runner.run('git', ['-C', projectPath, 'config', '--local', 'worldline.sourceAccepts', value])
+    if (result.failed) {
+      throw new Error(`Could not remember the answer: ${(result.stderr || result.stdout).trim()}`)
+    }
+    return { ok: true }
+  }
+
+  async clearSourceAccepts(projectPath) {
+    await this.#ensureGitProject(projectPath)
+    // Exit 5 means there was nothing to remove: the goal (no answer stored) already holds.
+    await this.runner.run('git', ['-C', projectPath, 'config', '--local', '--unset', 'worldline.sourceAccepts'])
+    return { ok: true }
   }
 
   // Best-effort, called on every project open (see detectProjectType in
@@ -1275,15 +1306,17 @@ export class DataLadAdapter {
   async getProjectHealth(projectPath) {
     await this.#ensureGitProject(projectPath)
 
-    const [sync, missingContent] = await Promise.all([
+    const [sync, missingContent, sourceAccepts] = await Promise.all([
       this.#readSyncStatus(projectPath),
-      this.#readMissingContentStatus(projectPath)
+      this.#readMissingContentStatus(projectPath),
+      this.getSourceAccepts(projectPath)
     ])
 
     return {
       projectPath,
       ...sync,
-      ...missingContent
+      ...missingContent,
+      sourceAccepts
     }
   }
 
