@@ -18,7 +18,7 @@ import {
 import { previewPaths } from './reckless-preview.js'
 import { escapeHtml } from './escape-html.js'
 import { describeUpdates } from './update-notice.js'
-import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity } from './project-card.js'
+import { changeSignature, describeFolders, describeSaveValidity, describeTypeBadge, describeValidity, moreProblemsLine } from './project-card.js'
 import { rowDataActions } from './row-data-actions.js'
 import { quarterTurn } from './logo-turn.js'
 import { joinProjectPath, existingFolderProblem } from './project-path.js'
@@ -4036,7 +4036,10 @@ function renderSaveValidity() {
   elements.saveValidityText.classList.toggle('save-validity-ok', out.tone === 'ok')
   elements.saveValidityText.classList.toggle('save-validity-bad', out.tone === 'bad')
   const problems = check.verdict === 'invalid' && Array.isArray(check.errors) ? check.errors.filter((e) => typeof e === 'string') : []
-  elements.saveValidityProblems.replaceChildren(...problems.map((line) => Object.assign(document.createElement('li'), { textContent: line })))
+  const lines = problems.slice()
+  const moreLine = problems.length ? moreProblemsLine(check.errorCount, problems.length) : null
+  if (moreLine) lines.push(moreLine)
+  elements.saveValidityProblems.replaceChildren(...lines.map((line) => Object.assign(document.createElement('li'), { textContent: line })))
   elements.saveValidityRecheck.disabled = check.verdict === 'checking'
 }
 

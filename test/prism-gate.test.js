@@ -43,7 +43,8 @@ test('interpretReport: a real invalid report lists its errors as one-line proble
   assert.equal(out.errorCount, 4)
   assert.equal(out.errors.length, 4)
   assert.ok(out.errors.every((line) => !line.includes('README_FILE_SMALL')), 'a warning was listed as an error')
-  assert.match(out.errors[0], /dataset_description\.json/)
+  assert.match(out.errors[0], /project\.json/, 'BIDS error comes first')
+  assert.ok(out.errors.some((line) => /dataset_description\.json/.test(line)))
   const bids = interpretReport(await fixture('bids-invalid'))
   assert.equal(bids.verdict, 'invalid')
   assert.equal(bids.errorCount, 1)
@@ -55,6 +56,38 @@ test('interpretReport: at most 10 problems are listed, the count stays complete'
   assert.equal(out.errorCount, 12)
   assert.equal(out.errors.length, 10)
   assert.equal(out.errors[0], '/sub-0: bad 0')
+})
+
+const mk = (code, i, severity = 'ERROR') => ({ code, severity, message: `m${i}`, file_path: `/f${i}` })
+const run = (issues, errors = issues.filter((x) => x.severity === 'ERROR').length) => interpretReport(JSON.stringify({ valid: false, issues, summary: { errors } }))
+
+test('interpretReport: a BIDS error behind 12 PRISM errors is listed first, still 10 entries', () => {
+  const issues = [...Array.from({ length: 12 }, (_, i) => mk('PRISM201', i)), { code: 'BIDS_PARTICIPANT_ID_MISMATCH', severity: 'ERROR', message: 'participants.tsv mismatch', file_path: '/participants.tsv' }]
+  const out = run(issues)
+  assert.equal(out.errors.length, 10)
+  assert.equal(out.errors[0], '/participants.tsv: participants.tsv mismatch')
+  assert.equal(out.errors[1], '/f0: m0')
+  assert.equal(out.errorCount, 13)
+})
+
+test('interpretReport: order inside the BIDS group and the PRISM group is kept', () => {
+  const out = run([mk('PRISM1', 1), mk('BIDS_A', 2), mk('PRISM3', 3), mk('BIDS_B', 4)])
+  assert.deepEqual(out.errors, ['/f2: m2', '/f4: m4', '/f1: m1', '/f3: m3'])
+})
+
+test('interpretReport: only PRISM errors, or only BIDS errors, keep the validator order', () => {
+  assert.deepEqual(run([mk('PRISM2', 2), mk('PRISM1', 1)]).errors, ['/f2: m2', '/f1: m1'])
+  assert.deepEqual(run([mk('BIDS_Z', 2), mk('BIDS_A', 1)]).errors, ['/f2: m2', '/f1: m1'])
+})
+
+test('interpretReport: warnings are never listed, even BIDS ones', () => {
+  const out = run([mk('BIDS_W', 1, 'WARNING'), mk('PRISM1', 2)], 1)
+  assert.deepEqual(out.errors, ['/f2: m2'])
+})
+
+test('Save panel says plainly when more problems exist than are listed', async () => {
+  const src = (await readFile(new URL('../src/gui/renderer/app.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
+  assert.match(src, /moreProblemsLine\(check\.errorCount, problems\.length\)/)
 })
 
 test('interpretReport: valid:true with errors counted is still invalid', () => {
@@ -345,4 +378,11 @@ test('checkProject passes the cancel signal and a timeout to the validator', asy
   await check(runner, await prismDir(), { signal })
   assert.equal(runner.opts.signal, signal)
   assert.ok(runner.opts.timeoutMs > 0)
+})
+
+test('interpretReport: a hostile non-string code cannot throw', () => {
+  const bad = (code) => ({ code, severity: 'ERROR', message: 'x', file_path: '/p' })
+  const out = run([bad({ toString: 1, startsWith: 1 }), bad(5), bad(null), bad({ toString: () => { throw new Error('boom') } })])
+  assert.equal(out.verdict, 'invalid')
+  assert.equal(out.errors.length, 4)
 })
