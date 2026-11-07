@@ -48,6 +48,7 @@ export function buildFilterGroups(files, selection = {}) {
   }
   for (const file of files) {
     const p = parseBidsPath(file.path)
+    // A file missing exactly one ticked group still counts for that group's own list (its ticks never narrow it).
     let missed = null
     let misses = 0
     for (const [key, set] of touched) {

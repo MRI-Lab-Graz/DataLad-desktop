@@ -39,12 +39,16 @@ function renderGroup(group, selected) {
 const EMPTY = 'No downloadable files were found. If this project was copied without its sub-datasets, they are not shown yet.'
 
 // fileCount: how many files were listed at all (0 = explain the empty panel; undefined = unknown, say nothing).
-export function renderDataPanel({ groups, selection, summary, fileCount }) {
+// fitCount: how many files fit the ticks, downloaded or not (0 with a tick = say so; undefined = unknown, say nothing).
+export function renderDataPanel({ groups, selection, summary, fileCount, fitCount }) {
+  const anyTick = Object.values(selection).some((set) => set?.size > 0)
+  const noFit = fileCount !== 0 && anyTick && fitCount === 0 && summary.count === 0
   const off = summary.count === 0 ? ' disabled' : ''
   return (
     (fileCount === 0
       ? `<p role="status">${esc(EMPTY)}</p>`
       : groups.filter((g) => g.values.length).map((g) => renderGroup(g, Object.hasOwn(selection, g.key) ? selection[g.key] : undefined)).join('')) +
+    (noFit ? '<p role="status">No file fits these choices. Untick something to see more.</p>' : '') +
     `<p id="data-panel-summary" aria-live="polite">${esc(summaryText(summary))}</p>` +
     `<button type="button" id="data-panel-download"${off} title="Copy the chosen files onto this computer so you can open them">Download selected</button> ` +
     `<button type="button" id="data-panel-free"${off} title="Remove the chosen files from this computer. They stay available from where they came from">Free up space</button>`

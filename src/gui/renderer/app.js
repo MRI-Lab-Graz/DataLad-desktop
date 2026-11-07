@@ -1949,7 +1949,8 @@ function renderDataPanelNow() {
     groups: buildFilterGroups(files, selection),
     selection,
     summary: summarize(getFiles.map((p) => byPath.get(p))),
-    fileCount: files.length
+    fileCount: files.length,
+    fitCount: getFiles.length + dropFiles.length
   })
   document.getElementById('data-panel-download').title =
     `Download ${describeCount(getFiles.map((p) => byPath.get(p)))} to this computer`
