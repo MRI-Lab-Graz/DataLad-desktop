@@ -198,3 +198,20 @@ test('startSequence lets one panel sequence run at a time', () => {
   gate.running = false
   assert.equal(startSequence(gate), true)
 })
+
+test('describeActionNote: the reason from the failed command is shown in the note, whole', () => {
+  const message = 'No configured remote could provide the requested file content. '.repeat(6).trim()
+  const out = (userError) => ({ ok: false, stopped: false, done: 0, failedPaths: ['a'], remainingPaths: [], failedResult: { ok: false, userError } })
+  assert.equal(
+    describeActionNote('get', out({ code: 'CONTENT_UNAVAILABLE', message })),
+    `1 file was not downloaded. Reason: ${message}`
+  )
+  const drop = describeActionNote('drop', out({ code: 'DROP_UNSAFE', message: 'Not enough copies.' }))
+  assert.match(drop, /1 file was not removed\./)
+  assert.match(drop, /Reason: Not enough copies\./)
+  assert.match(describeActionNote('reckless', out({ message: 'Nope.' })), /Reason: Nope\./)
+  // no message: the text stays as before
+  assert.equal(describeActionNote('get', out(undefined)), '1 file was not downloaded. Details are shown below.')
+  assert.equal(describeActionNote('get', out({ code: 'X', message: '  ' })), '1 file was not downloaded. Details are shown below.')
+  assert.doesNotMatch(describeActionNote('drop', out(undefined)), /Reason/)
+})

@@ -40,6 +40,12 @@ export function needsRecklessOffer(outcome) {
   return !outcome.ok && !outcome.stopped && outcome.failedResult?.userError?.code === 'DROP_UNSAFE' && outcome.failedPaths.length > 0
 }
 
+// The failed command's own plain-words reason (errors.js userError), whole; null when there is none. Shown via textContent only.
+const reasonOf = (outcome) => {
+  const message = outcome.failedResult?.userError?.message
+  return typeof message === 'string' && message.trim() ? `Reason: ${message.trim()}` : null
+}
+
 const files = (n) => `${n} ${n === 1 ? 'file' : 'files'}`
 
 /** Plain message after a drop that failed; the untried rest is named so nobody thinks it was refused. */
@@ -47,7 +53,8 @@ export function describeNotRemoved(outcome) {
   const n = outcome.failedPaths.length
   const rest = outcome.remainingPaths.length
   return (
-    `${files(n)} ${n === 1 ? 'was' : 'were'} not removed. Usually no other copy could be confirmed, or the remote cannot be reached. Details are shown below.` +
+    `${files(n)} ${n === 1 ? 'was' : 'were'} not removed. ` +
+    (reasonOf(outcome) ?? 'Usually no other copy could be confirmed, or the remote cannot be reached. Details are shown below.') +
     (rest ? ` ${files(rest)} ${rest === 1 ? 'was' : 'were'} not tried; press Free up space again for those.` : '')
   )
 }
@@ -58,8 +65,8 @@ export function describeActionNote(mode, outcome) {
   if (outcome.stopped) return 'Stopped. The rest was not touched.'
   const left = outcome.failedPaths.length + outcome.remainingPaths.length
   if (mode === 'drop') return describeNotRemoved(outcome)
-  if (mode === 'reckless') return `${files(left)} ${left === 1 ? 'was' : 'were'} not removed. Details are shown below.`
-  return `${files(left)} ${left === 1 ? 'was' : 'were'} not downloaded. Details are shown below.`
+  if (mode === 'reckless') return `${files(left)} ${left === 1 ? 'was' : 'were'} not removed. ${reasonOf(outcome) ?? 'Details are shown below.'}`
+  return `${files(left)} ${left === 1 ? 'was' : 'were'} not downloaded. ${reasonOf(outcome) ?? 'Details are shown below.'}`
 }
 
 export function describeRecklessDialog(paths) {
