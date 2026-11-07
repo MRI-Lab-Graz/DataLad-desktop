@@ -23,3 +23,11 @@ test('a BIDS/PRISM badge turns green or red: ok/bad rules beat the later pink .b
   assert.match(bad, /background:\s*#fbe3e3/i)
   assert.match(bad, /color:\s*#9b1c1c/i)
 })
+
+test('the last-action message has a heading right before the pill', () => {
+  const html = read('index.html')
+  assert.match(
+    html,
+    /<div class="strip-state-group">\s*<p class="strip-label">Last action<\/p>\s*<span id="last-action-state"/
+  )
+})
