@@ -118,7 +118,8 @@ export function computeRemoteGating(health) {
         `(e.g. OpenNeuro) you never intend to push to or pull further updates from — nothing already ` +
         `saved here is affected, this project just stops being linked to ${remoteName}.`
     },
-    addRemote: { hidden: true },
+    // A source that refuses changes leaves Add a Remote as the way to share saves.
+    addRemote: { hidden: health.sourceAccepts !== 'no' },
     remoteInfo: { hidden: false, text: `Remote: ${remoteLabel}` }
   }
 }

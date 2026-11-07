@@ -90,6 +90,14 @@ export function computeStatusLine(tree, health) {
     return { tone: 'warning', label: '⚠️ Saved, but some file content has not been downloaded yet.' }
   }
 
+  const onlyHere = onlyHereCount(health)
+  if (onlyHere && health.sourceAccepts === null) {
+    return { tone: 'neutral', label: `${plural(onlyHere, 'save is', 'saves are')} only on this computer.` }
+  }
+  if (onlyHere && health.sourceAccepts === 'no') {
+    return { tone: 'neutral', label: `${plural(onlyHere, 'save', 'saves')} only on this computer. The place this project came from does not accept changes.` }
+  }
+
   const syncChip = computeSyncStatusChip(health)
   if (syncChip.tone === 'warning') {
     return { tone: 'warning', label: `⚠️ Saved, but out of sync with remote (${syncChip.label}).` }
@@ -100,12 +108,19 @@ export function computeStatusLine(tree, health) {
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`
 
+// Saves that exist only here, while the answer to "does the source accept changes?" is unknown or no.
+// (undefined = an old snapshot without the answer: behaves as yes, like today.)
+function onlyHereCount(health) {
+  const unanswered = health?.sourceAccepts === null || health?.sourceAccepts === 'no'
+  return unanswered && health.hasUpstream && health.ahead > 0 ? health.ahead : 0
+}
+
 /**
  * The one-click "needs attention" rows on the Home view: only things the
  * researcher can fix with a single existing action. Empty when all is well.
  *
  * @param {{ annexSupported?: boolean, missingContentCount?: number|null, hasUpstream?: boolean, ahead?: number|null, behind?: number|null } | null | undefined} health
- * @returns {Array<{ kind: 'missing'|'publish'|'update', count: number, label: string, action: string }>}
+ * @returns {Array<{ kind: 'missing'|'publish'|'update'|'question'|'readonly', count: number, label: string, action?: string, undo?: string, groupLabel?: string, answers?: Array<{ answer: 'yes'|'no'|'unsure', text: string }> }>}
  */
 export function computeAttentionRows(health) {
   const rows = []
@@ -113,7 +128,29 @@ export function computeAttentionRows(health) {
     const count = health.missingContentCount
     rows.push({ kind: 'missing', count, label: `${plural(count, 'file', 'files')} not downloaded`, action: 'Get all' })
   }
-  if (health?.hasUpstream && health.ahead > 0) {
+  const onlyHere = onlyHereCount(health)
+  if (onlyHere && health.sourceAccepts === null) {
+    const question = 'Can you send changes back to the place this project came from?'
+    rows.push({
+      kind: 'question',
+      count: onlyHere,
+      label: `${onlyHere === 1 ? 'This' : 'These'} ${plural(onlyHere, 'save is', 'saves are')} only on this computer. ${question}`,
+      groupLabel: question,
+      answers: [
+        { answer: 'yes', text: 'Yes' },
+        { answer: 'no', text: 'No, it is read-only' },
+        { answer: 'unsure', text: 'Not sure' }
+      ]
+    })
+  } else if (onlyHere) {
+    rows.push({
+      kind: 'readonly',
+      count: onlyHere,
+      label: 'To share these saves, add your own remote (a USB drive, a network share or your own repository).',
+      action: 'Add a Remote',
+      undo: 'My answer was wrong'
+    })
+  } else if (health?.hasUpstream && health.ahead > 0) {
     rows.push({ kind: 'publish', count: health.ahead, label: `${plural(health.ahead, 'save', 'saves')} not published`, action: 'Publish' })
   }
   if (health?.hasUpstream && health.behind > 0) {
